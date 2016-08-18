@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -12,7 +13,24 @@ import (
 const (
 	// January 1, 2000, midnight UTC, in microseconds from Unix epoch
 	epoch2000 = 946717749000000000
+	// Make sure that we reply to the server at least this often
+	heartbeatTimeout = 10 * time.Second
 )
+
+/*
+EncodedChange represents the JSON schema of a change produced via
+logical replication.
+*/
+type EncodedChange struct {
+	Table          string                 `json:"table"`
+	Sequence       int64                  `json:"sequence"`       // LSN of the actual change
+	CommitSequence int64                  `json:"commitSequence"` // LSN of the transaction commit (> Sequence)
+	FirstSequence  int64                  `json:"firstSequence"`  // LSN of the first change in transaction (< CommitSequence)
+	Index          int32                  `json:"index"`          // Position of change within transaction
+	Operation      string                 `json:"operation"`      // insert, update, or delete
+	New            map[string]interface{} `json:"new,omitempty"`  // Fields in the new row for insert or update
+	Old            map[string]interface{} `json:"old,omitempty"`  // Fields in the old row for delete
+}
 
 /*
 A Change represents a single change that has been replicated from the server.
@@ -24,10 +42,20 @@ type Change struct {
 }
 
 /*
+Decode returns a decoded version of the JSON.
+*/
+func (c Change) Decode() (*EncodedChange, error) {
+	var change EncodedChange
+	err := json.Unmarshal([]byte(c.Data), &change)
+	return &change, err
+}
+
+/*
 A Replicator is a client for the logical replication protocol.
 */
 type Replicator struct {
 	conn       *pgclient.PgConnection
+	lastLSN    int64
 	slotName   string
 	changeChan chan Change
 	updateChan chan int64
@@ -160,11 +188,27 @@ func (r *Replicator) connect() error {
 This channel will read data from the clients and write to the server.
 */
 func (r *Replicator) replLoop() {
+	hbTimer := time.NewTimer(heartbeatTimeout)
+	defer hbTimer.Stop()
+
 	for {
 		select {
 		case newLSN := <-r.updateChan:
-			// Send an update to the server
-			r.updateLSN(newLSN)
+			if newLSN > r.lastLSN {
+				r.lastLSN = newLSN
+				// Send an update to the server
+				r.updateLSN()
+				hbTimer.Reset(heartbeatTimeout)
+			} else if newLSN <= 0 {
+				// Use this to trigger a re-send
+				r.updateLSN()
+				hbTimer.Reset(heartbeatTimeout)
+			}
+
+		case <-hbTimer.C:
+			r.updateLSN()
+			hbTimer.Reset(heartbeatTimeout)
+
 		case <-r.stopChan:
 			// This will send a terminate and also stop
 			log.Debug("Stopping replication")
@@ -263,16 +307,20 @@ func (r *Replicator) handleKeepalive(m *pgclient.InputMessage) {
 	m.ReadInt64() // end WAL
 	m.ReadInt64() // Timestamp
 	replyNow, _ := m.ReadByte()
-	log.Infof("Reply now? %d", replyNow)
-	// TODO send a message to the other channel to do something
+	log.Debugf("Got heartbeat. Reply now = %d", replyNow)
+	if replyNow != 0 {
+		// This will trigger an immediate heartbeat of current LSN
+		r.Acknowledge(0)
+	}
 }
 
-func (r *Replicator) updateLSN(lsn int64) {
+func (r *Replicator) updateLSN() {
+	log.Debugf("Updating server with last LSN %d", r.lastLSN)
 	om := pgclient.NewOutputMessage(pgclient.CopyData)
 	om.WriteByte(pgclient.StandbyStatusUpdate)
-	om.WriteInt64(lsn)                               // last written to disk
-	om.WriteInt64(lsn)                               // last flushed to disk
-	om.WriteInt64(lsn)                               // last applied
+	om.WriteInt64(r.lastLSN)                         // last written to disk
+	om.WriteInt64(r.lastLSN)                         // last flushed to disk
+	om.WriteInt64(r.lastLSN)                         // last applied
 	om.WriteInt64(time.Now().UnixNano() - epoch2000) // Timestamp!
 	om.WriteByte(0)
 

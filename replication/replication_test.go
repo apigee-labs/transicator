@@ -15,16 +15,6 @@ var dbHost string
 var dbConn *pgclient.PgConnection
 var dbConn2 *pgclient.PgConnection
 
-type EncodedChange struct {
-	Table          string                 `json:"table"`
-	CommitSequence int64                  `json:"commitSequence"`
-	FirstSequence  int64                  `json:"firstSequence"`
-	Index          int32                  `json:"index"`
-	Operation      string                 `json:"operation"`
-	New            map[string]interface{} `json:"new,omitempty"`
-	Old            map[string]interface{} `json:"old,omitempty"`
-}
-
 func TestPGClient(t *testing.T) {
 	dbHost = os.Getenv("TEST_PG_HOST")
 	if dbHost == "" {

@@ -1,6 +1,7 @@
 package: github.com/apigee-internal/transicator
 import:
-- package: github.com/onsi/ginkgo
-- package: github.com/onsi/gomega
 - package: github.com/Sirupsen/logrus
   version: ~0.10.0
+testImports:
+- package: github.com/onsi/ginkgo
+- package: github.com/onsi/gomega

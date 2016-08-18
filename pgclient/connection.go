@@ -173,7 +173,9 @@ func Connect(host, user, database string, opts map[string]string) (*PgConnection
 		case BackEndKeyData:
 			// Back end key data -- ignore
 		case ParameterStatus:
-			// Parameter status -- ignore
+			paramName, _ := im.ReadString()
+			paramVal, _ := im.ReadString()
+			log.Debugf("%s = %s", paramName, paramVal)
 		case NoticeResponse:
 			msg, _ := ParseNotice(im)
 			log.Info(msg)

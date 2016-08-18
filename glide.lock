@@ -1,6 +1,13 @@
-hash: a5711010977d4665a005faf8794714b9e8f67b0efc0041878ce2cf472a7c24d4
-updated: 2016-08-16T16:56:45.55129828-07:00
+hash: 6a0fd4f03c9d002e701c03aafc3db204852dbe8b198731434ad133d7e538bd6e
+updated: 2016-08-17T23:11:38.581586894-07:00
 imports:
+- name: github.com/Sirupsen/logrus
+  version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
+- name: golang.org/x/sys
+  version: a646d33e2ee3172a661fc09bca23bb4889a41bc8
+  subpackages:
+  - unix
+testImports:
 - name: github.com/onsi/ginkgo
   version: 462326b1628e124b23f42e87a8f2750e3c4e2d24
   subpackages:
@@ -32,8 +39,5 @@ imports:
   - matchers/support/goraph/edge
   - matchers/support/goraph/node
   - matchers/support/goraph/util
-- name: github.com/Sirupsen/logrus
-  version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
-testImports:
 - name: gopkg.in/yaml.v2
   version: e4d366fc3c7938e2958e662b4258c7a89e1f0e3e

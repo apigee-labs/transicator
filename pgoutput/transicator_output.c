@@ -35,7 +35,7 @@ static void print_literal(StringInfo s, Oid typid, char *outputstr)
 		case FLOAT4OID:
 		case FLOAT8OID:
 		case NUMERICOID:
-      /* NB: We don't care about Inf, NaN et al. */
+      /* TODO what about Inf, NaN et al? */
       appendStringInfoString(s, outputstr);
       break;
 
@@ -142,8 +142,9 @@ static void outputStart(
     bool is_init
 ) {
   DecodingState* state = (DecodingState*)malloc(sizeof(DecodingState));
-  options->output_type = OUTPUT_PLUGIN_TEXTUAL_OUTPUT;
+  state->index = 0;
   ctx->output_plugin_private = state;
+  options->output_type = OUTPUT_PLUGIN_TEXTUAL_OUTPUT;
 }
 
 
@@ -201,7 +202,10 @@ static void outputChange(
 
 	appendStringInfoString(ctx->out, "{\"table\":\"");
 	appendStringInfoString(ctx->out, tableName);
-  appendStringInfoString(ctx->out, "\",\"commitSequence\":");
+  appendStringInfoString(ctx->out, "\",\"sequence\":");
+  /* Invalid compiler warning produced here -- LSNs are "uint64" */
+  appendStringInfo(ctx->out, "%llu", change->lsn);
+  appendStringInfoString(ctx->out, ",\"commitSequence\":");
   /* Invalid compiler warning produced here -- LSNs are "uint64" */
   appendStringInfo(ctx->out, "%llu", txn->final_lsn);
   appendStringInfoString(ctx->out, ",\"firstSequence\":");
@@ -210,6 +214,8 @@ static void outputChange(
   /* Append an index when there are multiple records in a transaction */
   appendStringInfoString(ctx->out, ",\"index\":");
   appendStringInfo(ctx->out, "%u", state->index);
+  appendStringInfoString(ctx->out, ",\"txid\":");
+  appendStringInfo(ctx->out, "%u", txn->xid);
   appendStringInfoString(ctx->out, ",\"operation\":\"");
 
   state->index++;
