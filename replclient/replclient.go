@@ -7,7 +7,7 @@ import (
 	"net"
 	"os"
 
-	"github.com/apigee-internal/transicator/replication"
+	"github.com/30x/transicator/replication"
 )
 
 func printUsage() {

@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/30x/transicator/pgclient"
 	"github.com/Sirupsen/logrus"
-	"github.com/apigee-internal/transicator/pgclient"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

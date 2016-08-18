@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/30x/transicator/pgclient"
 	log "github.com/Sirupsen/logrus"
-	"github.com/apigee-internal/transicator/pgclient"
 )
 
 const (
