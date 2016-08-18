@@ -14,14 +14,14 @@ length.
 */
 type OutputMessage struct {
 	buf     *bytes.Buffer
-	msgType byte
+	msgType PgMessageType
 	hasType bool
 }
 
 /*
 NewOutputMessage constructs a new message with the given type byte
 */
-func NewOutputMessage(msgType byte) *OutputMessage {
+func NewOutputMessage(msgType PgMessageType) *OutputMessage {
 	return &OutputMessage{
 		buf:     &bytes.Buffer{},
 		msgType: msgType,
@@ -43,8 +43,18 @@ func NewStartupMessage() *OutputMessage {
 Type returns the message type byte from the message that was passed in to
 the "NewOutputMessage" function.
 */
-func (m *OutputMessage) Type() byte {
+func (m *OutputMessage) Type() PgMessageType {
 	return m.msgType
+}
+
+/*
+WriteInt64 writes a single "int64" to the output.
+*/
+func (m *OutputMessage) WriteInt64(i int64) {
+	err := binary.Write(m.buf, networkByteOrder, &i)
+	if err != nil {
+		panic(err.Error())
+	}
 }
 
 /*
@@ -55,6 +65,13 @@ func (m *OutputMessage) WriteInt32(i int32) {
 	if err != nil {
 		panic(err.Error())
 	}
+}
+
+/*
+WriteByte writes a single byte to the output.
+*/
+func (m *OutputMessage) WriteByte(b byte) error {
+	return m.buf.WriteByte(b)
 }
 
 /*
@@ -81,7 +98,7 @@ func (m *OutputMessage) Encode() []byte {
 	if m.hasType {
 		hdr = bytes.NewBuffer(make([]byte, 5))
 		hdr.Reset()
-		hdr.WriteByte(m.msgType)
+		hdr.WriteByte(byte(m.msgType))
 	} else {
 		hdr = bytes.NewBuffer(make([]byte, 4))
 		hdr.Reset()
@@ -100,14 +117,14 @@ message.
 */
 type InputMessage struct {
 	buf     *bytes.Buffer
-	msgType byte
+	msgType PgMessageType
 }
 
 /*
 NewInputMessage generates a new input message from the specified byte array,
 which must be the correct length for the message.
 */
-func NewInputMessage(msgType byte, b []byte) *InputMessage {
+func NewInputMessage(msgType PgMessageType, b []byte) *InputMessage {
 	return &InputMessage{
 		buf:     bytes.NewBuffer(b),
 		msgType: msgType,
@@ -118,8 +135,20 @@ func NewInputMessage(msgType byte, b []byte) *InputMessage {
 Type returns the message type byte from the message that was passed in to
 the "NewInputMessage" function.
 */
-func (m *InputMessage) Type() byte {
+func (m *InputMessage) Type() PgMessageType {
 	return m.msgType
+}
+
+/*
+ReadInt64 reads a single int64 from the message and returns it.
+*/
+func (m *InputMessage) ReadInt64() (int64, error) {
+	var i int64
+	err := binary.Read(m.buf, networkByteOrder, &i)
+	if err == nil {
+		return i, nil
+	}
+	return 0, err
 }
 
 /*
@@ -139,6 +168,18 @@ ReadInt16 reads a single int16 from the message and returns it.
 */
 func (m *InputMessage) ReadInt16() (int16, error) {
 	var i int16
+	err := binary.Read(m.buf, networkByteOrder, &i)
+	if err == nil {
+		return i, nil
+	}
+	return 0, err
+}
+
+/*
+ReadInt8 reads a single int8 from the message and returns it.
+*/
+func (m *InputMessage) ReadInt8() (int8, error) {
+	var i int8
 	err := binary.Read(m.buf, networkByteOrder, &i)
 	if err == nil {
 		return i, nil
@@ -179,4 +220,11 @@ func (m *InputMessage) ReadBytes(n int) ([]byte, error) {
 		return nil, err
 	}
 	return buf, nil
+}
+
+/*
+ReadRemaining reads everything that is left in the message.
+*/
+func (m *InputMessage) ReadRemaining() []byte {
+	return m.buf.Bytes()
 }

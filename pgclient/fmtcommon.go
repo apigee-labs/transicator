@@ -3,21 +3,31 @@ package pgclient
 import (
 	"bytes"
 	"errors"
+
+	log "github.com/Sirupsen/logrus"
 )
 
-func parseError(m *InputMessage) error {
+/*
+ParseError looks at an input message that represents an error and returns
+a Go error.
+*/
+func ParseError(m *InputMessage) error {
 	if m.Type() != 'E' {
 		return errors.New("Message type is not Error")
 	}
-	msg, err := parseNotice(m)
+	msg, err := ParseNotice(m)
 	if err == nil {
 		return errors.New(msg)
 	}
 	return err
 }
 
-func parseNotice(m *InputMessage) (string, error) {
-	if m.Type() != 'N' && m.Type() != 'E' {
+/*
+ParseNotice looks at an input message that's an error or a "notice" message
+(both have the same format) and returns the text.
+*/
+func ParseNotice(m *InputMessage) (string, error) {
+	if m.Type() != NoticeResponse && m.Type() != ErrorResponse {
 		return "", errors.New("Mismatched message type")
 	}
 
@@ -40,8 +50,22 @@ func parseNotice(m *InputMessage) (string, error) {
 	}
 }
 
+/*
+ParseCopyData looks at a CopyData message and then parses it again as
+another message.
+*/
+func ParseCopyData(m *InputMessage) (*InputMessage, error) {
+	if m.Type() != CopyData {
+		return nil, errors.New("Mismatched message type")
+	}
+
+	buf := m.buf.Bytes()
+	typeByte := buf[0]
+	return NewInputMessage(PgMessageType(typeByte), buf[1:]), nil
+}
+
 func parseRowDescription(m *InputMessage) ([]ColumnInfo, error) {
-	if m.Type() != 'T' {
+	if m.Type() != RowDescription {
 		return nil, errors.New("Message type is not Row Description")
 	}
 
@@ -52,6 +76,7 @@ func parseRowDescription(m *InputMessage) ([]ColumnInfo, error) {
 	}
 
 	nf := int(numFields)
+	log.Debugf("Row description has %d fields", nf)
 	for i := 0; i < nf; i++ {
 		col := ColumnInfo{}
 		col.Name, _ = m.ReadString()
@@ -69,7 +94,7 @@ func parseRowDescription(m *InputMessage) ([]ColumnInfo, error) {
 }
 
 func parseDataRow(m *InputMessage) ([]string, error) {
-	if m.Type() != 'D' {
+	if m.Type() != DataRow {
 		return nil, errors.New("Message type is not Row Description")
 	}
 
@@ -81,6 +106,7 @@ func parseDataRow(m *InputMessage) ([]string, error) {
 	}
 
 	nf := int(numFields)
+	log.Debugf("Row has %d columns", nf)
 	for i := 0; i < nf; i++ {
 		len, _ := m.ReadInt32()
 		if len > 0 {

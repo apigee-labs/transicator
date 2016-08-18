@@ -1,0 +1,98 @@
+package replication
+
+import (
+	"fmt"
+	"os"
+	"testing"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/apigee-internal/transicator/pgclient"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+)
+
+var dbHost string
+var dbConn *pgclient.PgConnection
+var dbConn2 *pgclient.PgConnection
+
+type EncodedChange struct {
+	Table          string                 `json:"table"`
+	CommitSequence int64                  `json:"commitSequence"`
+	FirstSequence  int64                  `json:"firstSequence"`
+	Index          int32                  `json:"index"`
+	Operation      string                 `json:"operation"`
+	New            map[string]interface{} `json:"new,omitempty"`
+	Old            map[string]interface{} `json:"old,omitempty"`
+}
+
+func TestPGClient(t *testing.T) {
+	dbHost = os.Getenv("TEST_PG_HOST")
+	if dbHost == "" {
+		fmt.Printf("Skipping replication tests because TEST_PG_HOST not set\n")
+	} else {
+		RegisterFailHandler(Fail)
+		RunSpecs(t, "replication suite")
+	}
+}
+
+var _ = BeforeSuite(func() {
+	logrus.SetLevel(logrus.DebugLevel)
+
+	var err error
+	dbConn, err = pgclient.Connect(dbHost, "postgres", "postgres", nil)
+	Expect(err).Should(Succeed())
+	dbConn2, err = pgclient.Connect(dbHost, "postgres", "postgres", nil)
+	Expect(err).Should(Succeed())
+
+	if !tableExists("transicator_test") {
+		_, _, err = dbConn.SimpleQuery(testTableSQL)
+		Expect(err).Should(Succeed())
+	}
+})
+
+var _ = AfterSuite(func() {
+	if dbConn != nil {
+		dropTable("transicator_test")
+		dbConn.Close()
+	}
+	if dbConn2 != nil {
+		dbConn2.Close()
+	}
+})
+
+func tableExists(name string) bool {
+	_, _, err := dbConn.SimpleQuery(fmt.Sprintf("select * from %s limit 0", name))
+	return err == nil
+}
+
+func dropTable(name string) error {
+	_, _, err := dbConn.SimpleQuery(fmt.Sprintf("drop table %s", name))
+	return err
+}
+
+func doExecute(query string) {
+	_, _, err := dbConn.SimpleQuery(query)
+	Expect(err).Should(Succeed())
+}
+
+func doExecute2(query string) {
+	_, _, err := dbConn2.SimpleQuery(query)
+	Expect(err).Should(Succeed())
+}
+
+const testTableSQL = `
+  create table transicator_test (
+    id varchar(32) primary key,
+    bool boolean,
+    chars char(64),
+    varchars varchar(64),
+    int integer,
+    smallint smallint,
+    bigint bigint,
+    float float4,
+    double float8,
+    date date,
+    time time with time zone,
+    timestamp timestamp with time zone,
+    timestampp timestamp
+  )`

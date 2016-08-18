@@ -22,52 +22,58 @@ It does not do any kind of preparation. The first parameter returned is an
 array of descriptors for each row. The second is an array of rows.
 */
 func (c *PgConnection) SimpleQuery(query string) ([]ColumnInfo, [][]string, error) {
-	qm := NewOutputMessage('Q')
+	log.Debugf("Query: %s", query)
+	qm := NewOutputMessage(Query)
 	qm.WriteString(query)
-	err := c.writeMessage(qm)
+	err := c.WriteMessage(qm)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	var rowDesc []ColumnInfo
 	var rows [][]string
+	var cmdErr error
 
+	// Loop until we get a ReadyForQuery message, or until we get an error
+	// reading messages at all.
 	for {
-		im, err := c.readMessage()
+		im, err := c.ReadMessage()
 		if err != nil {
 			return nil, nil, err
 		}
 
 		switch im.Type() {
-		case 'C':
+		case CommandComplete:
 			// Command complete. Could return what we did.
-		case 'G', 'H':
+		case CopyInResponse, CopyOutResponse:
 			// Copy in/out response -- not yet supported
-			return nil, nil, errors.New("COPY operations not supported by this client")
-		case 'T':
+			cmdErr = errors.New("COPY operations not supported by this client")
+		case RowDescription:
 			rowDesc, err = parseRowDescription(im)
 			if err != nil {
-				return nil, nil, err
+				cmdErr = err
 			}
-		case 'D':
+		case DataRow:
 			row, err := parseDataRow(im)
 			if err != nil {
-				return nil, nil, err
+				cmdErr = err
+			} else {
+				rows = append(rows, row)
 			}
-			rows = append(rows, row)
-		case 'I':
+		case EmptyQueryResponse:
 			// Empty query response. Nothing to do really.
-		case 'N':
-			msg, err := parseNotice(im)
+		case NoticeResponse:
+			msg, err := ParseNotice(im)
 			if err == nil {
 				log.Info(msg)
 			}
-		case 'E':
-			return nil, nil, parseError(im)
-		case 'Z':
-			return rowDesc, rows, nil
+		case ErrorResponse:
+			// Still have to keep processing until we get ReadyForQuery
+			cmdErr = ParseError(im)
+		case ReadyForQuery:
+			return rowDesc, rows, cmdErr
 		default:
-			return nil, nil, fmt.Errorf("Invalid server response %v", im.Type())
+			cmdErr = fmt.Errorf("Invalid server response %v", im.Type())
 		}
 	}
 }
