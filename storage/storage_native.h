@@ -35,7 +35,7 @@ extern char* go_db_open(
 /*
  * Close the database.
  */
-extern void go_db_close(GoRocksDb* h);
+extern void go_db_close(GoDb* h);
 
 /*
  * Wrapper around leveldb_get because it's a pain to cast to and from char* in

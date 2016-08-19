@@ -45,7 +45,7 @@ const (
 var storageByteOrder binary.ByteOrder = binary.LittleEndian
 
 /*
- * uint64 key, used for entries.
+ * uint64 key, used for entries. Used in tests so not dead code.
  */
 func uintToKey(keyType int, v uint64) (unsafe.Pointer, C.size_t) {
 	buf := &bytes.Buffer{}
@@ -55,7 +55,7 @@ func uintToKey(keyType int, v uint64) (unsafe.Pointer, C.size_t) {
 }
 
 /*
- * uint64 key, used for entries.
+ * uint64 key, used for entries. Used in tests so not dead code.
  */
 func keyToUint(ptr unsafe.Pointer, len C.size_t) (int, uint64, error) {
 	if len < 1 {
@@ -91,11 +91,11 @@ func stringToKey(keyType int, k string) (unsafe.Pointer, C.size_t) {
 keyToString is unused in the code but it is used in the test. Since it uses
 cgo it cannot be in a test file, however.
 */
-func keyToString(ptr unsafe.Pointer, len C.size_t) (int, string, error) {
-	if len < 1 {
+func keyToString(ptr unsafe.Pointer, l C.size_t) (int, string, error) {
+	if l < 1 {
 		return 0, "", errors.New("Invalid key")
 	}
-	bb := ptrToBytes(ptr, len)
+	bb := ptrToBytes(ptr, l)
 	buf := bytes.NewBuffer(bb)
 
 	var ktb byte
@@ -105,10 +105,10 @@ func keyToString(ptr unsafe.Pointer, len C.size_t) (int, string, error) {
 		return 0, "", fmt.Errorf("Invalid key version %d", vers)
 	}
 
-	kBytes, _ := buf.ReadBytes(0)
+	keyBytes, _ := buf.ReadBytes(0)
 	var key string
-	if len(kBytes) > 0 {
-		key = string(kBytes[:len(kBytes)-1])
+	if len(keyBytes) > 0 {
+		key = string(keyBytes[:len(keyBytes)-1])
 	}
 	return kt, key, nil
 }
@@ -122,8 +122,8 @@ func indexToKey(keyType int, tag string, lsn int64, index int32) (unsafe.Pointer
 	binary.Write(buf, storageByteOrder, keyPrefix(keyType)[0])
 	buf.WriteString(tag)
 	buf.WriteByte(0)
-	binary.Write(buf, storageByteOrder, &lsn)
-	binary.Write(buf, storageByteOrder, &index)
+	binary.Write(buf, storageByteOrder, lsn)
+	binary.Write(buf, storageByteOrder, index)
 	return bytesToPtr(buf.Bytes())
 }
 

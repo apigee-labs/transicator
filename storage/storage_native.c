@@ -34,7 +34,7 @@ void go_db_delete(
     const leveldb_writeoptions_t* options,
     const void* key, size_t keylen,
     char** errptr) {
-  leveldb_delete_cf(db, options, (const char*)key, keylen, errptr);
+  leveldb_delete(db, options, (const char*)key, keylen, errptr);
 }
 
 void go_db_iter_seek(leveldb_iterator_t* it,
@@ -67,13 +67,13 @@ static int compare_index_key(
 {
   if ((alen < 1) || (blen < 1)) { return 0; }
 
-  char* ap = a + 1;
-  char* bp = b + 1;
+  char* ap = (char*)a + 1;
+  char* bp = (char*)b + 1;
 
   int cmp = strcmp(ap, bp);
   if (cmp == 0) {
-    ap += (strlen(ap) + 1);
-    bp += (strlen(bp) + 1);
+    ap += strlen(ap) + 1;
+    bp += strlen(bp) + 1;
 
     long long* lsna = (long long*)ap;
     long long* lsnb = (long long*)bp;
@@ -88,8 +88,8 @@ static int compare_index_key(
     ap += 8;
     bp += 8;
 
-    long* indexa = (long*)ap;
-    long* indexb = (long*)bp;
+    int* indexa = (int*)ap;
+    int* indexb = (int*)bp;
 
     if (*indexa < *indexb) {
       return -1;
@@ -173,7 +173,7 @@ char* go_db_open(
   leveldb_options_destroy(mainOptions);
 
   if (err == NULL) {
-    Goleveldb* h = (Goleveldb*)malloc(sizeof(Goleveldb));
+    GoDb* h = (GoDb*)malloc(sizeof(GoDb));
     h->db = db;
     h->cache = cache;
     *ret = h;
@@ -182,7 +182,7 @@ char* go_db_open(
   return err;
 }
 
-void go_leveldb_close(GoDb* h)
+void go_db_close(GoDb* h)
 {
   leveldb_close(h->db);
   leveldb_cache_destroy(h->cache);

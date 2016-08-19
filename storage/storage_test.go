@@ -1,181 +1,164 @@
 package storage
 
 import (
-	"time"
+	"bytes"
+	"testing/quick"
 
-	"github.com/30x/changeagent/common"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
+const (
+	testDBDir = "./testdb"
+)
+
+var testDB *DB
+
 var _ = Describe("Storage Main Test", func() {
+
+	BeforeEach(func() {
+		var err error
+		testDB, err = OpenDB(testDBDir, 1000)
+		Expect(err).Should(Succeed())
+	})
+
+	AfterEach(func() {
+		testDB.Close()
+		err := testDB.Delete()
+		Expect(err).Should(Succeed())
+	})
+
 	It("Open and reopen", func() {
-		stor, err := CreateRocksDBStorage("./openleveldb", 1000)
+		stor, err := OpenDB("./openleveldb", 1000)
 		Expect(err).Should(Succeed())
 		stor.Close()
-		stor, err = CreateRocksDBStorage("./openleveldb", 1000)
+		stor, err = OpenDB("./openleveldb", 1000)
 		Expect(err).Should(Succeed())
 		stor.Close()
 		err = stor.Delete()
 		Expect(err).Should(Succeed())
 	})
 
-	It("Test metadata", func() {
-		stor, err := CreateRocksDBStorage("./metadatatestleveldb", 1000)
+	It("String metadata", func() {
+		err := quick.Check(testStringMetadata, nil)
 		Expect(err).Should(Succeed())
-		defer func() {
-			stor.Close()
-			err := stor.Delete()
-			Expect(err).Should(Succeed())
-		}()
-		metadataTest(stor)
 	})
 
-	It("Test entries", func() {
-		stor, err := CreateRocksDBStorage("./entrytestleveldb", 1000)
+	It("String metadata negative", func() {
+		ret, err := testDB.GetMetadata("NOTFOUND")
 		Expect(err).Should(Succeed())
-		defer func() {
-			//stor.Dump(os.Stdout, 25)
-			stor.Close()
-			err := stor.Delete()
-			Expect(err).Should(Succeed())
-		}()
-		entriesTest(stor)
+		Expect(ret).Should(BeNil())
+	})
+
+	It("Int metadata", func() {
+		err := quick.Check(testIntMetadata, nil)
+		Expect(err).Should(Succeed())
+	})
+
+	It("Int metadata negative", func() {
+		ret, err := testDB.GetUintMetadata("REALLYNOTFOUND")
+		Expect(err).Should(Succeed())
+		Expect(ret).Should(BeEquivalentTo(0))
+	})
+
+	It("Entries", func() {
+		err := quick.Check(testEntry, nil)
+		Expect(err).Should(Succeed())
+	})
+
+	It("Entries same tag", func() {
+		err := quick.Check(func(lsn int64, index int32, data []byte) bool {
+			return testEntry("tag", lsn, index, data)
+		}, nil)
+		Expect(err).Should(Succeed())
+	})
+
+	It("Entries empty tag", func() {
+		err := quick.Check(func(lsn int64, index int32, data []byte) bool {
+			return testEntry("", lsn, index, data)
+		}, nil)
+		Expect(err).Should(Succeed())
+	})
+
+	It("Entries same LSN", func() {
+		err := quick.Check(func(index int32, data []byte) bool {
+			return testEntry("tag", 8675309, index, data)
+		}, nil)
+		Expect(err).Should(Succeed())
+	})
+
+	It("Reading sequences", func() {
+		val1 := []byte("Hello!")
+		val2 := []byte("World.")
+
+		testDB.PutEntry("a", 0, 0, val1)
+		testDB.PutEntry("a", 1, 0, val2)
+		testDB.PutEntry("a", 1, 1, val1)
+		testDB.PutEntry("a", 2, 0, val2)
+		testDB.PutEntry("b", 3, 0, val1)
+		testDB.PutEntry("c", 4, 0, val1)
+		testDB.PutEntry("c", 4, 1, val2)
+		testDB.PutEntry("", 10, 0, val1)
+		testDB.PutEntry("", 11, 1, val2)
+
+		// Read whole ranges
+		testGetSequence("a", 0, 0, 100, [][]byte{val1, val2, val1, val2})
+		testGetSequence("b", 0, 0, 100, [][]byte{val1})
+		testGetSequence("c", 0, 0, 100, [][]byte{val1, val2})
+		testGetSequence("", 0, 0, 100, [][]byte{val1, val2})
+
+		// Read after start
+		testGetSequence("a", 1, 0, 100, [][]byte{val2, val1, val2})
+		testGetSequence("a", 1, 1, 100, [][]byte{val1, val2})
+		testGetSequence("a", 2, 0, 100, [][]byte{val2})
+		testGetSequence("a", 2, 1, 100, [][]byte{})
+		testGetSequence("a", 3, 0, 100, [][]byte{})
+
+		// Read with limit
+		testGetSequence("a", 0, 0, 4, [][]byte{val1, val2, val1, val2})
+		testGetSequence("a", 0, 0, 3, [][]byte{val1, val2, val1})
+		testGetSequence("a", 0, 0, 2, [][]byte{val1, val2})
+		testGetSequence("a", 0, 0, 1, [][]byte{val1})
+		testGetSequence("a", 0, 0, 0, [][]byte{})
+
+		// Read invalid range
+		testGetSequence("d", 0, 0, 0, [][]byte{})
 	})
 })
 
-func metadataTest(stor Storage) {
-	err := stor.SetUintMetadata("one", 123)
+func testGetSequence(tag string, lsn int64,
+	index int32, limit uint, expected [][]byte) {
+	ret, err := testDB.GetEntries(tag, lsn, index, limit)
 	Expect(err).Should(Succeed())
-	val, err := stor.GetUintMetadata("one")
-	Expect(err).Should(Succeed())
-	Expect(val).Should(BeEquivalentTo(123))
-
-	err = stor.SetUintMetadata("one", 234)
-	Expect(err).Should(Succeed())
-	val, err = stor.GetUintMetadata("one")
-	Expect(err).Should(Succeed())
-	Expect(val).Should(BeEquivalentTo(234))
-
-	bval := []byte("Hello, Metadata World!")
-	err = stor.SetMetadata("two", bval)
-	Expect(err).Should(Succeed())
-	bresult, err := stor.GetMetadata("two")
-	Expect(err).Should(Succeed())
-	Expect(bresult).Should(Equal(bval))
-
-	val, err = stor.GetUintMetadata("notfound")
-	Expect(err).Should(Succeed())
-	Expect(val).Should(BeEquivalentTo(0))
-
-	bval, err = stor.GetMetadata("notfound")
-	Expect(err).Should(Succeed())
-	Expect(bval).Should(BeNil())
+	Expect(len(ret)).Should(Equal(len(expected)))
+	for i := range expected {
+		Expect(bytes.Equal(expected[i], ret[i])).Should(BeTrue())
+	}
 }
 
-func entriesTest(stor Storage) {
-	max, term, err := stor.GetLastIndex()
+func testStringMetadata(key string, val []byte) bool {
+	err := testDB.SetMetadata(key, val)
 	Expect(err).Should(Succeed())
-	Expect(max).Should(BeEquivalentTo(0))
-	Expect(term).Should(BeEquivalentTo(0))
-
-	entries, err := stor.GetEntries(0, 2, everTrue)
+	ret, err := testDB.GetMetadata(key)
 	Expect(err).Should(Succeed())
-	Expect(len(entries)).Should(BeEquivalentTo(0))
-
-	entry, err := stor.GetEntry(1)
-	Expect(err).Should(Succeed())
-	Expect(entry).Should(BeNil())
-
-	hello := []byte("Hello!")
-
-	// Put in some metadata to confuse the index a bit
-	err = stor.SetUintMetadata("one", 1)
-	Expect(err).Should(Succeed())
-
-	max, term, err = stor.GetLastIndex()
-	Expect(err).Should(Succeed())
-	Expect(max).Should(BeEquivalentTo(0))
-	Expect(term).Should(BeEquivalentTo(0))
-
-	entry1 := &common.Entry{
-		Index:     1,
-		Term:      1,
-		Timestamp: time.Now(),
-	}
-
-	err = stor.AppendEntry(entry1)
-	Expect(err).Should(Succeed())
-
-	entry2 := &common.Entry{
-		Index:     2,
-		Term:      1,
-		Timestamp: time.Now(),
-		Data:      hello,
-	}
-	err = stor.AppendEntry(entry2)
-	Expect(err).Should(Succeed())
-
-	re, err := stor.GetEntry(1)
-	Expect(err).Should(Succeed())
-	compareEntries(re, entry1)
-
-	re, err = stor.GetEntry(2)
-	Expect(err).Should(Succeed())
-	compareEntries(entry2, re)
-
-	max, term, err = stor.GetLastIndex()
-	Expect(err).Should(Succeed())
-	Expect(max).Should(BeEquivalentTo(2))
-	Expect(term).Should(BeEquivalentTo(1))
-
-	ets, err := stor.GetEntryTerms(1)
-	Expect(err).Should(Succeed())
-	Expect(ets[1]).Should(BeEquivalentTo(1))
-	Expect(ets[2]).Should(BeEquivalentTo(1))
-
-	ets, err = stor.GetEntryTerms(3)
-	Expect(err).Should(Succeed())
-	Expect(len(ets)).Should(Equal(0))
-
-	entries, err = stor.GetEntries(0, 3, everTrue)
-	Expect(err).Should(Succeed())
-	Expect(len(entries)).Should(Equal(2))
-	compareEntries(entry1, &entries[0])
-	compareEntries(entry2, &entries[1])
-
-	err = stor.DeleteEntriesAfter(1)
-	Expect(err).Should(Succeed())
-
-	ets, err = stor.GetEntryTerms(1)
-	Expect(err).Should(Succeed())
-	Expect(len(ets)).Should(Equal(0))
-
-	err = stor.DeleteEntriesAfter(1)
-	Expect(err).Should(Succeed())
-
-	entry3 := &common.Entry{
-		Index:     3,
-		Term:      1,
-		Timestamp: time.Now(),
-		Data:      hello,
-	}
-	err = stor.AppendEntry(entry3)
-	Expect(err).Should(Succeed())
-
-	re, err = stor.GetEntry(3)
-	Expect(err).Should(Succeed())
-	compareEntries(re, entry3)
+	Expect(bytes.Equal(val, ret)).Should(BeTrue())
+	return true
 }
 
-func compareEntries(e1 *common.Entry, e2 *common.Entry) {
-	Expect(e1.Index).Should(Equal(e2.Index))
-	Expect(e1.Term).Should(Equal(e2.Term))
-	Expect(e1.Timestamp).Should(Equal(e2.Timestamp))
-	Expect(e1.Tags).Should(Equal(e2.Tags))
-	Expect(e1.Data).Should(Equal(e2.Data))
+func testIntMetadata(key string, val uint64) bool {
+	err := testDB.SetUintMetadata(key, val)
+	Expect(err).Should(Succeed())
+	ret, err := testDB.GetUintMetadata(key)
+	Expect(err).Should(Succeed())
+	Expect(ret).Should(Equal(val))
+	return true
 }
 
-func everTrue(e *common.Entry) bool {
+func testEntry(key string, lsn int64, index int32, val []byte) bool {
+	err := testDB.PutEntry(key, lsn, index, val)
+	Expect(err).Should(Succeed())
+	ret, err := testDB.GetEntry(key, lsn, index)
+	Expect(err).Should(Succeed())
+	Expect(bytes.Equal(val, ret)).Should(BeTrue())
 	return true
 }

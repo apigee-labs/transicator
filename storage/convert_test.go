@@ -22,19 +22,7 @@ var _ = Describe("Conversion", func() {
 		Expect(err).Should(Succeed())
 	})
 
-	It("Entry Key Compare", func() {
-		s := testEntryIndexCompare(1, 1)
-		Expect(s).Should(BeTrue())
-		s = testEntryIndexCompare(1, 2)
-		Expect(s).Should(BeTrue())
-		s = testEntryIndexCompare(2, 1)
-		Expect(s).Should(BeTrue())
-
-		err := quick.Check(testEntryIndexCompare, nil)
-		Expect(err).Should(Succeed())
-	})
-
-	It("Metadata Key Compare", func() {
+	It("String Key Compare", func() {
 		s := testMetadataIndexCompare("foo", "foo")
 		Expect(s).Should(BeTrue())
 		s = testMetadataIndexCompare("foo", "bar")
@@ -45,6 +33,13 @@ var _ = Describe("Conversion", func() {
 		Expect(s).Should(BeTrue())
 
 		err := quick.Check(testMetadataIndexCompare, nil)
+		Expect(err).Should(Succeed())
+	})
+
+	It("Index Key Compare", func() {
+		s := testIndexKeyCompare("foo", "foo", 123, 123, 456, 456)
+		Expect(s).Should(BeTrue())
+		err := quick.Check(testIndexKeyCompare, nil)
 		Expect(err).Should(Succeed())
 	})
 })
@@ -79,27 +74,39 @@ func testStringKey(kt int, key string) bool {
 	return true
 }
 
-func testEntryIndexCompare(k1, k2 uint64) bool {
-	keyBytes1, keyLen1 := uintToKey(EntryKey, k1)
-	defer freePtr(keyBytes1)
-	keyBytes2, keyLen2 := uintToKey(EntryKey, k2)
-	defer freePtr(keyBytes2)
+func testIndexKeyCompare(tag1, tag2 string, lsn1, lsn2 int64, seq1, seq2 int32) bool {
+	kb1, kl1 := indexToKey(IndexKey, tag1, lsn1, seq1)
+	defer freePtr(kb1)
+	kb2, kl2 := indexToKey(IndexKey, tag2, lsn2, seq2)
+	defer freePtr(kb2)
 
-	cmp := compareKeys(keyBytes1, keyLen1, keyBytes2, keyLen2)
+	cmp := compareKeys(kb1, kl1, kb2, kl2)
 
-	if k1 < k2 {
+	if tag1 < tag2 {
 		return cmp < 0
 	}
-	if k1 > k2 {
+	if tag1 > tag2 {
+		return cmp > 0
+	}
+	if lsn1 < lsn2 {
+		return cmp < 0
+	}
+	if lsn1 > lsn2 {
+		return cmp > 0
+	}
+	if seq1 < seq2 {
+		return cmp < 0
+	}
+	if seq1 > seq2 {
 		return cmp > 0
 	}
 	return cmp == 0
 }
 
 func testMetadataIndexCompare(k1, k2 string) bool {
-	keyBytes1, keyLen1 := stringToKey(MetadataKey, k1)
+	keyBytes1, keyLen1 := stringToKey(StringKey, k1)
 	defer freePtr(keyBytes1)
-	keyBytes2, keyLen2 := stringToKey(MetadataKey, k2)
+	keyBytes2, keyLen2 := stringToKey(StringKey, k2)
 	defer freePtr(keyBytes2)
 
 	cmp := compareKeys(keyBytes1, keyLen1, keyBytes2, keyLen2)
