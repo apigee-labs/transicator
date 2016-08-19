@@ -29,9 +29,9 @@ var _ = BeforeSuite(func() {
 	logrus.SetLevel(logrus.DebugLevel)
 
 	var err error
-	dbConn, err = pgclient.Connect(dbHost, "postgres", "postgres", nil)
+	dbConn, err = pgclient.Connect(fmt.Sprintf("postgres://postgres@%s/postgres", dbHost))
 	Expect(err).Should(Succeed())
-	dbConn2, err = pgclient.Connect(dbHost, "postgres", "postgres", nil)
+	dbConn2, err = pgclient.Connect(fmt.Sprintf("postgres://postgres@%s/postgres", dbHost))
 	Expect(err).Should(Succeed())
 
 	if !tableExists("transicator_test") {

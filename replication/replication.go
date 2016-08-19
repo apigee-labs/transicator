@@ -67,10 +67,10 @@ Start replication and return a new Replicator object that may be used to
 read it. The fourth argument is the name of the replication slot to create
 on the server.
 */
-func Start(host, user, database, sn string) (*Replicator, error) {
+func Start(connect, sn string) (*Replicator, error) {
 	slotName := strings.ToLower(sn)
-	conn, err := pgclient.Connect(host, user, database,
-		map[string]string{"replication": "database"})
+	// TODO what if there are already queries?
+	conn, err := pgclient.Connect(connect + "?replication=database")
 	if err != nil {
 		return nil, err
 	}

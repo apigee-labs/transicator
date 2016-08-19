@@ -102,23 +102,32 @@ type PgConnection struct {
 Connect to the databsae. "host" must be a "host:port" pair, "user" and "database"
 must contain the appropriate user name and database name, and "opts" contains
 any other keys and values to send to the database.
+
+The connect string works the same way as "psql":
+
+postgres://[user[:password]@]hostname[:port]/[database]?param=val&param=val
 */
-func Connect(host, user, database string, opts map[string]string) (*PgConnection, error) {
+func Connect(connect string) (*PgConnection, error) {
+	ci, err := parseConnectString(connect)
+	if err != nil {
+		return nil, err
+	}
+
 	startup := NewStartupMessage()
 	startup.WriteInt32(protocolVersion)
 	startup.WriteString("user")
-	startup.WriteString(user)
+	startup.WriteString(ci.user)
 	startup.WriteString("database")
-	startup.WriteString(database)
+	startup.WriteString(ci.database)
 
-	for k, v := range opts {
+	for k, v := range ci.options {
 		startup.WriteString(k)
 		startup.WriteString(v)
 	}
 
 	startup.WriteString("")
 
-	conn, err := net.Dial("tcp", host)
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", ci.host, ci.port))
 	if err != nil {
 		return nil, err
 	}

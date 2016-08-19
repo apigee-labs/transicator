@@ -12,14 +12,14 @@ var _ = Describe("Connection Tests", func() {
 		if dbHost == "" {
 			return
 		}
-		conn, err := Connect(dbHost, "postgres", "postgres", nil)
+		conn, err := Connect(fmt.Sprintf("postgres://postgres@%s/postgres", dbHost))
 		Expect(err).Should(Succeed())
 		Expect(conn).ShouldNot(BeNil())
 		conn.Close()
 	})
 
 	It("Connect to bad host", func() {
-		_, err := Connect("localhost:99999", "postgres", "postgres", nil)
+		_, err := Connect("postgres://badhost:9999/postgres")
 		Expect(err).ShouldNot(Succeed())
 	})
 
@@ -27,7 +27,7 @@ var _ = Describe("Connection Tests", func() {
 		if dbHost == "" {
 			return
 		}
-		_, err := Connect(dbHost, "postgres", "NOTFOUND", nil)
+		_, err := Connect("postgres://localhost/baddatabase")
 		Expect(err).ShouldNot(Succeed())
 		fmt.Fprintf(GinkgoWriter, "Error from database: %s\n", err)
 	})

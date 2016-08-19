@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 
 	"github.com/30x/transicator/replication"
@@ -12,25 +11,25 @@ import (
 
 func printUsage() {
 	fmt.Fprintln(os.Stderr,
-		"Usage: replclient <host> <port> <user> <database> <slot>")
+		"Usage: replclient <connect string> <slot>")
+	fmt.Fprintln(os.Stderr,
+		"  connect = \"postgres://[user[:pw]@]host/[database]\"")
+	fmt.Fprintln(os.Stderr,
+		"  example: \"postgres://postgres@localhost:5432/postgres\"")
 }
 
 func main() {
 	//log.SetLevel(log.DebugLevel)
 
-	if len(os.Args) != 6 {
+	if len(os.Args) != 3 {
 		printUsage()
 		os.Exit(2)
 	}
 
-	hostName := os.Args[1]
-	portStr := os.Args[2]
-	user := os.Args[3]
-	database := os.Args[4]
-	slot := os.Args[5]
+	connect := os.Args[1]
+	slot := os.Args[2]
 
-	repl, err := replication.Start(
-		net.JoinHostPort(hostName, portStr), user, database, slot)
+	repl, err := replication.Start(connect, slot)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error starting replicaton: %s\n", err)
 		os.Exit(3)

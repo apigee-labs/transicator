@@ -1,8 +1,12 @@
-hash: 6a0fd4f03c9d002e701c03aafc3db204852dbe8b198731434ad133d7e538bd6e
-updated: 2016-08-17T23:11:38.581586894-07:00
+hash: 3101ad1914ec53e2d5857d691358002e863bda143a0dde84bc2a96cd07c36e40
+updated: 2016-08-18T22:02:10.360049911-07:00
 imports:
+- name: github.com/julienschmidt/httprouter
+  version: 8c199fb6259ffc1af525cc3ad52ee60ba8359669
 - name: github.com/Sirupsen/logrus
   version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
+- name: github.com/tylerb/graceful
+  version: 842f31108f8d3512ce3176d00bf1a32db1d5e3af
 - name: golang.org/x/sys
   version: a646d33e2ee3172a661fc09bca23bb4889a41bc8
   subpackages:
@@ -26,7 +30,7 @@ testImports:
   - internal/spec
   - internal/specrunner
 - name: github.com/onsi/gomega
-  version: 9ed8da19f2156b87a803a8fdf6d126f627a12db1
+  version: c90bd38f8da6e92f8b114953db2f0ad7361fb4b4
   subpackages:
   - internal/assertion
   - internal/asyncassertion

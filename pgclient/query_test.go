@@ -13,7 +13,7 @@ var _ = Describe("Query Tests", func() {
 	BeforeEach(func() {
 		if dbHost != "" {
 			var err error
-			conn, err = Connect(dbHost, "postgres", "postgres", nil)
+			conn, err = Connect(fmt.Sprintf("postgres://postgres@%s/postgres", dbHost))
 			Expect(err).Should(Succeed())
 			Expect(conn).ShouldNot(BeNil())
 		}
