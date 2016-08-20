@@ -11,14 +11,15 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var dbHost string
+var dbURL string
 var dbConn *pgclient.PgConnection
 var dbConn2 *pgclient.PgConnection
 
 func TestPGClient(t *testing.T) {
-	dbHost = os.Getenv("TEST_PG_HOST")
-	if dbHost == "" {
-		fmt.Printf("Skipping replication tests because TEST_PG_HOST not set\n")
+	dbURL = os.Getenv("TEST_PG_URL")
+	if dbURL == "" {
+		fmt.Println("Skipping replication tests because TEST_PG_URL not set")
+		fmt.Println("  Example: postgres://user:password@host:port/database")
 	} else {
 		RegisterFailHandler(Fail)
 		RunSpecs(t, "replication suite")
@@ -29,9 +30,9 @@ var _ = BeforeSuite(func() {
 	logrus.SetLevel(logrus.DebugLevel)
 
 	var err error
-	dbConn, err = pgclient.Connect(fmt.Sprintf("postgres://postgres@%s/postgres", dbHost))
+	dbConn, err = pgclient.Connect(dbURL)
 	Expect(err).Should(Succeed())
-	dbConn2, err = pgclient.Connect(fmt.Sprintf("postgres://postgres@%s/postgres", dbHost))
+	dbConn2, err = pgclient.Connect(dbURL)
 	Expect(err).Should(Succeed())
 
 	if !tableExists("transicator_test") {

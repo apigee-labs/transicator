@@ -9,10 +9,10 @@ import (
 
 var _ = Describe("Connection Tests", func() {
 	It("Basic Connect", func() {
-		if dbHost == "" {
+		if dbURL == "" {
 			return
 		}
-		conn, err := Connect(fmt.Sprintf("postgres://postgres@%s/postgres", dbHost))
+		conn, err := Connect(dbURL)
 		Expect(err).Should(Succeed())
 		Expect(conn).ShouldNot(BeNil())
 		conn.Close()
@@ -24,10 +24,10 @@ var _ = Describe("Connection Tests", func() {
 	})
 
 	It("Connect to bad database", func() {
-		if dbHost == "" {
+		if dbURL == "" {
 			return
 		}
-		_, err := Connect("postgres://localhost/baddatabase")
+		_, err := Connect("postgres://postgres@localhost/baddatabase")
 		Expect(err).ShouldNot(Succeed())
 		fmt.Fprintf(GinkgoWriter, "Error from database: %s\n", err)
 	})

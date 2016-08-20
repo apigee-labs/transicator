@@ -10,7 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var dbHost string
+var dbURL string
 
 func TestPGClient(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -20,8 +20,10 @@ func TestPGClient(t *testing.T) {
 var _ = BeforeSuite(func() {
 	logrus.SetLevel(logrus.DebugLevel)
 
-	dbHost = os.Getenv("TEST_PG_HOST")
-	if dbHost == "" {
-		fmt.Printf("Skipping many tests because TEST_PG_HOST not set\n")
+	dbURL = os.Getenv("TEST_PG_URL")
+	if dbURL == "" {
+		fmt.Println("Skipping many tests because TEST_PG_URL not set")
+		fmt.Println("Format:")
+		fmt.Println("  postgres://user:password@host:port/database")
 	}
 })

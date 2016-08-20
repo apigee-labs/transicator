@@ -11,9 +11,9 @@ var _ = Describe("Query Tests", func() {
 	var conn *PgConnection
 
 	BeforeEach(func() {
-		if dbHost != "" {
+		if dbURL != "" {
 			var err error
-			conn, err = Connect(fmt.Sprintf("postgres://postgres@%s/postgres", dbHost))
+			conn, err = Connect(dbURL)
 			Expect(err).Should(Succeed())
 			Expect(conn).ShouldNot(BeNil())
 		}

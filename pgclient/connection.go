@@ -2,7 +2,9 @@ package pgclient
 
 import (
 	"bytes"
+	"crypto/md5"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
@@ -41,6 +43,7 @@ const (
 	SenderKeepalive                      = 'k'
 	StandbyStatusUpdate                  = 'r'
 	HotStandbyFeedback                   = 'h'
+	PasswordMessage                      = 'p'
 )
 
 func (t PgMessageType) String() string {
@@ -86,6 +89,8 @@ func (t PgMessageType) String() string {
 		return "StandbyStatusUpdate"
 	case HotStandbyFeedback:
 		return "HotStandbyFeedback"
+	case PasswordMessage:
+		return "PasswordMessage"
 	default:
 		return fmt.Sprintf("PgMessageType(%d)", t)
 	}
@@ -155,7 +160,10 @@ func Connect(connect string) (*PgConnection, error) {
 		if err != nil {
 			return nil, err
 		}
-		if im.Type() != AuthenticationResponse {
+
+		if im.Type() == ErrorResponse {
+			return nil, ParseError(im)
+		} else if im.Type() != AuthenticationResponse {
 			return nil, fmt.Errorf("Invalid response from server: %v", im.Type())
 		}
 
@@ -166,6 +174,15 @@ func Connect(connect string) (*PgConnection, error) {
 		switch authResp {
 		case 0:
 			authDone = true
+		case 3:
+			pm := NewOutputMessage(PasswordMessage)
+			pm.WriteString(ci.creds)
+			c.WriteMessage(pm)
+		case 5:
+			salt, _ := im.ReadBytes(4)
+			pm := NewOutputMessage(PasswordMessage)
+			pm.WriteString(passwordMD5(ci.user, ci.creds, salt))
+			c.WriteMessage(pm)
 		default:
 			return nil, fmt.Errorf("Invalid authentication response: %d", authResp)
 		}
@@ -264,4 +281,16 @@ func (c *PgConnection) ReadMessage() (*InputMessage, error) {
 
 	im := NewInputMessage(msgType, bodBuf)
 	return im, nil
+}
+
+/*
+passwordMD5 generates an MD5 password using the same algorithm
+as Postgres.
+*/
+func passwordMD5(user, pass string, salt []byte) string {
+	up := user + pass
+	md1 := md5.Sum([]byte(up))
+	md1S := hex.EncodeToString(md1[:]) + string(salt)
+	md2 := md5.Sum([]byte(md1S))
+	return "md5" + hex.EncodeToString(md2[:])
 }

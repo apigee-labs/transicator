@@ -11,7 +11,7 @@ import (
 
 var _ = Describe("Replicator tests", func() {
 	It("Basic replication", func() {
-		repl, err := Start(fmt.Sprintf("postgres://postgres@%s/postgres", dbHost), "unittestslot")
+		repl, err := Start(dbURL, "unittestslot")
 		Expect(err).Should(Succeed())
 		defer repl.Stop()
 		// There may be duplicates, so always drain first
