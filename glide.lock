@@ -1,12 +1,27 @@
-hash: 3101ad1914ec53e2d5857d691358002e863bda143a0dde84bc2a96cd07c36e40
-updated: 2016-08-18T22:02:10.360049911-07:00
+hash: 623c5e43b042a999859c8710540bbf3a7d69e9b6c1bfa5cdec0348151c82705c
+updated: 2016-08-23T21:29:22.144941279+01:00
 imports:
+- name: cloud.google.com/go
+  version: 667e96c2105de5035a927cafb03a7c09ec982d6b
+  subpackages:
+  - compute/metadata
+  - internal
+- name: github.com/golang/gddo
+  version: 2c3c8d49541ae53a09b7096345a2d26bf69b4646
+  subpackages:
+  - httputil
+  - httputil/header
 - name: github.com/julienschmidt/httprouter
   version: 8c199fb6259ffc1af525cc3ad52ee60ba8359669
 - name: github.com/Sirupsen/logrus
   version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
 - name: github.com/tylerb/graceful
   version: 842f31108f8d3512ce3176d00bf1a32db1d5e3af
+- name: golang.org/x/net
+  version: 7394c112eae4dba7e96bfcfe738e6373d61772b4
+  subpackages:
+  - context
+  - context/ctxhttp
 - name: golang.org/x/sys
   version: a646d33e2ee3172a661fc09bca23bb4889a41bc8
   subpackages:

@@ -41,7 +41,8 @@ var _ = Describe("Replicator tests", func() {
 	})
 
 	It("Cleanup", func() {
-		doExecute("select * from pg_drop_replication_slot('unittestslot')")
+		err := DropSlot(dbURL, "unittestslot")
+		Expect(err).Should(Succeed())
 	})
 })
 

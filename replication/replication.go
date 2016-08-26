@@ -64,8 +64,9 @@ type Replicator struct {
 
 /*
 Start replication and return a new Replicator object that may be used to
-read it. The fourth argument is the name of the replication slot to create
-on the server.
+read it. "connect" is a postgres URL to be passed to the "pgclient" module.
+"sn" is the name of the replication slot to read from. This slot will be
+created if it does not already exist.
 */
 func Start(connect, sn string) (*Replicator, error) {
 	slotName := strings.ToLower(sn)
@@ -97,6 +98,25 @@ func Start(connect, sn string) (*Replicator, error) {
 	go repl.readLoop()
 
 	return repl, nil
+}
+
+/*
+DropSlot deletes the logical replication slot created by "Start".
+"connect" is a postgres URL to be passed to the "pgclient" module.
+"sn" is the name of the replication slot to drop.
+*/
+func DropSlot(connect, sn string) error {
+	slotName := strings.ToLower(sn)
+	// TODO what if there are already queries?
+	conn, err := pgclient.Connect(connect)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	sql := fmt.Sprintf("select * from pg_drop_replication_slot('%s')", slotName)
+	_, _, err = conn.SimpleQuery(sql)
+	return err
 }
 
 /*
