@@ -199,9 +199,10 @@ func Connect(connect string) (*PgConnection, error) {
 		case BackEndKeyData:
 			// Back end key data -- ignore
 		case ParameterStatus:
-			paramName, _ := im.ReadString()
-			paramVal, _ := im.ReadString()
-			log.Debugf("%s = %s", paramName, paramVal)
+			// Database parameter -- no need for now
+			//paramName, _ := im.ReadString()
+			//paramVal, _ := im.ReadString()
+			//log.Debugf("%s = %s", paramName, paramVal)
 		case NoticeResponse:
 			msg, _ := ParseNotice(im)
 			log.Info(msg)
@@ -267,7 +268,7 @@ func (c *PgConnection) ReadMessage() (*InputMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("Got message type %s length %d", msgType, msgLen)
+	//log.Debugf("Got message type %s length %d", msgType, msgLen)
 
 	if msgLen < 4 {
 		return nil, fmt.Errorf("Invalid message length %d", msgLen)

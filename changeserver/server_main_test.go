@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	debugTests      = false
+	debugTests      = true
 	replicationSlot = "change_server_test"
 	testDataDir     = "./changeservertestdata"
 )

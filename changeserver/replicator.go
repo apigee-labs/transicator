@@ -26,6 +26,7 @@ func (s *server) handleChange(c replication.Change) {
 		tag := getTag(e)
 		log.Debugf("Received change %d for tag %s", e.CommitSequence, tag)
 		err = s.db.PutEntry(tag, e.CommitSequence, e.Index, []byte(c.Data))
+		s.tracker.update(e.CommitSequence, tag)
 	}
 }
 

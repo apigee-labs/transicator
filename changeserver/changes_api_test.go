@@ -105,6 +105,44 @@ var _ = Describe("Changes API Tests", func() {
 		Expect(len(changes)).Should(Equal(1))
 		Expect(changes[0].New["sequence"]).Should(BeEquivalentTo(lastTestSequence - 3))
 	})
+
+	It("Long polling empty", func() {
+		lastCommit := lastChangeSequence
+		changes := getChanges(fmt.Sprintf(
+			"%s/changes?since=%d&tag=foo", baseURL, lastChangeSequence))
+		if len(changes) > 0 {
+			lastCommit = changes[len(changes)-1].CommitSequence
+		}
+
+		changes = getChanges(fmt.Sprintf(
+			"%s/changes?since=%d&tag=foo&block=1", baseURL, lastCommit+10))
+		Expect(changes).Should(BeEmpty())
+	})
+
+	It("Long polling", func() {
+		resultChan := make(chan []replication.EncodedChange, 1)
+
+		go func() {
+			lc := getChanges(fmt.Sprintf(
+				"%s/changes?since=%d&tag=foo", baseURL, lastChangeSequence))
+			resultChan <- lc
+			lc = getChanges(fmt.Sprintf(
+				"%s/changes?since=%d&tag=foo&block=30", baseURL, lastChangeSequence))
+			resultChan <- lc
+		}()
+
+		changes := <-resultChan
+		Expect(changes).Should(BeEmpty())
+
+		lastTestSequence++
+		executeSQL(fmt.Sprintf(
+			"insert into changeserver_test (sequence, tag) values(%d, 'foo')",
+			lastTestSequence))
+
+		changes = <-resultChan
+		Expect(len(changes)).Should(Equal(1))
+		Expect(changes[0].New["sequence"]).Should(BeEquivalentTo(lastTestSequence))
+	})
 })
 
 func getChanges(url string) []replication.EncodedChange {

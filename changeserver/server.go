@@ -20,6 +20,7 @@ const (
 type server struct {
 	db       *storage.DB
 	repl     *replication.Replicator
+	tracker  *changeTracker
 	stopChan chan chan<- bool
 }
 
@@ -55,6 +56,7 @@ func startChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot string) (*server
 	s := &server{
 		db:       db,
 		repl:     repl,
+		tracker:  createTracker(),
 		stopChan: make(chan chan<- bool, 1),
 	}
 
@@ -71,6 +73,7 @@ func (s *server) stop() {
 	stopped := make(chan bool, 1)
 	s.stopChan <- stopped
 	<-stopped
+	s.tracker.close()
 	s.db.Close()
 }
 
