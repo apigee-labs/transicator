@@ -62,7 +62,7 @@ var _ = BeforeSuite(func() {
 	// Start the server, which will be ready to respond to API calls
 	// and which will also start replication with the database
 	mux := http.NewServeMux()
-	testServer, err = startChangeServer(mux, testDataDir, dbURL, replicationSlot)
+	testServer, err = startChangeServer(mux, testDataDir, dbURL, replicationSlot, "")
 	Expect(err).Should(Succeed())
 
 	// Start listening for HTTP calls

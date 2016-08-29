@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync/atomic"
 
 	"github.com/30x/transicator/replication"
 	"github.com/30x/transicator/storage"
@@ -18,17 +19,18 @@ const (
 )
 
 type server struct {
-	db       *storage.DB
-	repl     *replication.Replicator
-	tracker  *changeTracker
-	stopChan chan chan<- bool
+	db             *storage.DB
+	repl           *replication.Replicator
+	tracker        *changeTracker
+	markdownReason atomic.Value
+	stopChan       chan chan<- bool
 }
 
 type errMsg struct {
 	Error string `json:"error"`
 }
 
-func startChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot string) (*server, error) {
+func startChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix string) (*server, error) {
 	success := false
 
 	db, err := storage.OpenDB(dbDir, defaultCacheSize)
@@ -54,16 +56,18 @@ func startChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot string) (*server
 	success = true
 
 	s := &server{
-		db:       db,
-		repl:     repl,
-		tracker:  createTracker(),
-		stopChan: make(chan chan<- bool, 1),
+		db:             db,
+		repl:           repl,
+		tracker:        createTracker(),
+		markdownReason: atomic.Value{},
+		stopChan:       make(chan chan<- bool, 1),
 	}
 
 	router := httprouter.New()
 	mux.Handle("/", router)
 
-	s.initChangesAPI("", router)
+	s.initChangesAPI(urlPrefix, router)
+	s.initDiagAPI(urlPrefix, router)
 	go s.runReplication()
 
 	return s, nil

@@ -1,0 +1,16 @@
+# High Priority
+
+Persist last commit sequence and start replication from there, or at least
+ignore all changes since before that.
+
+Handle database disconnect and reconnect.
+
+Exponential backoff on database connect errors.
+
+# Lower Priority
+
+SSL to Postgres
+
+SSL server.
+
+Basic authentication.

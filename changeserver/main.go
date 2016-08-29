@@ -3,12 +3,19 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
+	"time"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/tylerb/graceful"
 )
 
 const (
-	defaultPort      = 9000
-	defaultCacheSize = 65536
+	defaultPort             = 9000
+	defaultCacheSize        = 65536
+	gracefulShutdownTimeout = 60 * time.Second
 )
 
 func main() {
@@ -30,12 +37,16 @@ func runMain() int {
 	var dbDir string
 	var pgURL string
 	var pgSlot string
+	var prefix string
+	var debug bool
 	var help bool
 
 	flag.IntVar(&port, "p", defaultPort, "Listen port")
 	flag.StringVar(&dbDir, "d", "", "Location of database files")
 	flag.StringVar(&pgURL, "u", "", "URL to connect to Postgres")
 	flag.StringVar(&pgSlot, "s", "", "Slot name for Postgres logical replication")
+	flag.BoolVar(&debug, "D", false, "Turn on debugging")
+	flag.StringVar(&prefix, "P", "", "Optional prefix URL for all API calls")
 	flag.BoolVar(&help, "h", false, "Print help message")
 	flag.Parse()
 
@@ -49,16 +60,35 @@ func runMain() int {
 		return 3
 	}
 
-	fmt.Fprintln(os.Stderr, "Not done yet")
-	return 999
-	/*
-		server, err := startChangeServer(port, dbDir, pgURL, pgSlot)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error starting server: %s\n", err)
-			return 4
-		}
+	if debug {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
 
-		fmt.Fprintln(os.Stderr, "Not done -- need to listen here!")
-		return 999
-	*/
+	mux := http.NewServeMux()
+
+	server, err := startChangeServer(mux, dbDir, pgURL, pgSlot, prefix)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error starting server: %s\n", err)
+		return 4
+	}
+	defer server.stop()
+
+	listener, err := net.ListenTCP("tcp", &net.TCPAddr{
+		Port: port,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error starting server: %s\n", err)
+		return 5
+	}
+	defer listener.Close()
+
+	svr := &http.Server{
+		Handler: mux,
+	}
+
+	// This will intercept signals and carefully stop running HTTP transactions,
+	// then return so that we can close everything above.
+	graceful.Serve(svr, listener, gracefulShutdownTimeout)
+
+	return 0
 }
