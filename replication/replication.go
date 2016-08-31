@@ -27,9 +27,10 @@ type EncodedChange struct {
 	CommitSequence int64                  `json:"commitSequence"` // LSN of the transaction commit (> Sequence)
 	FirstSequence  int64                  `json:"firstSequence"`  // LSN of the first change in transaction (< CommitSequence)
 	Index          int32                  `json:"index"`          // Position of change within transaction
-	Operation      string                 `json:"operation"`      // insert, update, or delete
-	New            map[string]interface{} `json:"new,omitempty"`  // Fields in the new row for insert or update
-	Old            map[string]interface{} `json:"old,omitempty"`  // Fields in the old row for delete
+	Txid           int32                  `json:"txid"`
+	Operation      string                 `json:"operation"`     // insert, update, or delete
+	New            map[string]interface{} `json:"new,omitempty"` // Fields in the new row for insert or update
+	Old            map[string]interface{} `json:"old,omitempty"` // Fields in the old row for delete
 }
 
 /*
