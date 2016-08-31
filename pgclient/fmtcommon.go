@@ -50,6 +50,41 @@ func ParseNotice(m *InputMessage) (string, error) {
 	}
 }
 
+func ParseCopyOutResponse(m *InputMessage) (info *CopyResponseInfo, err error) {
+	if m.Type() != CopyOutResponse {
+		err = errors.New("Message type is not CopyOutResponse")
+		return
+	}
+
+	i8, err := m.ReadInt8()
+	if err != nil {
+		return
+	}
+	log.Debugf("copy format (raw): %d", i8)
+	copyFmt := GetCopyFormat(int(i8))
+
+	i16, err := m.ReadInt16()
+	if err != nil {
+		return
+	}
+	numCol := int(i16)
+	var colFmts = make([]int, numCol)
+	for i := 0; i < numCol; i++ {
+		var f int16
+		f, err = m.ReadInt16()
+		if err != nil {
+			return
+		}
+		colFmts[i] = int(f)
+	}
+	info = &CopyResponseInfo{
+		format:  copyFmt,
+		numCol:  numCol,
+		colFmts: colFmts,
+	}
+	return info, nil
+}
+
 /*
 ParseCopyData looks at a CopyData message and then parses it again as
 another message.
@@ -64,7 +99,7 @@ func ParseCopyData(m *InputMessage) (*InputMessage, error) {
 	return NewInputMessage(PgMessageType(typeByte), buf[1:]), nil
 }
 
-func parseRowDescription(m *InputMessage) ([]ColumnInfo, error) {
+func ParseRowDescription(m *InputMessage) ([]ColumnInfo, error) {
 	if m.Type() != RowDescription {
 		return nil, errors.New("Message type is not Row Description")
 	}
@@ -93,9 +128,9 @@ func parseRowDescription(m *InputMessage) ([]ColumnInfo, error) {
 	return cols, nil
 }
 
-func parseDataRow(m *InputMessage) ([]string, error) {
+func ParseDataRow(m *InputMessage) ([]string, error) {
 	if m.Type() != DataRow {
-		return nil, errors.New("Message type is not Row Description")
+		return nil, errors.New("Message type is not DataRow")
 	}
 
 	var fields []string
@@ -117,4 +152,37 @@ func parseDataRow(m *InputMessage) ([]string, error) {
 		}
 	}
 	return fields, nil
+}
+
+func ParseCommandComplete(m *InputMessage) (string, error) {
+	if m.Type() != CommandComplete {
+		return "", errors.New("Message type is not CommandComplete")
+	}
+
+	s, err := m.ReadString()
+	if err != nil {
+		return "", err
+	}
+
+	log.Debugf("CommandComplete %s", s)
+	return s, nil
+}
+
+func ParseParameterStatus(m *InputMessage) (string, error) {
+	if m.Type() != ParameterStatus {
+		return "", errors.New("Message type is not ParameterStatus")
+	}
+
+	s, err := m.ReadString()
+	if err != nil {
+		return "", err
+	}
+
+	s2, err := m.ReadString()
+	if err != nil {
+		return "", err
+	}
+
+	log.Debugf("ParameterStatus %s %s", s, s2)
+	return s + " " + s2, nil
 }

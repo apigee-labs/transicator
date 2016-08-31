@@ -45,16 +45,20 @@ func (c *PgConnection) SimpleQuery(query string) ([]ColumnInfo, [][]string, erro
 		switch im.Type() {
 		case CommandComplete:
 			// Command complete. Could return what we did.
+			msg, err := ParseCommandComplete(im)
+			if err == nil {
+				log.Debug(msg)
+			}
 		case CopyInResponse, CopyOutResponse:
 			// Copy in/out response -- not yet supported
 			cmdErr = errors.New("COPY operations not supported by this client")
 		case RowDescription:
-			rowDesc, err = parseRowDescription(im)
+			rowDesc, err = ParseRowDescription(im)
 			if err != nil {
 				cmdErr = err
 			}
 		case DataRow:
-			row, err := parseDataRow(im)
+			row, err := ParseDataRow(im)
 			if err != nil {
 				cmdErr = err
 			} else {

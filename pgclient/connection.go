@@ -39,6 +39,7 @@ const (
 	EmptyQueryResponse                   = 'I'
 	Terminate                            = 'X'
 	CopyData                             = 'd'
+	CopyDone                             = 'c'
 	WALData                              = 'w'
 	SenderKeepalive                      = 'k'
 	StandbyStatusUpdate                  = 'r'
