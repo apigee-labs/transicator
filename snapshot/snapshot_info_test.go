@@ -442,7 +442,31 @@ var _ = Describe("Taking a snapshot", func() {
 				<-- xmin=1 xmax=1 xip=nil LSN(0)
 			R1
 				<-- xmin=2 xmax=2 xip=nil LSN(0)
+	*/
 
+	Context("Rollback when No pending transactions present", func() {
+
+		It("should xmin == xmax, with xip == nil, xmin ==  txid + 1", func() {
+
+			doExecute1("begin")
+			txid1 := getCurrentTxid1()
+			doExecute1("insert into snapshot_test (id) values ('0-pending-tx-1')")
+			s0 := getCurrentSnapshotInfo()
+			fmt.Printf("\nSnapshot info %+v\n", s0)
+			Expect(s0.xmax).To(Equal(s0.xmin))
+			Expect(s0.xip_list).To(BeNil())
+
+			doExecute1("rollback")
+			s1 := getCurrentSnapshotInfo()
+			fmt.Printf("\nSnapshot info %+v\n", s1)
+			Expect(s1.xmin).To(Equal(txid1 + 1))
+			Expect(s1.xmax).To(Equal(s1.xmin))
+			Expect(s1.xip_list).To(BeNil())
+
+		})
+	})
+
+	/*
 		6. Rollback Single pending tx
 			B1
 				<-- xmin=1 xmax=1 xip=nil LSN(0)
@@ -453,4 +477,6 @@ var _ = Describe("Taking a snapshot", func() {
 			C1
 				<-- xmin=3 xmax=3 xip=nil LSN(1)
 	*/
+
+
 })
