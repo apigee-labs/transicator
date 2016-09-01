@@ -33,10 +33,10 @@ const (
  *   Key is a null-terminated string, sorted as per "strcmp".
  *
  * Format 10: Indexed Entry Record
- *   Consists of three parts: tag, transaction id, and index
+ *   Consists of three parts: tag, sequence id, and index
  *   Tenant name is null-terminated ASCII
- *   Transaction is is an int64
- *   Index is an int32
+ *   Logical Commit Sequence is an int64
+ *   Index is an int32 (This is the statement index within the logical commit sequence number)
  */
 
 // Byte order needs to match the native byte order of the host,

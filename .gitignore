@@ -2,3 +2,6 @@
 *.so
 vendor/
 .idea/
+.vscode
+replclient
+snapclient/data
