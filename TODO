@@ -32,6 +32,11 @@ That means that if some tenants in the system generate many changes and others
 do not, we end up with a large number of database scans -- one per client --
 which will not return anything.
 
+New API for changeserver:
+  Given {xmin, xmax, xip...}, return the commit sequence that matches.
+  This will probably require another index in LDB.
+  Greg can also work on this.
+
 # Other changes
 
 changeserver must persist last "commit sequence" that it received from
