@@ -1,16 +1,72 @@
-# High Priority
+# Changes necessary for new data model:
 
-Persist last commit sequence and start replication from there, or at least
-ignore all changes since before that.
+Use "scope" instead of "tag" as query parameter name when requesting sets of changes.
 
-Handle database disconnect and reconnect.
+Look for database field called "scope" for all changes, instead of "tag".
+(Or consider using "_scope" or something else more unique.)
 
-Exponential backoff on database connect errors.
+Change "/changes" API endpoint to take a list of "scope" query parameters rather
+than just one. The algorithm should look like this:
+
+  1) Query storage layer for changes since the "commit sequence" for each
+  scope passed in the request.
+  2) If there were no changes returned by step 1, and the "block" parameter was
+  set, use the "changetracker" to wait for any change for any scope passed
+  in the request.
+  3) If we blocked in step 2, re-do the query in step 1.
+  4) Sort the results in "commit sequence" order.
+
+Change "changetracker" to operate on a list of scopes instead of just a single
+"tag". User of this module would pass in an "[]string" of scopes, and changetracker
+would consider that for each change published. This is necessary so that
+the "/changes" API can handle multiple things.
+
+Consider the LevelDB schema design. Today the key consists of tag, commit
+sequence (LSN), and index. That means that to implement the API with multiple
+scopes, we have to read a database range once per scope, sort the result,
+and then apply the limit to the sorted result. However, this is inefficient
+for a large number of scopes. The alternative is to just order the database
+by commit sequence, and not by tag. Then there is only one operation to
+read from the database, but we must manually check for a scope match.
+That means that if some tenants in the system generate many changes and others
+do not, we end up with a large number of database scans -- one per client --
+which will not return anything.
+
+# Other changes
+
+changeserver must persist last "commit sequence" that it received from
+the database and committed to LevelDB. (The "metadata" functions in the
+"storage" module can be used for this.) Changeserver must ignore anything
+pushed from the database that is <= this sequence. This is important because
+we do not send the LSN that was applied back to Postgres on a regular basis,
+and even if we do it looks like sometimes PG sends us back old changes that
+we already saw, especially after a restart.
+
+changeserver must be able to handle a Postgres disconnect by reporting the
+disconnect, and trying to reconnect using an exponential backoff.
+
+changeserver must be able to start up even if Postgres is unavailable, start
+reconnect attempts using an exponential backoff, and eventually connect
+when PG is available.
+
+Consider what happens for a big transaction -- Postgres will return us
+many records, each with the same commit sequence, and different values
+of "index." Should the "/changes" API always return them all, even if
+"limit" is exceeded? It might simplify things.
 
 # Lower Priority
 
-SSL to Postgres
+SSL to Postgres server using PG's weird SSL techique. (Greg can do that.)
 
-SSL server.
+Add basic authentication to the API. (Greg has code for that.)
 
-Basic authentication.
+Complete the health check mechanism so that a load balancer can mark the server
+down for a zero-downtime replacement. (Greg can do that.)
+
+Docker image and repo for building it on Docker Hub.
+
+Deployment to E2E Kubernetes.
+
+Support the "Comet" technique or even WebSockets in addition to long polling.
+
+Investigate binary support for the change log from PG to LevelDB.
