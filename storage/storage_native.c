@@ -60,6 +60,25 @@ static int compare_string_key(
   return strcmp(a + 1, b + 1);
 }
 
+static int compare_txid_key(
+  void* c,
+  const char* a, size_t alen,
+  const char* b, size_t blen)
+{
+  if ((alen < 1) || (blen < 1)) { return 0; }
+
+  long long* ida = (long long*)(a + 1);
+  long long* idb = (long long*)(b + 1);
+
+  if (*ida < *idb) {
+    return -1;
+  }
+  if (*ida > *idb) {
+    return 1;
+  }
+  return 0;
+}
+
 static int compare_index_key(
   void* c,
   const char* a, size_t alen,
@@ -130,6 +149,8 @@ static int go_compare_bytes_impl(
     return compare_string_key(state, a, alen, b, blen);
   case INDEX_KEY:
     return compare_index_key(state, a, alen, b, blen);
+  case TXID_KEY:
+    return compare_txid_key(state, a, alen, b, blen);
   default:
     return 999;
   }

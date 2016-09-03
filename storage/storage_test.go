@@ -61,6 +61,19 @@ var _ = Describe("Storage Main Test", func() {
 		Expect(ret).Should(BeEquivalentTo(0))
 	})
 
+	It("TXID Index", func() {
+		err := testDB.PutTransactionIndex(123, 456)
+		Expect(err).Should(Succeed())
+		ret, err := testDB.GetTransactionIndex(123)
+		Expect(err).Should(Succeed())
+		Expect(ret).Should(BeEquivalentTo(456))
+		err = testDB.DeleteTransactionIndex(123)
+		Expect(err).Should(Succeed())
+		ret, err = testDB.GetTransactionIndex(123)
+		Expect(err).Should(Succeed())
+		Expect(ret).Should(BeZero())
+	})
+
 	It("Entries", func() {
 		err := quick.Check(testEntry, nil)
 		Expect(err).Should(Succeed())

@@ -241,6 +241,50 @@ func (s *DB) GetEntries(tag string, startLSN int64,
 	return results, nil
 }
 
+/*
+PutTransactionIndex inserts a record into an index field that records the
+lsn of a particular transaction. We need this in order to discover
+the commit index of a particular transaction snapshot.
+*/
+func (s *DB) PutTransactionIndex(txid, lsn int64) error {
+	keyBuf, keyLen := intToKey(TXIDKey, txid)
+	defer freePtr(keyBuf)
+	valBuf, valLen := intToPtr(lsn)
+	defer freePtr(valBuf)
+
+	return s.putEntry(keyBuf, keyLen, valBuf, valLen)
+}
+
+/*
+GetTransactionIndex returns the LSN value associated with the specified
+transaction ID.
+*/
+func (s *DB) GetTransactionIndex(txid int64) (int64, error) {
+	keyBuf, keyLen := intToKey(TXIDKey, txid)
+	defer freePtr(keyBuf)
+
+	val, valLen, err := s.readEntry(keyBuf, keyLen)
+	if err != nil {
+		return 0, err
+	}
+	if val == nil {
+		return 0, nil
+	}
+
+	defer freePtr(val)
+	return ptrToInt(val, valLen), nil
+}
+
+/*
+DeleteTransactionIndex deletes the index associated with the specified
+transaction ID.
+*/
+func (s *DB) DeleteTransactionIndex(txid int64) error {
+	keyBuf, keyLen := intToKey(TXIDKey, txid)
+	defer freePtr(keyBuf)
+	return s.deleteEntry(keyBuf, keyLen)
+}
+
 func (s *DB) deleteEntry(keyPtr unsafe.Pointer, keyLen C.size_t) error {
 	var e *C.char
 	C.go_db_delete(s.db, defaultWriteOptions, keyPtr, keyLen, &e)

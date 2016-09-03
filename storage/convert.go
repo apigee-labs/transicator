@@ -18,6 +18,7 @@ import (
 const (
 	KeyVersion = 1
 	StringKey  = 1
+	TXIDKey    = 5
 	IndexKey   = 10
 )
 
@@ -37,44 +38,16 @@ const (
  *   Tenant name is null-terminated ASCII
  *   Transaction is is an int64
  *   Index is an int32
+ *
+ * Format 20: Transaction index record
+ *   Key is an int64 (provides future expandability in case PG TXids grow to 64 bits)
+ *   Value will be another int64
  */
 
 // Byte order needs to match the native byte order of the host,
 // or the C code to compare keys doesn't work.
 // So this code will fail on a non-Intel CPU...
 var storageByteOrder binary.ByteOrder = binary.LittleEndian
-
-/*
- * uint64 key, used for entries. Used in tests so not dead code.
- */
-func uintToKey(keyType int, v uint64) (unsafe.Pointer, C.size_t) {
-	buf := &bytes.Buffer{}
-	binary.Write(buf, storageByteOrder, keyPrefix(keyType)[0])
-	binary.Write(buf, storageByteOrder, v)
-	return bytesToPtr(buf.Bytes())
-}
-
-/*
- * uint64 key, used for entries. Used in tests so not dead code.
- */
-func keyToUint(ptr unsafe.Pointer, len C.size_t) (int, uint64, error) {
-	if len < 1 {
-		return 0, 0, errors.New("Invalid key")
-	}
-	bb := ptrToBytes(ptr, len)
-	buf := bytes.NewBuffer(bb)
-
-	var ktb byte
-	binary.Read(buf, storageByteOrder, &ktb)
-	vers, kt := parseKeyPrefix(ktb)
-	if vers != KeyVersion {
-		return 0, 0, fmt.Errorf("Invalid key version %d", vers)
-	}
-	var key uint64
-	binary.Read(buf, storageByteOrder, &key)
-
-	return kt, key, nil
-}
 
 /*
  * String key, used for metadata.
@@ -110,6 +83,38 @@ func keyToString(ptr unsafe.Pointer, l C.size_t) (int, string, error) {
 	if len(keyBytes) > 0 {
 		key = string(keyBytes[:len(keyBytes)-1])
 	}
+	return kt, key, nil
+}
+
+/*
+int key, used for transaction ID index
+*/
+func intToKey(keyType int, v int64) (unsafe.Pointer, C.size_t) {
+	buf := &bytes.Buffer{}
+	binary.Write(buf, storageByteOrder, keyPrefix(keyType)[0])
+	binary.Write(buf, storageByteOrder, v)
+	return bytesToPtr(buf.Bytes())
+}
+
+/*
+int key, used for the transaction ID index. Only used in test code.
+*/
+func keyToInt(ptr unsafe.Pointer, len C.size_t) (int, int64, error) {
+	if len < 1 {
+		return 0, 0, errors.New("Invalid key")
+	}
+	bb := ptrToBytes(ptr, len)
+	buf := bytes.NewBuffer(bb)
+
+	var ktb byte
+	binary.Read(buf, storageByteOrder, &ktb)
+	vers, kt := parseKeyPrefix(ktb)
+	if vers != KeyVersion {
+		return 0, 0, fmt.Errorf("Invalid key version %d", vers)
+	}
+	var key int64
+	binary.Read(buf, storageByteOrder, &key)
+
 	return kt, key, nil
 }
 
@@ -170,6 +175,11 @@ func uintToPtr(v uint64) (unsafe.Pointer, C.size_t) {
 	return bytesToPtr(bb)
 }
 
+func intToPtr(v int64) (unsafe.Pointer, C.size_t) {
+	bb := intToBytes(v)
+	return bytesToPtr(bb)
+}
+
 func bytesToPtr(bb []byte) (unsafe.Pointer, C.size_t) {
 	bsLen := C.size_t(len(bb))
 	buf := C.malloc(bsLen)
@@ -178,6 +188,12 @@ func bytesToPtr(bb []byte) (unsafe.Pointer, C.size_t) {
 }
 
 func uintToBytes(v uint64) []byte {
+	buf := &bytes.Buffer{}
+	binary.Write(buf, storageByteOrder, v)
+	return buf.Bytes()
+}
+
+func intToBytes(v int64) []byte {
 	buf := &bytes.Buffer{}
 	binary.Write(buf, storageByteOrder, v)
 	return buf.Bytes()
@@ -193,6 +209,14 @@ func ptrToUint(ptr unsafe.Pointer, len C.size_t) uint64 {
 	bb := ptrToBytes(ptr, len)
 	buf := bytes.NewBuffer(bb)
 	var ret uint64
+	binary.Read(buf, storageByteOrder, &ret)
+	return ret
+}
+
+func ptrToInt(ptr unsafe.Pointer, len C.size_t) int64 {
+	bb := ptrToBytes(ptr, len)
+	buf := bytes.NewBuffer(bb)
+	var ret int64
 	binary.Read(buf, storageByteOrder, &ret)
 	return ret
 }

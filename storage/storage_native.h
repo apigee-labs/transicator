@@ -4,12 +4,12 @@
 
 #include <leveldb/c.h>
 
-/* These have to match constants in storage_convert.go */
+/* These have to match constants in storage_convert.go.
+   These go into just four bits so you only get 0-15! */
 #define KEY_VERSION 1
-#define STRING_KEY 1
-#define INDEX_KEY 10
-
-#define NUM_CFS 3
+#define STRING_KEY  1
+#define TXID_KEY    5
+#define INDEX_KEY   10
 
 #define COMPARATOR_NAME "TRANSICATOR-V1"
 

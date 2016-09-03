@@ -42,17 +42,30 @@ var _ = Describe("Conversion", func() {
 		err := quick.Check(testIndexKeyCompare, nil)
 		Expect(err).Should(Succeed())
 	})
+
+	It("TXID Key Compare", func() {
+		v1 := int64(123)
+		v2 := int64(456)
+		s := testTxIndexCompare(v1, v1)
+		Expect(s).Should(BeTrue())
+		s = testTxIndexCompare(v1, v2)
+		Expect(s).Should(BeTrue())
+		s = testTxIndexCompare(v2, v1)
+		Expect(s).Should(BeTrue())
+		err := quick.Check(testTxIndexCompare, nil)
+		Expect(err).Should(Succeed())
+	})
 })
 
-func testIntKey(kt int, key uint64) bool {
+func testIntKey(kt int, key int64) bool {
 	if kt < 0 || kt > (1<<8) {
 		return true
 	}
-	keyBytes, keyLen := uintToKey(kt, key)
+	keyBytes, keyLen := intToKey(kt, key)
 	Expect(keyLen).Should(BeEquivalentTo(9))
 	defer freePtr(keyBytes)
 
-	newType, newKey, err := keyToUint(keyBytes, keyLen)
+	newType, newKey, err := keyToInt(keyBytes, keyLen)
 	Expect(err).Should(Succeed())
 	Expect(newType).Should(Equal(kt))
 	Expect(newKey).Should(Equal(key))
@@ -115,6 +128,23 @@ func testMetadataIndexCompare(k1, k2 string) bool {
 		return cmp < 0
 	}
 	if k1 > k2 {
+		return cmp > 0
+	}
+	return cmp == 0
+}
+
+func testTxIndexCompare(tx1, tx2 int64) bool {
+	keyBytes1, keyLen1 := intToKey(TXIDKey, tx1)
+	defer freePtr(keyBytes1)
+	keyBytes2, keyLen2 := intToKey(TXIDKey, tx2)
+	defer freePtr(keyBytes2)
+
+	cmp := compareKeys(keyBytes1, keyLen1, keyBytes2, keyLen2)
+
+	if tx1 < tx2 {
+		return cmp < 0
+	}
+	if tx1 > tx2 {
 		return cmp > 0
 	}
 	return cmp == 0
