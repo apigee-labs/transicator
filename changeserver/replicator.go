@@ -25,11 +25,13 @@ func (s *server) handleChange(c replication.Change) {
 	} else {
 		tag := getTag(e)
 		log.Debugf("Received change %d for tag %s", e.CommitSequence, tag)
-		err = s.db.PutEntry(tag, e.CommitSequence, e.Index, []byte(c.Data))
+		s.db.PutEntry(tag, e.CommitSequence, e.Index, []byte(c.Data))
+		s.db.PutTransactionIndex(int64(e.Txid), e.CommitSequence)
 		s.tracker.update(e.CommitSequence, tag)
 	}
 }
 
+// TODO replace this with a list of "scopes".
 func getTag(e *replication.EncodedChange) string {
 	if e.New != nil {
 		if e.New["tag"] == nil {

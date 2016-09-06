@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/30x/transicator/pgclient"
@@ -17,7 +18,7 @@ import (
 )
 
 const (
-	debugTests      = true
+	debugTests      = false
 	replicationSlot = "change_server_test"
 	testDataDir     = "./changeservertestdata"
 )
@@ -88,14 +89,37 @@ var _ = AfterSuite(func() {
 	Expect(err).Should(Succeed())
 })
 
-func executeSQL(sql string) {
-	fmt.Fprintf(GinkgoWriter, "Executing SQL: \"%s\"\n", sql)
+func connectDB() *pgclient.PgConnection {
 	dbConn, err := pgclient.Connect(dbURL)
 	Expect(err).Should(Succeed())
+	return dbConn
+}
+
+func executeSQL(sql string) {
+	fmt.Fprintf(GinkgoWriter, "Executing SQL: \"%s\"\n", sql)
+	dbConn := connectDB()
 	defer dbConn.Close()
 
+	_, _, err := dbConn.SimpleQuery(sql)
+	Expect(err).Should(Succeed())
+}
+
+// Execute the SQL in a transaction and return the snapshot txids.
+func executeSQLTransaction(sql string) (int32, int32, []int32) {
+	fmt.Fprintf(GinkgoWriter, "Executing SQL: \"%s\"\n", sql)
+	dbConn := connectDB()
+	defer dbConn.Close()
+
+	_, _, err := dbConn.SimpleQuery("begin transaction isolation level repeatable read")
+	Expect(err).Should(Succeed())
 	_, _, err = dbConn.SimpleQuery(sql)
 	Expect(err).Should(Succeed())
+	_, txids, err := dbConn.SimpleQuery("select * from txid_current_snapshot()")
+	Expect(err).Should(Succeed())
+	Expect(len(txids)).Should(Equal(1))
+	_, _, err = dbConn.SimpleQuery("commit")
+	Expect(err).Should(Succeed())
+	return parseTxids(txids[0][0])
 }
 
 func executeGet(url string) []byte {
@@ -106,6 +130,25 @@ func executeGet(url string) []byte {
 	bod, err := ioutil.ReadAll(resp.Body)
 	Expect(err).Should(Succeed())
 	return bod
+}
+
+func parseTxids(ids string) (int32, int32, []int32) {
+	fmt.Fprintf(GinkgoWriter, "Parsing txids: %s\n", ids)
+	ss := strings.SplitN(ids, ":", 3)
+	Expect(len(ss)).Should(Equal(3))
+	min, _ := strconv.ParseInt(ss[0], 10, 32)
+	max, _ := strconv.ParseInt(ss[1], 10, 32)
+
+	var ips []int32
+	ipss := strings.Split(ss[2], ",")
+	for _, ipss := range ipss {
+		if strings.TrimSpace(ipss) != "" {
+			ip, _ := strconv.ParseInt(ipss, 10, 32)
+			ips = append(ips, int32(ip))
+		}
+	}
+
+	return int32(min), int32(max), ips
 }
 
 const testTableSQL = `
