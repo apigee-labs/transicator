@@ -16,13 +16,13 @@ type trackerUpdate struct {
 	updateType int
 	key        int32
 	change     int64
-	tag        string
+	scope      string
 	waiter     changeWaiter
 }
 
 type changeWaiter struct {
 	change int64
-	tag    string
+	scopes map[string]bool
 	rc     chan int64
 }
 
@@ -64,11 +64,11 @@ func (t *changeTracker) close() {
 Update indicates that the current sequence has changed. Wake up any waiting
 waiters and tell them about it.
 */
-func (t *changeTracker) update(change int64, tag string) {
+func (t *changeTracker) update(change int64, scope string) {
 	u := trackerUpdate{
 		updateType: update,
 		change:     change,
-		tag:        tag,
+		scope:      scope,
 	}
 	t.updateChan <- u
 }
@@ -77,8 +77,8 @@ func (t *changeTracker) update(change int64, tag string) {
 Wait blocks the calling gorouting forever until the change tracker has reached a value at least as high as
 "curChange." Return the current value when that happens.
 */
-func (t *changeTracker) wait(curChange int64, tag string) int64 {
-	_, resultChan := t.doWait(curChange, tag)
+func (t *changeTracker) wait(curChange int64, scopes []string) int64 {
+	_, resultChan := t.doWait(curChange, scopes)
 	return <-resultChan
 }
 
@@ -87,8 +87,8 @@ TimedWait blocks the current gorouting until either a new value higher than
 "curChange" has been reached, or "maxWait" has been exceeded.
 */
 func (t *changeTracker) timedWait(
-	curChange int64, maxWait time.Duration, tag string) int64 {
-	key, resultChan := t.doWait(curChange, tag)
+	curChange int64, maxWait time.Duration, scopes []string) int64 {
+	key, resultChan := t.doWait(curChange, scopes)
 	timer := time.NewTimer(maxWait)
 	select {
 	case result := <-resultChan:
@@ -103,16 +103,20 @@ func (t *changeTracker) timedWait(
 	}
 }
 
-func (t *changeTracker) doWait(curChange int64, tag string) (int32, chan int64) {
+func (t *changeTracker) doWait(curChange int64, scopes []string) (int32, chan int64) {
 	key := atomic.AddInt32(&t.lastKey, 1)
 	resultChan := make(chan int64, 1)
+	scopeMap := make(map[string]bool)
+	for _, s := range scopes {
+		scopeMap[s] = true
+	}
+
 	u := trackerUpdate{
 		updateType: newWaiter,
 		key:        key,
-		tag:        tag,
 		waiter: changeWaiter{
 			change: curChange,
-			tag:    tag,
+			scopes: scopeMap,
 			rc:     resultChan,
 		},
 	}
@@ -145,14 +149,14 @@ func (t *changeTracker) run() {
 
 	// Close out all waiting waiters
 	for _, w := range t.waiters {
-		w.rc <- t.lastChanges[w.tag]
+		w.rc <- t.getMaxChange(w.scopes)
 	}
 }
 
 func (t *changeTracker) handleUpdate(up trackerUpdate) {
-	t.lastChanges[up.tag] = up.change
+	t.lastChanges[up.scope] = up.change
 	for k, w := range t.waiters {
-		if up.change >= w.change && up.tag == w.tag {
+		if up.change >= w.change && w.scopes[up.scope] {
 			//log.Debugf("Waking up waiter waiting for change %d with change %d and tag %s",
 			//	w.change, up.change, up.tag)
 			w.rc <- up.change
@@ -162,8 +166,9 @@ func (t *changeTracker) handleUpdate(up trackerUpdate) {
 }
 
 func (t *changeTracker) handleWaiter(u trackerUpdate) {
-	if t.lastChanges[u.tag] >= u.waiter.change {
-		u.waiter.rc <- t.lastChanges[u.tag]
+	maxAlready := t.getMaxChange(u.waiter.scopes)
+	if maxAlready >= u.waiter.change {
+		u.waiter.rc <- maxAlready
 	} else {
 		t.waiters[u.key] = u.waiter
 	}
@@ -171,4 +176,14 @@ func (t *changeTracker) handleWaiter(u trackerUpdate) {
 
 func (t *changeTracker) handleCancel(key int32) {
 	delete(t.waiters, key)
+}
+
+func (t *changeTracker) getMaxChange(scopes map[string]bool) int64 {
+	var max int64
+	for scope := range scopes {
+		if t.lastChanges[scope] > max {
+			max = t.lastChanges[scope]
+		}
+	}
+	return max
 }

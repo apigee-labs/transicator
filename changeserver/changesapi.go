@@ -63,7 +63,7 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 
 	if len(entries) == 0 && block > 0 {
 		log.Debugf("Blocking for up to %d seconds", block)
-		newIndex := s.tracker.timedWait(since+1, time.Duration(block)*time.Second, tag)
+		newIndex := s.tracker.timedWait(since+1, time.Duration(block)*time.Second, []string{tag})
 		if newIndex > since {
 			entries, err = s.db.GetEntries(tag, since+1, index, limit)
 			if err != nil {
