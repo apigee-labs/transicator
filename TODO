@@ -1,37 +1,5 @@
 # Changes necessary for new data model:
 
-Use "scope" instead of "tag" as query parameter name when requesting sets of changes.
-
-Look for database field called "scope" for all changes, instead of "tag".
-(Or consider using "_scope" or something else more unique.)
-
-Change "/changes" API endpoint to take a list of "scope" query parameters rather
-than just one. The algorithm should look like this:
-
-  1) Query storage layer for changes since the "commit sequence" for each
-  scope passed in the request.
-  2) If there were no changes returned by step 1, and the "block" parameter was
-  set, use the "changetracker" to wait for any change for any scope passed
-  in the request.
-  3) If we blocked in step 2, re-do the query in step 1.
-  4) Sort the results in "commit sequence" order.
-
-Change "changetracker" to operate on a list of scopes instead of just a single
-"tag". User of this module would pass in an "[]string" of scopes, and changetracker
-would consider that for each change published. This is necessary so that
-the "/changes" API can handle multiple things.
-
-Consider the LevelDB schema design. Today the key consists of tag, commit
-sequence (LSN), and index. That means that to implement the API with multiple
-scopes, we have to read a database range once per scope, sort the result,
-and then apply the limit to the sorted result. However, this is inefficient
-for a large number of scopes. The alternative is to just order the database
-by commit sequence, and not by tag. Then there is only one operation to
-read from the database, but we must manually check for a scope match.
-That means that if some tenants in the system generate many changes and others
-do not, we end up with a large number of database scans -- one per client --
-which will not return anything.
-
 New API for changeserver:
   Given {xmin, xmax, xip...}, return the commit sequence that matches.
   This will probably require another index in LDB.

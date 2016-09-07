@@ -1,5 +1,6 @@
 *.o
 *.so
 vendor/
+bin/
 .idea/
 changeserver/changeserver

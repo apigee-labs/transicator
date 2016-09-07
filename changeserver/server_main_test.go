@@ -111,7 +111,7 @@ func executeGet(url string) []byte {
 const testTableSQL = `
   create table changeserver_test (
   sequence integer primary key,
-  tag varchar
+  _scope varchar
 )`
 
 const dropTableSQL = "drop table changeserver_test"

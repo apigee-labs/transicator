@@ -23,25 +23,25 @@ func (s *server) handleChange(c replication.Change) {
 	if err != nil {
 		log.Errorf("Received an invalid change: %s", err)
 	} else {
-		tag := getTag(e)
-		log.Debugf("Received change %d for tag %s", e.CommitSequence, tag)
-		err = s.db.PutEntry(tag, e.CommitSequence, e.Index, []byte(c.Data))
-		s.tracker.update(e.CommitSequence, tag)
+		scope := getScope(e)
+		log.Debugf("Received change %d for scope %s", e.CommitSequence, scope)
+		err = s.db.PutEntry(scope, e.CommitSequence, e.Index, []byte(c.Data))
+		s.tracker.update(e.CommitSequence, scope)
 	}
 }
 
-func getTag(e *replication.EncodedChange) string {
+func getScope(e *replication.EncodedChange) string {
 	if e.New != nil {
-		if e.New["tag"] == nil {
+		if e.New["_scope"] == nil {
 			return ""
 		}
-		return e.New["tag"].(string)
+		return e.New["_scope"].(string)
 	}
 	if e.Old != nil {
-		if e.Old["tag"] == nil {
+		if e.Old["_scope"] == nil {
 			return ""
 		}
-		return e.Old["tag"].(string)
+		return e.Old["_scope"].(string)
 	}
 	return ""
 }

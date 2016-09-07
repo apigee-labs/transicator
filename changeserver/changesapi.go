@@ -50,11 +50,15 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	tag := q.Get("tag")
+	scopes := q["scope"]
+	if len(scopes) == 0 {
+		// If no scope specified, replace with the empty scope
+		scopes = []string{""}
+	}
 
-	log.Debugf("Receiving changes: tag = %s since = %d index = %d limit = %d block = %d",
-		tag, since, index, limit, block)
-	entries, err := s.db.GetEntries(tag, since+1, index, limit)
+	log.Debugf("Receiving changes: scopes = %v since = %d index = %d limit = %d block = %d",
+		scopes, since, index, limit, block)
+	entries, err := s.db.GetMultiEntries(scopes, since+1, index, limit)
 	if err != nil {
 		sendError(resp, req, http.StatusInternalServerError, err.Error())
 		return
@@ -63,9 +67,9 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 
 	if len(entries) == 0 && block > 0 {
 		log.Debugf("Blocking for up to %d seconds", block)
-		newIndex := s.tracker.timedWait(since+1, time.Duration(block)*time.Second, []string{tag})
+		newIndex := s.tracker.timedWait(since+1, time.Duration(block)*time.Second, scopes)
 		if newIndex > since {
-			entries, err = s.db.GetEntries(tag, since+1, index, limit)
+			entries, err = s.db.GetMultiEntries(scopes, since+1, index, limit)
 			if err != nil {
 				sendError(resp, req, http.StatusInternalServerError, err.Error())
 				return
