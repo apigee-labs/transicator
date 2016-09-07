@@ -37,6 +37,12 @@ void go_db_iter_seek(leveldb_iterator_t* it,
   leveldb_iter_seek(it, (const char*)k, klen);
 }
 
+void go_db_writebatch_put(leveldb_writebatch_t* b,
+    const void* key, size_t klen,
+    const void* val, size_t vlen) {
+  leveldb_writebatch_put(b, (const char*)key, klen, (const char*)val, vlen);
+}
+
 static int compare_string_key(
   void* c,
   const char* a, size_t alen,

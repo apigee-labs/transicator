@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	jsonContent = "application/json"
-	textContent = "text/plain"
+	jsonContent     = "application/json"
+	textContent     = "text/plain"
+	lastSequenceKey = "_ls"
 )
 
 type server struct {
@@ -43,6 +44,11 @@ func startChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix strin
 		}
 	}()
 
+	firstChange, err := db.GetIntMetadata(lastSequenceKey)
+	if err != nil {
+		return nil, err
+	}
+
 	repl, err := replication.Start(pgURL, pgSlot)
 	if err != nil {
 		return nil, err
@@ -68,7 +74,7 @@ func startChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix strin
 
 	s.initChangesAPI(urlPrefix, router)
 	s.initDiagAPI(urlPrefix, router)
-	go s.runReplication()
+	go s.runReplication(firstChange)
 
 	return s, nil
 }

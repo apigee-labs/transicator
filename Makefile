@@ -8,3 +8,7 @@ all: ./bin/changeserver
 
 test:
 	go test `glide nv`
+
+clean:
+	rm -f bin/changeserver
+

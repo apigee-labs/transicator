@@ -42,7 +42,7 @@ const (
 // Byte order needs to match the native byte order of the host,
 // or the C code to compare keys doesn't work.
 // So this code will fail on a non-Intel CPU...
-var storageByteOrder binary.ByteOrder = binary.LittleEndian
+var storageByteOrder = binary.LittleEndian
 
 /*
  * uint64 key, used for entries. Used in tests so not dead code.
@@ -165,8 +165,8 @@ func stringToError(c *C.char) error {
 	return errors.New(es)
 }
 
-func uintToPtr(v uint64) (unsafe.Pointer, C.size_t) {
-	bb := uintToBytes(v)
+func intToPtr(v int64) (unsafe.Pointer, C.size_t) {
+	bb := intToBytes(v)
 	return bytesToPtr(bb)
 }
 
@@ -177,7 +177,7 @@ func bytesToPtr(bb []byte) (unsafe.Pointer, C.size_t) {
 	return buf, bsLen
 }
 
-func uintToBytes(v uint64) []byte {
+func intToBytes(v int64) []byte {
 	buf := &bytes.Buffer{}
 	binary.Write(buf, storageByteOrder, v)
 	return buf.Bytes()
@@ -189,10 +189,10 @@ func ptrToBytes(ptr unsafe.Pointer, len C.size_t) []byte {
 	return bb
 }
 
-func ptrToUint(ptr unsafe.Pointer, len C.size_t) uint64 {
+func ptrToInt(ptr unsafe.Pointer, len C.size_t) int64 {
 	bb := ptrToBytes(ptr, len)
 	buf := bytes.NewBuffer(bb)
-	var ret uint64
+	var ret int64
 	binary.Read(buf, storageByteOrder, &ret)
 	return ret
 }

@@ -118,10 +118,10 @@ func (s *DB) Delete() error {
 }
 
 /*
-GetUintMetadata returns metadata with the specified key and converts it
+GetIntMetadata returns metadata with the specified key and converts it
 into a uint64. It returns 0 if the key cannot be found.
 */
-func (s *DB) GetUintMetadata(key string) (uint64, error) {
+func (s *DB) GetIntMetadata(key string) (int64, error) {
 	keyBuf, keyLen := stringToKey(StringKey, key)
 	defer freePtr(keyBuf)
 
@@ -134,7 +134,7 @@ func (s *DB) GetUintMetadata(key string) (uint64, error) {
 	}
 
 	defer C.leveldb_free(unsafe.Pointer(val))
-	return ptrToUint(val, valLen), nil
+	return ptrToInt(val, valLen), nil
 }
 
 /*
@@ -158,13 +158,13 @@ func (s *DB) GetMetadata(key string) ([]byte, error) {
 }
 
 /*
-SetUintMetadata sets the metadata with the specified key to
+SetIntMetadata sets the metadata with the specified key to
 the integer value.
 */
-func (s *DB) SetUintMetadata(key string, val uint64) error {
+func (s *DB) SetIntMetadata(key string, val int64) error {
 	keyBuf, keyLen := stringToKey(StringKey, key)
 	defer freePtr(keyBuf)
-	valBuf, valLen := uintToPtr(val)
+	valBuf, valLen := intToPtr(val)
 	defer freePtr(valBuf)
 
 	return s.putEntry(keyBuf, keyLen, valBuf, valLen)
@@ -192,6 +192,38 @@ func (s *DB) PutEntry(scope string, lsn int64, index int32, data []byte) error {
 	defer freePtr(valBuf)
 
 	return s.putEntry(keyBuf, keyLen, valBuf, valLen)
+}
+
+/*
+PutEntryAndMetadata writes an entry to the database in the same batch as
+a metadata write.
+*/
+func (s *DB) PutEntryAndMetadata(scope string, lsn int64, index int32,
+	data []byte, metaKey string, metaVal int64) error {
+
+	batch := C.leveldb_writebatch_create()
+	defer C.leveldb_writebatch_destroy(batch)
+
+	keyBuf, keyLen := indexToKey(IndexKey, scope, lsn, index)
+	defer freePtr(keyBuf)
+	valBuf, valLen := bytesToPtr(data)
+	defer freePtr(valBuf)
+	C.go_db_writebatch_put(batch, keyBuf, keyLen, valBuf, valLen)
+
+	mkeyBuf, mkeyLen := stringToKey(StringKey, metaKey)
+	defer freePtr(mkeyBuf)
+	mvalBuf, mvalLen := intToPtr(metaVal)
+	defer freePtr(mvalBuf)
+	C.go_db_writebatch_put(batch, mkeyBuf, mkeyLen, mvalBuf, mvalLen)
+
+	var e *C.char
+	C.leveldb_write(s.db, defaultWriteOptions, batch, &e)
+
+	if e == nil {
+		return nil
+	}
+	defer C.leveldb_free(unsafe.Pointer(e))
+	return stringToError(e)
 }
 
 /*

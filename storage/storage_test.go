@@ -56,7 +56,7 @@ var _ = Describe("Storage Main Test", func() {
 	})
 
 	It("Int metadata negative", func() {
-		ret, err := testDB.GetUintMetadata("REALLYNOTFOUND")
+		ret, err := testDB.GetIntMetadata("REALLYNOTFOUND")
 		Expect(err).Should(Succeed())
 		Expect(ret).Should(BeEquivalentTo(0))
 	})
@@ -84,6 +84,11 @@ var _ = Describe("Storage Main Test", func() {
 		err := quick.Check(func(index int32, data []byte) bool {
 			return testEntry("tag", 8675309, index, data)
 		}, nil)
+		Expect(err).Should(Succeed())
+	})
+
+	It("Entries and metadata", func() {
+		err := quick.Check(testEntryAndData, nil)
 		Expect(err).Should(Succeed())
 	})
 
@@ -168,10 +173,10 @@ func testStringMetadata(key string, val []byte) bool {
 	return true
 }
 
-func testIntMetadata(key string, val uint64) bool {
-	err := testDB.SetUintMetadata(key, val)
+func testIntMetadata(key string, val int64) bool {
+	err := testDB.SetIntMetadata(key, val)
 	Expect(err).Should(Succeed())
-	ret, err := testDB.GetUintMetadata(key)
+	ret, err := testDB.GetIntMetadata(key)
 	Expect(err).Should(Succeed())
 	Expect(ret).Should(Equal(val))
 	return true
@@ -183,5 +188,18 @@ func testEntry(key string, lsn int64, index int32, val []byte) bool {
 	ret, err := testDB.GetEntry(key, lsn, index)
 	Expect(err).Should(Succeed())
 	Expect(bytes.Equal(val, ret)).Should(BeTrue())
+	return true
+}
+
+func testEntryAndData(key string, lsn int64, index int32, val []byte,
+	mkey string, mval int64) bool {
+	err := testDB.PutEntryAndMetadata(key, lsn, index, val, mkey, mval)
+	Expect(err).Should(Succeed())
+	ret, err := testDB.GetEntry(key, lsn, index)
+	Expect(err).Should(Succeed())
+	Expect(bytes.Equal(val, ret)).Should(BeTrue())
+	mret, err := testDB.GetIntMetadata(mkey)
+	Expect(err).Should(Succeed())
+	Expect(mret).Should(Equal(mval))
 	return true
 }

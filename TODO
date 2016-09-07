@@ -7,14 +7,6 @@ New API for changeserver:
 
 # Other changes
 
-changeserver must persist last "commit sequence" that it received from
-the database and committed to LevelDB. (The "metadata" functions in the
-"storage" module can be used for this.) Changeserver must ignore anything
-pushed from the database that is <= this sequence. This is important because
-we do not send the LSN that was applied back to Postgres on a regular basis,
-and even if we do it looks like sometimes PG sends us back old changes that
-we already saw, especially after a restart.
-
 changeserver must be able to handle a Postgres disconnect by reporting the
 disconnect, and trying to reconnect using an exponential backoff.
 

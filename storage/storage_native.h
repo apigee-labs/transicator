@@ -48,7 +48,7 @@ extern char* go_db_get(
     size_t* vallen,
     char** errptr);
 
-/* Do wrapper for leveldb_put */
+/* Go wrapper for leveldb_put */
 extern void go_db_put(
     leveldb_t* db,
     const leveldb_writeoptions_t* options,
@@ -56,16 +56,21 @@ extern void go_db_put(
     const void* val, size_t vallen,
     char** errptr);
 
-/* Do wrapper for leveldb_delete */
+/* Go wrapper for leveldb_delete */
 extern void go_db_delete(
     leveldb_t* db,
     const leveldb_writeoptions_t* options,
     const void* key, size_t keylen,
     char** errptr);
 
-/* Do wrapper for leveldbdb_seek */
+/* Go wrapper for leveldb_seek */
 extern void go_db_iter_seek(leveldb_iterator_t* it,
     const void* k, size_t klen);
+
+/* Go wrapper for leveldb batch put */
+extern void go_db_writebatch_put(leveldb_writebatch_t*,
+    const void* key, size_t klen,
+    const void* val, size_t vlen);
 
 /*
  * Wrapper for internal comparator to facilitate testing from Go.
