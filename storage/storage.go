@@ -10,6 +10,7 @@ import "C"
 
 import (
 	"math"
+	"sort"
 	"sync"
 	"unsafe"
 
@@ -28,6 +29,13 @@ type DB struct {
 	dbHandle *C.GoDb
 	db       *C.leveldb_t
 }
+
+type readResult struct {
+	lsn   int64
+	index int32
+	data  []byte
+}
+type readResults []readResult
 
 /*
 OpenDB opens a LevelDB database and makes it available for reads and writes.
@@ -125,7 +133,7 @@ func (s *DB) GetUintMetadata(key string) (uint64, error) {
 		return 0, nil
 	}
 
-	defer freePtr(val)
+	defer C.leveldb_free(unsafe.Pointer(val))
 	return ptrToUint(val, valLen), nil
 }
 
@@ -145,7 +153,7 @@ func (s *DB) GetMetadata(key string) ([]byte, error) {
 		return nil, nil
 	}
 
-	defer freePtr(val)
+	defer C.leveldb_free(unsafe.Pointer(val))
 	return ptrToBytes(val, valLen), nil
 }
 
@@ -175,10 +183,10 @@ func (s *DB) SetMetadata(key string, val []byte) error {
 }
 
 /*
-PutEntry writes an entry to the database indexed by tag, lsn, and index in order
+PutEntry writes an entry to the database indexed by scope, lsn, and index in order
 */
-func (s *DB) PutEntry(tag string, lsn int64, index int32, data []byte) error {
-	keyBuf, keyLen := indexToKey(IndexKey, tag, lsn, index)
+func (s *DB) PutEntry(scope string, lsn int64, index int32, data []byte) error {
+	keyBuf, keyLen := indexToKey(IndexKey, scope, lsn, index)
 	defer freePtr(keyBuf)
 	valBuf, valLen := bytesToPtr(data)
 	defer freePtr(valBuf)
@@ -189,39 +197,94 @@ func (s *DB) PutEntry(tag string, lsn int64, index int32, data []byte) error {
 /*
 GetEntry returns what was written by PutEntry.
 */
-func (s *DB) GetEntry(tag string, lsn int64, index int32) ([]byte, error) {
-	keyBuf, keyLen := indexToKey(IndexKey, tag, lsn, index)
+func (s *DB) GetEntry(scope string, lsn int64, index int32) ([]byte, error) {
+	keyBuf, keyLen := indexToKey(IndexKey, scope, lsn, index)
 	defer freePtr(keyBuf)
 
 	valBuf, valLen, err := s.readEntry(keyBuf, keyLen)
 	if err != nil {
 		return nil, err
 	}
-	defer freePtr(valBuf)
+	defer C.leveldb_free(unsafe.Pointer(valBuf))
 	return ptrToBytes(valBuf, valLen), nil
 }
 
 /*
 GetEntries returns entries in sequence number order for the given
-tag. The first entry returned will be the first entry that matches the specified
+scope. The first entry returned will be the first entry that matches the specified
 startLSN and startIndex. No more than "limit" entries will be returned.
 To retrieve the very next entry after an entry, simply increment the index
 by 1.
 */
-func (s *DB) GetEntries(tag string, startLSN int64,
-	startIndex int32, limit uint) ([][]byte, error) {
-	startKeyBuf, startKeyLen := indexToKey(IndexKey, tag, startLSN, startIndex)
+func (s *DB) GetEntries(scope string, startLSN int64,
+	startIndex int32, limit int) ([][]byte, error) {
+
+	rr, err := s.readOneRange(scope, startLSN, startIndex, limit, defaultReadOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	var results [][]byte
+	for _, r := range rr {
+		results = append(results, r.data)
+	}
+	return results, nil
+}
+
+/*
+GetMultiEntries returns entries in sequence number order a list of scopes.
+The first entry returned will be the first entry that matches the specified
+startLSN and startIndex. No more than "limit" entries will be returned.
+To retrieve the very next entry after an entry, simply increment the index
+by 1. This method uses a snapshot to guarantee consistency even if data is
+being inserted to the database -- as long as the data is being inserted
+in LSN order!
+*/
+func (s *DB) GetMultiEntries(scopes []string, startLSN int64,
+	startIndex int32, limit int) ([][]byte, error) {
+
+	// Do this all inside a level DB snapshot so that we get a repeatable read
+	snap := C.leveldb_create_snapshot(s.db)
+	defer C.leveldb_release_snapshot(s.db, snap)
+
+	ropts := C.leveldb_readoptions_create()
+	C.leveldb_readoptions_set_snapshot(ropts, snap)
+	defer C.leveldb_readoptions_destroy(ropts)
+
+	// Read range for each scope
+	var results readResults
+	for _, scope := range scopes {
+		rr, err := s.readOneRange(scope, startLSN, startIndex, limit, ropts)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, rr...)
+	}
+
+	// Sort and then take limit
+	sort.Sort(results)
+
+	var final [][]byte
+	for count := 0; count < len(results) && count < limit; count++ {
+		final = append(final, results[count].data)
+	}
+	return final, nil
+}
+
+func (s *DB) readOneRange(scope string, startLSN int64,
+	startIndex int32, limit int, ro *C.leveldb_readoptions_t) (readResults, error) {
+	startKeyBuf, startKeyLen := indexToKey(IndexKey, scope, startLSN, startIndex)
 	defer freePtr(startKeyBuf)
-	endKeyBuf, endKeyLen := indexToKey(IndexKey, tag, math.MaxInt64, math.MaxInt32)
+	endKeyBuf, endKeyLen := indexToKey(IndexKey, scope, math.MaxInt64, math.MaxInt32)
 	defer freePtr(endKeyBuf)
 
-	it := C.leveldb_create_iterator(s.db, defaultReadOptions)
+	it := C.leveldb_create_iterator(s.db, ro)
+	defer C.leveldb_iter_destroy(it)
 	C.go_db_iter_seek(it, startKeyBuf, startKeyLen)
 
-	var count uint
-	var results [][]byte
+	var results readResults
 
-	for count < limit && C.leveldb_iter_valid(it) != 0 {
+	for count := 0; count < limit && C.leveldb_iter_valid(it) != 0; count++ {
 		var keyLen C.size_t
 		iterKey := C.leveldb_iter_key(it, &keyLen)
 
@@ -230,11 +293,21 @@ func (s *DB) GetEntries(tag string, startLSN int64,
 			break
 		}
 
+		_, iterLSN, iterIx, err := keyToIndex(unsafe.Pointer(iterKey), keyLen)
+		if err != nil {
+			return nil, err
+		}
+
 		var dataLen C.size_t
-		data := C.leveldb_iter_value(it, &dataLen)
-		newVal := ptrToBytes(unsafe.Pointer(data), dataLen)
-		results = append(results, newVal)
-		count++
+		iterData := C.leveldb_iter_value(it, &dataLen)
+		newVal := ptrToBytes(unsafe.Pointer(iterData), dataLen)
+
+		result := readResult{
+			lsn:   iterLSN,
+			index: iterIx,
+			data:  newVal,
+		}
+		results = append(results, result)
 		C.leveldb_iter_next(it)
 	}
 
@@ -245,7 +318,7 @@ func (s *DB) deleteEntry(keyPtr unsafe.Pointer, keyLen C.size_t) error {
 	var e *C.char
 	C.go_db_delete(s.db, defaultWriteOptions, keyPtr, keyLen, &e)
 	if e != nil {
-		defer freeString(e)
+		defer C.leveldb_free(unsafe.Pointer(e))
 		return stringToError(e)
 	}
 	return nil
@@ -263,7 +336,7 @@ func (s *DB) putEntry(
 	if e == nil {
 		return nil
 	}
-	defer freeString(e)
+	defer C.leveldb_free(unsafe.Pointer(e))
 	return stringToError(e)
 }
 
@@ -282,9 +355,31 @@ func (s *DB) readEntry(
 		if e == nil {
 			return nil, 0, nil
 		}
-		defer freeString(e)
+		defer C.leveldb_free(unsafe.Pointer(e))
 		return nil, 0, stringToError(e)
 	}
 
 	return unsafe.Pointer(val), valLen, nil
+}
+
+// Needed to sort read results by LSN and index
+
+func (r readResults) Len() int {
+	return len(r)
+}
+
+func (r readResults) Less(i, j int) bool {
+	if r[i].lsn < r[j].lsn {
+		return true
+	}
+	if r[i].lsn == r[j].lsn && r[i].index < r[j].index {
+		return true
+	}
+	return false
+}
+
+func (r readResults) Swap(i, j int) {
+	tmp := r[i]
+	r[i] = r[j]
+	r[j] = tmp
 }

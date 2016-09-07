@@ -109,16 +109,16 @@ func getInt32Param(q url.Values, key string, dflt int32) (int32, error) {
 	return int32(v), nil
 }
 
-func getUintParam(q url.Values, key string, dflt uint) (uint, error) {
+func getIntParam(q url.Values, key string, dflt int) (int, error) {
 	qs := q.Get(key)
 	if qs == "" {
 		return dflt, nil
 	}
-	v, err := strconv.ParseUint(qs, 10, 32)
+	v, err := strconv.ParseInt(qs, 10, 32)
 	if err != nil {
 		return 0, err
 	}
-	return uint(v), nil
+	return int(v), nil
 }
 
 func sendError(resp http.ResponseWriter, req *http.Request, code int, msg string) {

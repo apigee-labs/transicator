@@ -38,13 +38,13 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	limit, err := getUintParam(q, "limit", defaultLimit)
+	limit, err := getIntParam(q, "limit", defaultLimit)
 	if err != nil {
 		sendError(resp, req, http.StatusBadRequest, "Invalid limit parameter")
 		return
 	}
 
-	block, err := getUintParam(q, "block", 0)
+	block, err := getIntParam(q, "block", 0)
 	if err != nil {
 		sendError(resp, req, http.StatusBadRequest, "Invalid block parameter")
 		return

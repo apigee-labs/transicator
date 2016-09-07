@@ -123,12 +123,35 @@ var _ = Describe("Storage Main Test", func() {
 
 		// Read invalid range
 		testGetSequence("d", 0, 0, 0, [][]byte{})
+
+		// Read a bunch of ranges
+		testGetSequences([]string{"a", "b", "c"}, 0, 0, 100,
+			[][]byte{val1, val2, val1, val2, val1, val1, val2})
+		// test that sorting works
+		testGetSequences([]string{"c", "b", "a"}, 0, 0, 100,
+			[][]byte{val1, val2, val1, val2, val1, val1, val2})
+		// test that limits work
+		testGetSequences([]string{"c", "b", "a"}, 0, 0, 3,
+			[][]byte{val1, val2, val1})
+		// test that they work when we start in the middle
+		testGetSequences([]string{"c", "b", "a"}, 2, 0, 3,
+			[][]byte{val2, val1, val1})
 	})
 })
 
 func testGetSequence(tag string, lsn int64,
-	index int32, limit uint, expected [][]byte) {
+	index int32, limit int, expected [][]byte) {
 	ret, err := testDB.GetEntries(tag, lsn, index, limit)
+	Expect(err).Should(Succeed())
+	Expect(len(ret)).Should(Equal(len(expected)))
+	for i := range expected {
+		Expect(bytes.Equal(expected[i], ret[i])).Should(BeTrue())
+	}
+}
+
+func testGetSequences(tags []string, lsn int64,
+	index int32, limit int, expected [][]byte) {
+	ret, err := testDB.GetMultiEntries(tags, lsn, index, limit)
 	Expect(err).Should(Succeed())
 	Expect(len(ret)).Should(Equal(len(expected)))
 	for i := range expected {

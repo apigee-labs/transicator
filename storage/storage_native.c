@@ -5,11 +5,6 @@
 
 static leveldb_comparator_t* Comparator;
 
-static size_t minsize(size_t a, size_t b)
-{
-  return (a < b) ? a : b;
-}
-
 char* go_db_get(
     leveldb_t* db,
     const leveldb_readoptions_t* options,
