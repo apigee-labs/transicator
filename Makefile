@@ -1,6 +1,6 @@
 all: ./bin/changeserver
 
-./bin/changeserver: ./bin ./changeserver/*.go
+./bin/changeserver: ./bin ./*/*.go
 	go build -o $@ ./changeserver
 
 ./bin:

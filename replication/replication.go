@@ -15,6 +15,18 @@ const (
 	epoch2000 = 946717749000000000
 	// Make sure that we reply to the server at least this often
 	heartbeatTimeout = 10 * time.Second
+	// Make sure that we always reconnect eventually
+	maxReconnectDelay     = time.Minute
+	initialReconnectDelay = 100 * time.Millisecond
+)
+
+type replCommand int
+
+const (
+	stopCmd replCommand = iota
+	disconnectedCmd
+	shutdownCmd
+	acknowedgeCmd
 )
 
 /*
@@ -55,12 +67,11 @@ func (c Change) Decode() (*EncodedChange, error) {
 A Replicator is a client for the logical replication protocol.
 */
 type Replicator struct {
-	conn       *pgclient.PgConnection
-	lastLSN    int64
-	slotName   string
-	changeChan chan Change
-	updateChan chan int64
-	stopChan   chan bool
+	slotName      string
+	connectString string
+	changeChan    chan Change
+	updateChan    chan int64
+	cmdChan       chan replCommand
 }
 
 /*
@@ -71,32 +82,18 @@ created if it does not already exist.
 */
 func Start(connect, sn string) (*Replicator, error) {
 	slotName := strings.ToLower(sn)
-	// TODO what if there are already queries?
-	conn, err := pgclient.Connect(connect + "?replication=database")
-	if err != nil {
-		return nil, err
-	}
+	connectString := connect + "?replication=database"
 
 	repl := &Replicator{
-		conn:       conn,
-		slotName:   slotName,
-		changeChan: make(chan Change, 100),
-		updateChan: make(chan int64, 100),
-		stopChan:   make(chan bool, 1),
+		slotName:      slotName,
+		connectString: connectString,
+		changeChan:    make(chan Change, 100),
+		updateChan:    make(chan int64, 100),
+		cmdChan:       make(chan replCommand, 1),
 	}
 
-	log.Debug("Starting replication...")
-	err = repl.connect()
-	if err != nil {
-		conn.Close()
-		return nil, err
-	}
-	log.Debug("Replication started.")
-
-	// Start the main loop that will listen for commands and stop requests
+	// The main loop will handle connecting and all events.
 	go repl.replLoop()
-	// And start another loop that will read from the socket
-	go repl.readLoop()
 
 	return repl, nil
 }
@@ -132,16 +129,17 @@ func (r *Replicator) Changes() <-chan Change {
 Stop stops the replication process and closes the channel.
 */
 func (r *Replicator) Stop() {
-	r.stopChan <- true
+	r.cmdChan <- stopCmd
 }
 
 /*
-Acknowledge acknowledges to the server that we have committed a change.
-Acknowledged changes will not be re-delivered via the replication
-protocol. Postgres LSN order and logical decoding order are not the
-same. It is important to periodically acknowledge LSNs, but it is also
-important that we do not do so until we are sure that all previous LSNs
-are stable.
+Acknowledge acknowledges to the server that we have committed a change, and
+will result in a message being sent back to the database to the same
+effect. It is important to periodically acknowledge changes so that the
+database does not have to maintain its transaction log forever.
+However, changes that happened before the specified LSN might still be
+delivered on a reconnect, so it is important that consumers of this class
+be prepared to handle and ignore duplicates.
 */
 func (r *Replicator) Acknowledge(lsn int64) {
 	r.updateChan <- lsn
@@ -151,43 +149,54 @@ func (r *Replicator) Acknowledge(lsn int64) {
 connect to the database and either get replication started, or
 return an error.
 */
-func (r *Replicator) connect() error {
+func (r *Replicator) connect() (*pgclient.PgConnection, error) {
+	success := false
+	conn, err := pgclient.Connect(r.connectString)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if !success {
+			conn.Close()
+		}
+	}()
+
 	slotCreated := false
 	startMsg := pgclient.NewOutputMessage(pgclient.Query)
 	startMsg.WriteString(fmt.Sprintf("START_REPLICATION SLOT %s LOGICAL 0/0", r.slotName))
-	err := r.conn.WriteMessage(startMsg)
+	err = conn.WriteMessage(startMsg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Read until we get a CopyBothResponse
 	for {
-		m, err := r.conn.ReadMessage()
+		m, err := conn.ReadMessage()
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		switch m.Type() {
 		case pgclient.ErrorResponse:
 			if !slotCreated {
 				// First error might because slot is not created, so create it.
-				consumeTillReady(r.conn)
+				consumeTillReady(conn)
 
 				log.Debugf("Creating new replication slot %s", r.slotName)
-				_, _, err = r.conn.SimpleQuery(fmt.Sprintf(
+				_, _, err = conn.SimpleQuery(fmt.Sprintf(
 					"CREATE_REPLICATION_SLOT %s LOGICAL transicator_output", r.slotName))
 				if err != nil {
-					return err
+					return nil, err
 				}
 				slotCreated = true
 
 				// Re-send start replication command.
-				err := r.conn.WriteMessage(startMsg)
+				err = conn.WriteMessage(startMsg)
 				if err != nil {
-					return err
+					return nil, err
 				}
 			} else {
-				return pgclient.ParseError(m)
+				return nil, pgclient.ParseError(m)
 			}
 
 		case pgclient.NoticeResponse:
@@ -197,64 +206,122 @@ func (r *Replicator) connect() error {
 		case pgclient.CopyBothResponse:
 			// We'll use this as a signal to move on
 			parseCopyBoth(m)
-			return nil
+			success = true
+			return conn, nil
 
 		default:
-			return fmt.Errorf("Unknown message from server: %s", m.Type())
+			return nil, fmt.Errorf("Unknown message from server: %s", m.Type())
 		}
 	}
 }
 
 /*
-This channel will read data from the clients and write to the server.
+This is the main loop. It handles connecting and reconnecting, and then
+receives commands from the client and passes them on as appropriate.
 */
 func (r *Replicator) replLoop() {
+	var highLSN int64
+	var connected bool
+	var connection *pgclient.PgConnection
+	var err error
+	connectDelay := initialReconnectDelay
+
 	hbTimer := time.NewTimer(heartbeatTimeout)
 	defer hbTimer.Stop()
 
+	// First time through -- connect right away
+	connectTimer := time.NewTimer(0)
+	defer connectTimer.Stop()
+
 	for {
 		select {
+		// We were not connected, so attempt a reconnect.
+		case <-connectTimer.C:
+			connection, err = r.connect()
+			if err == nil {
+				connected = true
+				go r.readLoop(connection)
+			} else {
+				connectDelay *= 2
+				if connectDelay > maxReconnectDelay {
+					connectDelay = maxReconnectDelay
+				}
+				log.Warningf("Error connecting to Postgres. Retrying in %v: %s",
+					connectDelay, err)
+				connectTimer.Reset(connectDelay)
+			}
+
+		// Client called "Acknowledge" to ask us to update the high LSN
 		case newLSN := <-r.updateChan:
-			if newLSN > r.lastLSN {
-				r.lastLSN = newLSN
+			if newLSN > highLSN {
+				highLSN = newLSN
 				// Send an update to the server
-				r.updateLSN()
-				hbTimer.Reset(heartbeatTimeout)
-			} else if newLSN <= 0 {
-				// Use this to trigger a re-send
-				r.updateLSN()
+				if connected {
+					r.updateLSN(highLSN, connection)
+				}
 				hbTimer.Reset(heartbeatTimeout)
 			}
 
+		// Periodic timeout to keep replication connection alive.
 		case <-hbTimer.C:
-			r.updateLSN()
-			hbTimer.Reset(heartbeatTimeout)
+			if connected {
+				r.updateLSN(highLSN, connection)
+				hbTimer.Reset(heartbeatTimeout)
+			}
 
-		case <-r.stopChan:
-			// This will send a terminate and also stop
-			log.Debug("Stopping replication")
-			r.conn.Close()
-			return
+		case cmd := <-r.cmdChan:
+			switch cmd {
+			// Read loop exiting due to connection failure.
+			case disconnectedCmd:
+				connected = false
+				log.Warning("Disconnected from Postgres.")
+				connection.Close()
+				connectDelay = initialReconnectDelay
+				connectTimer.Reset(connectDelay)
+
+			// Server asked us to acknowledge right now
+			case acknowedgeCmd:
+				if connected {
+					r.updateLSN(highLSN, connection)
+				}
+
+			// We think that the server wants us to disconnect
+			case shutdownCmd:
+				if connected {
+					cd := pgclient.NewOutputMessage(pgclient.CopyDone)
+					connection.WriteMessage(cd)
+					r.cmdChan <- disconnectedCmd
+				}
+
+			// Client called Stop
+			case stopCmd:
+				log.Debug("Stopping replication")
+				if connected {
+					connection.Close()
+				}
+				return
+			}
 		}
 	}
 }
 
 /*
-This channel will read from the server and hand out what it gets.
+This is the goroutine that is responsible for reading the replication output
+from the database and passing it along to clients.
 */
-func (r *Replicator) readLoop() {
+func (r *Replicator) readLoop(connection *pgclient.PgConnection) {
 	log.Debug("Starting to read from replication connection")
-	shouldClose := false
-	for !shouldClose {
-		m, err := r.conn.ReadMessage()
+
+	for {
+		m, err := connection.ReadMessage()
 		if err != nil {
 			log.Warningf("Error reading from server: %s", err)
 			errChange := Change{
 				Error: err,
 			}
 			r.changeChan <- errChange
-			shouldClose = true
-			break
+			r.cmdChan <- disconnectedCmd
+			return
 		}
 
 		switch m.Type() {
@@ -269,22 +336,25 @@ func (r *Replicator) readLoop() {
 				Error: err,
 			}
 			r.changeChan <- errChange
-			shouldClose = true
+			r.cmdChan <- disconnectedCmd
+			return
 
 		case pgclient.CopyData:
 			cm, err := pgclient.ParseCopyData(m)
 			if err != nil {
 				log.Warningf("Received invalid CopyData message: %s", err)
 			} else {
-				r.handleCopyData(cm)
+				shouldExit := r.handleCopyData(cm)
+				if shouldExit {
+					r.cmdChan <- shutdownCmd
+					return
+				}
 			}
 
 		default:
 			log.Warningf("Server received an unknown message %s", m.Type())
 		}
 	}
-
-	r.conn.Close()
 }
 
 func parseCopyBoth(m *pgclient.InputMessage) {
@@ -299,14 +369,16 @@ func parseCopyBoth(m *pgclient.InputMessage) {
 	}
 }
 
-func (r *Replicator) handleCopyData(m *pgclient.InputMessage) {
+func (r *Replicator) handleCopyData(m *pgclient.InputMessage) bool {
 	switch m.Type() {
 	case pgclient.WALData:
 		r.handleWALData(m)
+		return false
 	case pgclient.SenderKeepalive:
-		r.handleKeepalive(m)
+		return r.handleKeepalive(m)
 	default:
 		log.Warningf("Received unknown WAL message %s", m.Type())
+		return false
 	}
 }
 
@@ -324,28 +396,34 @@ func (r *Replicator) handleWALData(m *pgclient.InputMessage) {
 	r.changeChan <- c
 }
 
-func (r *Replicator) handleKeepalive(m *pgclient.InputMessage) {
+func (r *Replicator) handleKeepalive(m *pgclient.InputMessage) bool {
 	m.ReadInt64() // end WAL
 	m.ReadInt64() // Timestamp
 	replyNow, _ := m.ReadByte()
 	log.Debugf("Got heartbeat. Reply now = %d", replyNow)
 	if replyNow != 0 {
-		// This will trigger an immediate heartbeat of current LSN
-		r.Acknowledge(0)
+		// Postgres 9.5 does this on a graceful shutdown, and never exits unless
+		// we use this as a trigger to stop replication and exit.
+		// That is not what the documentation says -- the documentation says that
+		// we should just send a heartbeat right away. But if we do that, then
+		// we end up in a heartbeat loop and the database instance never exits.
+		log.Info("Database requested immediate heartbeat response. Using this to trigger shutdown.")
+		return true
 	}
+	return false
 }
 
-func (r *Replicator) updateLSN() {
-	log.Debugf("Updating server with last LSN %d", r.lastLSN)
+func (r *Replicator) updateLSN(highLSN int64, conn *pgclient.PgConnection) {
+	log.Debugf("Updating server with last LSN %d", highLSN)
 	om := pgclient.NewOutputMessage(pgclient.CopyData)
 	om.WriteByte(pgclient.StandbyStatusUpdate)
-	om.WriteInt64(r.lastLSN)                         // last written to disk
-	om.WriteInt64(r.lastLSN)                         // last flushed to disk
-	om.WriteInt64(r.lastLSN)                         // last applied
+	om.WriteInt64(highLSN)                           // last written to disk
+	om.WriteInt64(highLSN)                           // last flushed to disk
+	om.WriteInt64(highLSN)                           // last applied
 	om.WriteInt64(time.Now().UnixNano() - epoch2000) // Timestamp!
 	om.WriteByte(0)
 
-	r.conn.WriteMessage(om)
+	conn.WriteMessage(om)
 }
 
 func consumeTillReady(c *pgclient.PgConnection) error {

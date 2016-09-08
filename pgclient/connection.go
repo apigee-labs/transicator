@@ -72,6 +72,8 @@ func (t PgMessageType) String() string {
 		return "CopyOutResponse"
 	case CopyBothResponse:
 		return "CopyBothResponse"
+	case CopyDone:
+		return "CopyDone"
 	case RowDescription:
 		return "RowDescription"
 	case DataRow:
@@ -105,7 +107,7 @@ type PgConnection struct {
 }
 
 /*
-Connect to the databsae. "host" must be a "host:port" pair, "user" and "database"
+Connect to the database. "host" must be a "host:port" pair, "user" and "database"
 must contain the appropriate user name and database name, and "opts" contains
 any other keys and values to send to the database.
 
