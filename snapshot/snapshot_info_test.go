@@ -1,4 +1,4 @@
-package snapshot_test
+package snapshot
 
 import (
 	"fmt"
@@ -78,7 +78,10 @@ var _ = AfterSuite(func() {
 		dbConn0.Close()
 	}
 	if dbConn1 != nil {
-		dropTable("snapshot_test")
+		tables := []string{"snapshot_test", "APP", "DEVELOPER"}
+		for _, table := range tables {
+			dropTable(table)
+		}
 		dbConn1.Close()
 	}
 	if dbConn2 != nil {
@@ -159,7 +162,48 @@ const testTableSQL = `
     time time with time zone,
     timestamp timestamp with time zone,
     timestampp timestamp
-  )`
+  );
+  CREATE TABLE DEVELOPER (
+	org varchar(255),
+	email varchar(255),
+	id varchar(255),
+	sts varchar(255),
+	username varchar(255),
+	firstname varchar(255),
+	lastname varchar(255),
+	apigee_scope varchar(255),
+	enc_password varchar(255),
+	salt varchar(255),
+	created_at integer,
+	created_by varchar(255),
+	updated_at integer,
+	updated_by varchar(255),
+ 	_scope varchar(255),
+	PRIMARY KEY (id, _scope)
+);
+  CREATE TABLE APP (
+	org varchar(255),
+	id varchar(255),
+	dev_id varchar(255) null,
+	cmp_id varchar(255) null,
+	display_name varchar(255),
+	apigee_scope varchar(255),
+	type varchar(255),
+	access_type varchar(255),
+	cback_url varchar(255),
+	status varchar(255),
+	name varchar(255),
+	app_family varchar(255),
+	created_at integer,
+	created_by varchar(255),
+	updated_at integer,
+	updated_by varchar(255),
+ 	_scope varchar(255),
+	PRIMARY KEY (id, _scope),
+	FOREIGN KEY (dev_id, _scope) references DEVELOPER (id, _scope) ON DELETE CASCADE
+);
+
+`
 
 func getCurrentTxid1() int32 {
 	return getCurrentTxid(dbConn1)
@@ -442,7 +486,31 @@ var _ = Describe("Taking a snapshot", func() {
 				<-- xmin=1 xmax=1 xip=nil LSN(0)
 			R1
 				<-- xmin=2 xmax=2 xip=nil LSN(0)
+	*/
 
+	Context("Rollback when No pending transactions present", func() {
+
+		It("should xmin == xmax, with xip == nil, xmin ==  txid + 1", func() {
+
+			doExecute1("begin")
+			txid1 := getCurrentTxid1()
+			doExecute1("insert into snapshot_test (id) values ('0-pending-tx-1')")
+			s0 := getCurrentSnapshotInfo()
+			fmt.Printf("\nSnapshot info %+v\n", s0)
+			Expect(s0.xmax).To(Equal(s0.xmin))
+			Expect(s0.xip_list).To(BeNil())
+
+			doExecute1("rollback")
+			s1 := getCurrentSnapshotInfo()
+			fmt.Printf("\nSnapshot info %+v\n", s1)
+			Expect(s1.xmin).To(Equal(txid1 + 1))
+			Expect(s1.xmax).To(Equal(s1.xmin))
+			Expect(s1.xip_list).To(BeNil())
+
+		})
+	})
+
+	/*
 		6. Rollback Single pending tx
 			B1
 				<-- xmin=1 xmax=1 xip=nil LSN(0)
@@ -453,4 +521,26 @@ var _ = Describe("Taking a snapshot", func() {
 			C1
 				<-- xmin=3 xmax=3 xip=nil LSN(1)
 	*/
+
+	Context("Insert Tables (App & Developer), Get JSON data for ONE scope", func() {
+		It("Insert with multiple scopes, retrieve single scope data", func() {
+
+			doExecute1("begin")
+			doExecute1("insert into DEVELOPER (org, id, username, created_at, _scope) values ('Pepsi', 'xxx-yyy-zzz', 'sundar', 3231231, 'pepsi_##_dev')")
+			doExecute1("insert into DEVELOPER (org, id, username, created_at, _scope) values ('Pepsi', 'xxy-yyy-zzz', 'sundar', 3221231, 'pepsi_##_dev')")
+			doExecute1("insert into DEVELOPER (org, id, username, created_at, _scope) values ('Pepsi', 'xxz-yyy-zzz', 'sundar', 3231231, 'pepsi_##_test')")
+
+			doExecute1("insert into APP (org, id, dev_id, display_name, created_at, _scope) values ('Pepsi', 'aaa-bbb-ccc', 'xxx-yyy-zzz', 'Oracle', 9859348, 'pepsi_##_dev')")
+			doExecute1("commit")
+
+			scope := []string{"pepsi_##_dev", "pespsi_##_badchoice"}
+			_, err := GetTenantSnapshotData(dbURL, scope)
+			Expect(err).Should(Succeed())
+
+		})
+	})
+	/*
+		TBD: More test cases with decoding the data needs to be Checked in.
+	*/
+
 })
