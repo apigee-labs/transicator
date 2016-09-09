@@ -1,0 +1,43 @@
+{
+  "firstSequence": 123,
+  "lastSequence": 456,
+  "changes": [
+    {
+      "operation": 1,
+      "changeSequence": 123,
+      "commitSequence": 130,
+      "commitIndex": 0,
+      "txid": 10,
+      "newRow": [
+        { "key": "foo", "value": "foo", "type": 1 },
+        { "key": "bar", "value": "456", "type": 2 }
+      ]
+    },
+    {
+      "operation": 2,
+      "changeSequence": 124,
+      "commitSequence": 140,
+      "commitIndex": 0,
+      "txid": 11,
+      "newRow": [
+        { "key": "foo", "value": "foo", "type": 1 },
+        { "key": "bar", "value": "456", "type": 2 }
+      ],
+      "oldRow": [
+        { "key": "foo", "value": "foo", "type": 1 },
+        { "key": "bar", "value": "999", "type": 2 }
+      ]
+    },
+    {
+      "operation": 3,
+      "changeSequence": 125,
+      "commitSequence": 140,
+      "commitIndex": 1,
+      "txid": 11,
+      "oldRow": [
+        { "key": "foo", "value": "foo", "type": 1 },
+        { "key": "bar", "value": "456", "type": 2 }
+      ]
+    }
+  ]
+}
