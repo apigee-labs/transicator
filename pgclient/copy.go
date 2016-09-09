@@ -8,8 +8,10 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
+// CopyFormat is the format of the copy.
 type CopyFormat string
 
+// Various types of copy formats
 const (
 	CopyFormatText    CopyFormat = "text"
 	CopyFormatBinary             = "binary"
@@ -17,12 +19,14 @@ const (
 	CopyFormatUnknown            = "unknown"
 )
 
+// CopyResponseInfo describes the format of the copy response
 type CopyResponseInfo struct {
 	format  CopyFormat
 	numCol  int
 	colFmts []int
 }
 
+// GetCopyFormat translates a numeric format code from the server to a format
 func GetCopyFormat(i int) CopyFormat {
 	switch i {
 	case 0:
@@ -35,6 +39,7 @@ func GetCopyFormat(i int) CopyFormat {
 	}
 }
 
+// CopyTo performs the actual copy on the connection
 func (c *PgConnection) CopyTo(wr io.Writer, query string, cf CopyFormat) (io.Writer, error) {
 	var cmd string
 	if cf == CopyFormatText {

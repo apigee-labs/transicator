@@ -48,6 +48,7 @@ var _ = Describe("Connect string", func() {
 		Expect(i.user).Should(BeEmpty())
 		Expect(i.creds).Should(BeEmpty())
 		Expect(i.options).Should(BeEmpty())
+		Expect(i.ssl).ShouldNot(BeTrue())
 	})
 
 	It("Database", func() {
@@ -69,6 +70,17 @@ var _ = Describe("Connect string", func() {
 		Expect(i.database).Should(Equal("postgres"))
 		Expect(i.user).Should(Equal("user"))
 		Expect(i.creds).Should(BeEmpty())
+		Expect(i.options).Should(BeEmpty())
+	})
+
+	It("User and PW params", func() {
+		i, err := parseConnectString("postgresql://localhost?user=foo&password=bar")
+		Expect(err).Should(Succeed())
+		Expect(i.host).Should(Equal("localhost"))
+		Expect(i.port).Should(Equal(5432))
+		Expect(i.database).Should(Equal("postgres"))
+		Expect(i.user).Should(Equal("foo"))
+		Expect(i.creds).Should(Equal("bar"))
 		Expect(i.options).Should(BeEmpty())
 	})
 
@@ -94,8 +106,31 @@ var _ = Describe("Connect string", func() {
 		Expect(i.options).Should(BeEmpty())
 	})
 
+	It("User Host Port SSL", func() {
+		i, err := parseConnectString("postgresql://user:secret@myhost:9999?ssl=true")
+		Expect(err).Should(Succeed())
+		Expect(i.host).Should(Equal("myhost"))
+		Expect(i.port).Should(Equal(9999))
+		Expect(i.database).Should(Equal("postgres"))
+		Expect(i.user).Should(Equal("user"))
+		Expect(i.creds).Should(Equal("secret"))
+		Expect(i.ssl).Should(BeTrue())
+		Expect(i.options).Should(BeEmpty())
+	})
+
+	It("User Host Port Override", func() {
+		i, err := parseConnectString("postgresql://user:secret@myhost:9999?user=foo&password=bar")
+		Expect(err).Should(Succeed())
+		Expect(i.host).Should(Equal("myhost"))
+		Expect(i.port).Should(Equal(9999))
+		Expect(i.database).Should(Equal("postgres"))
+		Expect(i.user).Should(Equal("foo"))
+		Expect(i.creds).Should(Equal("bar"))
+		Expect(i.options).Should(BeEmpty())
+	})
+
 	It("Params", func() {
-		i, err := parseConnectString("postgres://other@otherhost/otherdb?connect_timeout=10&application_name=myapp")
+		i, err := parseConnectString("postgres://other@otherhost/otherdb?connect_timeout=10&application_name=myapp&ssl=true")
 		Expect(err).Should(Succeed())
 		Expect(i.host).Should(Equal("otherhost"))
 		Expect(i.port).Should(Equal(5432))
@@ -104,6 +139,7 @@ var _ = Describe("Connect string", func() {
 		Expect(i.creds).Should(BeEmpty())
 		Expect(i.options["connect_timeout"]).Should(Equal("10"))
 		Expect(i.options["application_name"]).Should(Equal("myapp"))
+		Expect(i.ssl).Should(BeTrue())
 	})
 
 	It("Invalid scheme", func() {

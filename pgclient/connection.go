@@ -3,8 +3,10 @@ package pgclient
 import (
 	"bytes"
 	"crypto/md5"
+	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -13,7 +15,10 @@ import (
 )
 
 const (
+	// Postgres protocol version. We only support the latest as of 9.5.
 	protocolVersion = (3 << 16)
+	// Magic number needed to initate SSL stuff
+	sslMagicNumber = 80877103
 )
 
 /*
@@ -111,9 +116,9 @@ Connect to the database. "host" must be a "host:port" pair, "user" and "database
 must contain the appropriate user name and database name, and "opts" contains
 any other keys and values to send to the database.
 
-The connect string works the same way as "psql":
+The connect string works the same way as "psql," or the JDBC driver:
 
-postgres://[user[:password]@]hostname[:port]/[database]?param=val&param=val
+postgres://[user[:password]@]hostname[:port]/[database]?ssl=[true|false]&param=val&param=val
 */
 func Connect(connect string) (*PgConnection, error) {
 	ci, err := parseConnectString(connect)
@@ -121,6 +126,99 @@ func Connect(connect string) (*PgConnection, error) {
 		return nil, err
 	}
 
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", ci.host, ci.port))
+	if err != nil {
+		return nil, err
+	}
+	c := &PgConnection{
+		conn: conn,
+	}
+
+	success := false
+	defer func() {
+		if !success {
+			conn.Close()
+		}
+	}()
+
+	if ci.ssl {
+		err = c.startSSL(ci)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Send "Startup" message
+	err = c.sendStartup(ci)
+	if err != nil {
+		return nil, err
+	}
+
+	// Loop here later for challenge-response
+	err = c.authenticationLoop(ci)
+	if err != nil {
+		return nil, err
+	}
+
+	// Finish up with receiving parameters and all that
+	err = c.finishConnect(ci)
+	if err == nil {
+		success = true
+	}
+	return c, err
+}
+
+func (c *PgConnection) startSSL(ci *connectInfo) error {
+	log.Debug("Starting SSL on connection")
+	sslStartup := NewStartupMessage()
+	sslStartup.WriteInt32(sslMagicNumber)
+
+	err := c.WriteMessage(sslStartup)
+	if err != nil {
+		return err
+	}
+
+	// Just read one byte to see if we support SSL:
+	sslStatus := make([]byte, 1)
+	_, err = io.ReadFull(c.conn, sslStatus)
+	if err != nil {
+		log.Debug("Error on read")
+		return err
+	}
+
+	log.Debugf("Got back %v", sslStatus[0])
+	switch sslStatus[0] {
+	case 'S':
+		return c.sslHandshake(ci)
+	case 'N':
+		return errors.New("Server does not support SSL")
+	default:
+		return fmt.Errorf("Invalid SSL handshake from server: %v", sslStatus[0])
+	}
+}
+
+func (c *PgConnection) sslHandshake(ci *connectInfo) error {
+	// Always do TLS without verifying the server
+	tlsConfig := &tls.Config{
+		ServerName:         ci.host,
+		InsecureSkipVerify: true,
+	}
+
+	tlsConn := tls.Client(c.conn, tlsConfig)
+	err := tlsConn.Handshake()
+	if err != nil {
+		return err
+	}
+
+	cs := tlsConn.ConnectionState()
+	log.Debugf("TLS state: %v", cs)
+	//log.Debugf("TLS status: handshake = %v version = %d cipher = %d protocol = %s",
+	//	cs.HandshakeComplete, cs.Version, cs.CipherSuite, cs.NegotiatedProtocol)
+	c.conn = tlsConn
+	return nil
+}
+
+func (c *PgConnection) sendStartup(ci *connectInfo) error {
 	startup := NewStartupMessage()
 	startup.WriteInt32(protocolVersion)
 	startup.WriteString("user")
@@ -135,44 +233,26 @@ func Connect(connect string) (*PgConnection, error) {
 
 	startup.WriteString("")
 
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", ci.host, ci.port))
-	if err != nil {
-		return nil, err
-	}
+	return c.WriteMessage(startup)
+}
 
-	success := false
-	defer func() {
-		if !success {
-			conn.Close()
-		}
-	}()
-
-	c := &PgConnection{
-		conn: conn,
-	}
-
-	err = c.WriteMessage(startup)
-	if err != nil {
-		return nil, err
-	}
-
-	// Loop here later for challenge-response
+func (c *PgConnection) authenticationLoop(ci *connectInfo) error {
 	authDone := false
 	for !authDone {
 		im, err := c.ReadMessage()
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		if im.Type() == ErrorResponse {
-			return nil, ParseError(im)
+			return ParseError(im)
 		} else if im.Type() != AuthenticationResponse {
-			return nil, fmt.Errorf("Invalid response from server: %v", im.Type())
+			return fmt.Errorf("Invalid response from server: %v", im.Type())
 		}
 
 		authResp, err := im.ReadInt32()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		switch authResp {
 		case 0:
@@ -187,15 +267,18 @@ func Connect(connect string) (*PgConnection, error) {
 			pm.WriteString(passwordMD5(ci.user, ci.creds, salt))
 			c.WriteMessage(pm)
 		default:
-			return nil, fmt.Errorf("Invalid authentication response: %d", authResp)
+			return fmt.Errorf("Invalid authentication response: %d", authResp)
 		}
 	}
+	return nil
+}
 
+func (c *PgConnection) finishConnect(ci *connectInfo) error {
 	// Loop to wait for "ready" status
 	for {
 		im, err := c.ReadMessage()
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		switch im.Type() {
@@ -210,13 +293,12 @@ func Connect(connect string) (*PgConnection, error) {
 			msg, _ := ParseNotice(im)
 			log.Info(msg)
 		case ErrorResponse:
-			return nil, ParseError(im)
+			return ParseError(im)
 		case ReadyForQuery:
 			// Ready for query!
-			success = true
-			return c, nil
+			return nil
 		default:
-			return nil, fmt.Errorf("Invalid database response %v", im.Type())
+			return fmt.Errorf("Invalid database response %v", im.Type())
 		}
 	}
 }
@@ -227,10 +309,10 @@ Close does what you think it does.
 func (c *PgConnection) Close() {
 	if c.conn != nil {
 		tm := NewOutputMessage(Terminate)
+		// Ignore error because what would we do if we couldn't send?
 		c.WriteMessage(tm)
 		log.Debug("Closing TCP connection")
 		c.conn.Close()
-		c.conn = nil
 	}
 }
 

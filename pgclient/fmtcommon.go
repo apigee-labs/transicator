@@ -50,6 +50,7 @@ func ParseNotice(m *InputMessage) (string, error) {
 	}
 }
 
+// ParseCopyOutResponse parses the response from the CopyData message
 func ParseCopyOutResponse(m *InputMessage) (info *CopyResponseInfo, err error) {
 	if m.Type() != CopyOutResponse {
 		err = errors.New("Message type is not CopyOutResponse")
@@ -99,6 +100,7 @@ func ParseCopyData(m *InputMessage) (*InputMessage, error) {
 	return NewInputMessage(PgMessageType(typeByte), buf[1:]), nil
 }
 
+// ParseRowDescription looks at a RowDescription message and parses it
 func ParseRowDescription(m *InputMessage) ([]ColumnInfo, error) {
 	if m.Type() != RowDescription {
 		return nil, errors.New("Message type is not Row Description")
@@ -128,6 +130,7 @@ func ParseRowDescription(m *InputMessage) ([]ColumnInfo, error) {
 	return cols, nil
 }
 
+// ParseDataRow turns a single DataRow message to a list of strings
 func ParseDataRow(m *InputMessage) ([]string, error) {
 	if m.Type() != DataRow {
 		return nil, errors.New("Message type is not DataRow")
@@ -154,6 +157,7 @@ func ParseDataRow(m *InputMessage) ([]string, error) {
 	return fields, nil
 }
 
+// ParseCommandComplete parses the CommandComplete message
 func ParseCommandComplete(m *InputMessage) (string, error) {
 	if m.Type() != CommandComplete {
 		return "", errors.New("Message type is not CommandComplete")
@@ -168,6 +172,7 @@ func ParseCommandComplete(m *InputMessage) (string, error) {
 	return s, nil
 }
 
+// ParseParameterStatus parses the ParameterStatus message
 func ParseParameterStatus(m *InputMessage) (string, error) {
 	if m.Type() != ParameterStatus {
 		return "", errors.New("Message type is not ParameterStatus")

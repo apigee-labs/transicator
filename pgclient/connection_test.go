@@ -31,4 +31,14 @@ var _ = Describe("Connection Tests", func() {
 		Expect(err).ShouldNot(Succeed())
 		fmt.Fprintf(GinkgoWriter, "Error from database: %s\n", err)
 	})
+
+	It("Basic Connect with SSL", func() {
+		if dbURL == "" {
+			return
+		}
+		conn, err := Connect(dbURL + "?ssl=true")
+		Expect(err).Should(Succeed())
+		Expect(conn).ShouldNot(BeNil())
+		conn.Close()
+	})
 })

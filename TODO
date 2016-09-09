@@ -7,13 +7,6 @@ New API for changeserver:
 
 # Other changes
 
-changeserver must be able to handle a Postgres disconnect by reporting the
-disconnect, and trying to reconnect using an exponential backoff.
-
-changeserver must be able to start up even if Postgres is unavailable, start
-reconnect attempts using an exponential backoff, and eventually connect
-when PG is available.
-
 Consider what happens for a big transaction -- Postgres will return us
 many records, each with the same commit sequence, and different values
 of "index." Should the "/changes" API always return them all, even if

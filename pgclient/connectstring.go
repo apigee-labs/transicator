@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -23,9 +24,16 @@ type connectInfo struct {
 	database string
 	user     string
 	creds    string
+	ssl      bool
 	options  map[string]string
 }
 
+/*
+parseConnectString parses a postgres connection string in the style of JDBC
+into something we can use internally.
+see:
+https://jdbc.postgresql.org/documentation/80/connect.html
+*/
 func parseConnectString(c string) (*connectInfo, error) {
 	p, err := url.Parse(c)
 	if err != nil {
@@ -64,6 +72,7 @@ func parseConnectString(c string) (*connectInfo, error) {
 		database = p.Path[1:]
 	}
 
+	// Parse all "query parameters" into options
 	opts := make(map[string]string)
 	for paramName := range p.Query() {
 		opts[paramName] = p.Query().Get(paramName)
@@ -71,10 +80,26 @@ func parseConnectString(c string) (*connectInfo, error) {
 
 	var user string
 	var pw string
+	ssl := false
 
 	if p.User != nil {
 		user = p.User.Username()
 		pw, _ = p.User.Password()
+	}
+
+	// "user" and "password" can override what we set before
+	if opts["user"] != "" {
+		user = opts["user"]
+		delete(opts, "user")
+	}
+	if opts["password"] != "" {
+		pw = opts["password"]
+		delete(opts, "password")
+	}
+
+	if opts["ssl"] != "" {
+		ssl = strings.EqualFold(opts["ssl"], "true")
+		delete(opts, "ssl")
 	}
 
 	return &connectInfo{
@@ -83,6 +108,7 @@ func parseConnectString(c string) (*connectInfo, error) {
 		database: database,
 		user:     user,
 		creds:    pw,
+		ssl:      ssl,
 		options:  opts,
 	}, nil
 }
