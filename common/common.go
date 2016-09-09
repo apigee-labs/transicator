@@ -44,17 +44,17 @@ type Change struct {
 	Operation Operation `json:"operation"`
 	// The Postgres LSN when the row changed. This will be interleaved
 	// in the change list because transactions commit at different times.
-	ChangeSequence uint64 `json:"changeSequence"`
+	ChangeSequence int64 `json:"changeSequence"`
 	// The LSN when the change was committed. Changes are delivered in this order.
-	CommitSequence uint64 `json:"commitSequence"`
+	CommitSequence int64 `json:"commitSequence"`
 	// The order in which the change happened within the commit. For a transaction
 	// affects multiple rows, changes will be listed in order, and this value
 	// will begin at zero and be incremented by one.
-	CommitIndex uint32 `json:"commitIndex"`
+	CommitIndex int32 `json:"commitIndex"`
 	// The Postgres Transaction ID when this change committed. This may be used
 	// to find a CommitSequence from a particular snapshot. (TXIDs are 32
 	// bits inside Postgres but we may be able to expand this in the future.)
-	TransactionID uint64 `json:"txid"`
+	TransactionID int64 `json:"txid"`
 	// For an insert operation, the columns that are being inserted. For an update,
 	// the new value of the columns
 	NewRow Row `json:"newRow,omitempty"`
@@ -93,11 +93,11 @@ type ChangeList struct {
 	// The highest value for "CommitSequence" in the whole database. The
 	// client may use this to understand when they are at the end of the list
 	// of changes.
-	LastSequence uint64 `json:"lastSequence"`
+	LastSequence int64 `json:"lastSequence"`
 	// The lowest value for "CommitSequence" in the whole database. The client
 	// may use this to determine if they are at the beginning of the whole
 	// change list and must request a new snapshot to get consistent data.
-	FirstSequence uint64 `json:"firstSequence"`
+	FirstSequence int64 `json:"firstSequence"`
 	// All the changes, in order of "commit sequence" and "commit index"
 	Changes []Change `json:"changes"`
 }
