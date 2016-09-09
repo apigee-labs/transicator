@@ -32,7 +32,7 @@ var _ = Describe("Connection Tests", func() {
 		fmt.Fprintf(GinkgoWriter, "Error from database: %s\n", err)
 	})
 
-	It("Basic Connect with SSL", func() {
+	PIt("Basic Connect with SSL", func() {
 		if dbURL == "" {
 			return
 		}
