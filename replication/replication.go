@@ -1,11 +1,11 @@
 package replication
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/30x/transicator/common"
 	"github.com/30x/transicator/pgclient"
 	log "github.com/Sirupsen/logrus"
 )
@@ -30,46 +30,12 @@ const (
 )
 
 /*
-EncodedChange represents the JSON schema of a change produced via
-logical replication.
-*/
-type EncodedChange struct {
-	Table          string                 `json:"table"`
-	Sequence       int64                  `json:"sequence"`       // LSN of the actual change
-	CommitSequence int64                  `json:"commitSequence"` // LSN of the transaction commit (> Sequence)
-	FirstSequence  int64                  `json:"firstSequence"`  // LSN of the first change in transaction (< CommitSequence)
-	Index          int32                  `json:"index"`          // Position of change within transaction
-	Txid           int32                  `json:"txid"`
-	Operation      string                 `json:"operation"`     // insert, update, or delete
-	New            map[string]interface{} `json:"new,omitempty"` // Fields in the new row for insert or update
-	Old            map[string]interface{} `json:"old,omitempty"` // Fields in the old row for delete
-}
-
-/*
-A Change represents a single change that has been replicated from the server.
-*/
-type Change struct {
-	LSN   int64
-	Data  string
-	Error error
-}
-
-/*
-Decode returns a decoded version of the JSON.
-*/
-func (c Change) Decode() (*EncodedChange, error) {
-	var change EncodedChange
-	err := json.Unmarshal([]byte(c.Data), &change)
-	return &change, err
-}
-
-/*
 A Replicator is a client for the logical replication protocol.
 */
 type Replicator struct {
 	slotName      string
 	connectString string
-	changeChan    chan Change
+	changeChan    chan *common.Change
 	updateChan    chan int64
 	cmdChan       chan replCommand
 }
@@ -87,7 +53,7 @@ func Start(connect, sn string) (*Replicator, error) {
 	repl := &Replicator{
 		slotName:      slotName,
 		connectString: connectString,
-		changeChan:    make(chan Change, 100),
+		changeChan:    make(chan *common.Change, 100),
 		updateChan:    make(chan int64, 100),
 		cmdChan:       make(chan replCommand, 1),
 	}
@@ -121,7 +87,7 @@ func DropSlot(connect, sn string) error {
 Changes returns a channel that can be used to wait for changes. If an error
 is returned, then no more changes will be forthcoming.
 */
-func (r *Replicator) Changes() <-chan Change {
+func (r *Replicator) Changes() <-chan *common.Change {
 	return r.changeChan
 }
 
@@ -316,7 +282,7 @@ func (r *Replicator) readLoop(connection *pgclient.PgConnection) {
 		m, err := connection.ReadMessage()
 		if err != nil {
 			log.Warningf("Error reading from server: %s", err)
-			errChange := Change{
+			errChange := &common.Change{
 				Error: err,
 			}
 			r.changeChan <- errChange
@@ -332,7 +298,7 @@ func (r *Replicator) readLoop(connection *pgclient.PgConnection) {
 		case pgclient.ErrorResponse:
 			err = pgclient.ParseError(m)
 			log.Warningf("Server returned an error: %s", err)
-			errChange := Change{
+			errChange := &common.Change{
 				Error: err,
 			}
 			r.changeChan <- errChange
@@ -384,16 +350,16 @@ func (r *Replicator) handleCopyData(m *pgclient.InputMessage) bool {
 
 func (r *Replicator) handleWALData(m *pgclient.InputMessage) {
 	m.ReadInt64() // StartWAL
-	endWAL, _ := m.ReadInt64()
+	m.ReadInt64() // end WAL
 	m.ReadInt64() // Timestamp
 	buf := m.ReadRemaining()
 
-	c := Change{
-		LSN:  endWAL,
-		Data: string(buf),
+	c, err := common.UnmarshalChange(buf)
+	if err == nil {
+		r.changeChan <- c
+	} else {
+		log.Warningf("Received invalid change %s: %s", string(buf), err)
 	}
-
-	r.changeChan <- c
 }
 
 func (r *Replicator) handleKeepalive(m *pgclient.InputMessage) bool {

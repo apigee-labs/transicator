@@ -1,10 +1,10 @@
 package replication
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/30x/transicator/common"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -19,10 +19,9 @@ var _ = Describe("Replicator tests", func() {
 
 		doExecute("insert into transicator_test (id) values ('basic replication')")
 
-		var change Change
+		var change *common.Change
 		Eventually(repl.Changes()).Should(Receive(&change))
-		enc := decodeChange(change)
-		Expect(enc.New["id"]).Should(Equal("basic replication"))
+		Expect(change.NewRow["id"].Value).Should(Equal("basic replication"))
 		Consistently(repl.Changes()).ShouldNot(Receive())
 
 		doExecute("begin")
@@ -31,12 +30,10 @@ var _ = Describe("Replicator tests", func() {
 		doExecute("commit")
 
 		Eventually(repl.Changes()).Should(Receive(&change))
-		enc = decodeChange(change)
-		Expect(enc.New["id"]).Should(Equal("replication 1"))
+		Expect(change.NewRow["id"].Value).Should(Equal("replication 1"))
 
 		Eventually(repl.Changes()).Should(Receive(&change))
-		enc = decodeChange(change)
-		Expect(enc.New["id"]).Should(Equal("replication 2"))
+		Expect(change.NewRow["id"].Value).Should(Equal("replication 2"))
 		Consistently(repl.Changes()).ShouldNot(Receive())
 	})
 
@@ -57,20 +54,13 @@ func drainReplication(repl *Replicator) {
 			timedOut = true
 		case change := <-repl.Changes():
 			Expect(change.Error).Should(Succeed())
-			fmt.Fprintf(GinkgoWriter, "LSN %d data %s\n", change.LSN, change.Data)
-			if change.LSN > maxLSN {
-				maxLSN = change.LSN
+			fmt.Fprintf(GinkgoWriter, "LSN %d\n", change.CommitSequence)
+			if change.CommitSequence > maxLSN {
+				maxLSN = change.CommitSequence
 			}
 		}
 	}
 
 	fmt.Fprintf(GinkgoWriter, "Acknowledging %d\n", maxLSN)
 	repl.Acknowledge(maxLSN)
-}
-
-func decodeChange(c Change) *EncodedChange {
-	var enc EncodedChange
-	err := json.Unmarshal([]byte(c.Data), &enc)
-	Expect(err).Should(Succeed())
-	return &enc
 }

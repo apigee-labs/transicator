@@ -1,9 +1,9 @@
 package replication
 
 import (
-	"encoding/json"
 	"fmt"
 
+	"github.com/30x/transicator/common"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -25,10 +25,10 @@ var _ = Describe("Logical Decoding Tests", func() {
 			"insert into transicator_test (id) values ('basic insert')")
 		changes := getChanges()
 		Expect(len(changes)).Should(Equal(1))
-		Expect(changes[0].Index).Should(BeEquivalentTo(0))
-		Expect(changes[0].Operation).Should(Equal("insert"))
-		Expect(changes[0].New).ShouldNot(BeNil())
-		Expect(changes[0].New["id"]).Should(Equal("basic insert"))
+		Expect(changes[0].CommitIndex).Should(BeEquivalentTo(0))
+		Expect(changes[0].Operation).Should(Equal(1))
+		Expect(changes[0].NewRow).ShouldNot(BeNil())
+		Expect(changes[0].NewRow["id"].Value).Should(Equal("basic insert"))
 	})
 
 	It("Basic delete", func() {
@@ -39,14 +39,14 @@ var _ = Describe("Logical Decoding Tests", func() {
 
 		changes := getChanges()
 		Expect(len(changes)).Should(Equal(2))
-		Expect(changes[0].Index).Should(BeEquivalentTo(0))
-		Expect(changes[0].Operation).Should(Equal("insert"))
-		Expect(changes[0].New).ShouldNot(BeNil())
-		Expect(changes[0].New["id"]).Should(Equal("basic delete"))
-		Expect(changes[1].Index).Should(BeEquivalentTo(0))
-		Expect(changes[1].Operation).Should(Equal("delete"))
-		Expect(changes[1].Old).ShouldNot(BeNil())
-		Expect(changes[1].Old["id"]).Should(Equal("basic delete"))
+		Expect(changes[0].CommitIndex).Should(BeEquivalentTo(0))
+		Expect(changes[0].Operation).Should(Equal(1))
+		Expect(changes[0].NewRow).ShouldNot(BeNil())
+		Expect(changes[0].NewRow["id"].Value).Should(Equal("basic delete"))
+		Expect(changes[1].CommitIndex).Should(BeEquivalentTo(0))
+		Expect(changes[1].Operation).Should(Equal(3))
+		Expect(changes[1].OldRow).ShouldNot(BeNil())
+		Expect(changes[1].OldRow["id"].Value).Should(Equal("basic delete"))
 		Expect(changes[1].CommitSequence).Should(BeNumerically(">", changes[0].CommitSequence))
 	})
 
@@ -58,20 +58,20 @@ var _ = Describe("Logical Decoding Tests", func() {
 
 		changes := getChanges()
 		Expect(len(changes)).Should(Equal(2))
-		Expect(changes[0].Index).Should(BeEquivalentTo(0))
-		Expect(changes[0].Operation).Should(Equal("insert"))
-		Expect(changes[0].New).ShouldNot(BeNil())
-		Expect(changes[0].New["id"]).Should(Equal("basic update"))
-		Expect(changes[0].New["varchars"]).Should(Equal("one"))
+		Expect(changes[0].CommitIndex).Should(BeEquivalentTo(0))
+		Expect(changes[0].Operation).Should(Equal(1))
+		Expect(changes[0].NewRow).ShouldNot(BeNil())
+		Expect(changes[0].NewRow["id"].Value).Should(Equal("basic update"))
+		Expect(changes[0].NewRow["varchars"].Value).Should(Equal("one"))
 
-		Expect(changes[1].Index).Should(BeEquivalentTo(0))
-		Expect(changes[1].Operation).Should(Equal("update"))
+		Expect(changes[1].CommitIndex).Should(BeEquivalentTo(0))
+		Expect(changes[1].Operation).Should(Equal(2))
 		// TODO what table changes do we need to get old data?
 		//Expect(changes[1].Old).ShouldNot(BeNil())
 		//Expect(changes[1].Old["id"]).Should(Equal("basic update"))
-		Expect(changes[1].New).ShouldNot(BeNil())
-		Expect(changes[1].New["id"]).Should(Equal("basic update"))
-		Expect(changes[1].New["varchars"]).Should(Equal("two"))
+		Expect(changes[1].NewRow).ShouldNot(BeNil())
+		Expect(changes[1].NewRow["id"].Value).Should(Equal("basic update"))
+		Expect(changes[1].NewRow["varchars"].Value).Should(Equal("two"))
 		Expect(changes[1].CommitSequence).Should(BeNumerically(">", changes[0].CommitSequence))
 	})
 
@@ -85,17 +85,17 @@ var _ = Describe("Logical Decoding Tests", func() {
 
 		changes := getChanges()
 		Expect(len(changes)).Should(Equal(2))
-		Expect(changes[0].Index).Should(BeEquivalentTo(0))
+		Expect(changes[0].CommitIndex).Should(BeEquivalentTo(0))
 		Expect(changes[0].Operation).Should(Equal("insert"))
-		Expect(changes[0].New).ShouldNot(BeNil())
-		Expect(changes[0].New["id"]).Should(Equal("basic tran 1"))
-		Expect(changes[0].New["varchars"]).Should(Equal("one"))
+		Expect(changes[0].NewRow).ShouldNot(BeNil())
+		Expect(changes[0].NewRow["id"].Value).Should(Equal("basic tran 1"))
+		Expect(changes[0].NewRow["varchars"].Value).Should(Equal("one"))
 
-		Expect(changes[1].Index).Should(BeEquivalentTo(1))
+		Expect(changes[1].CommitIndex).Should(BeEquivalentTo(1))
 		Expect(changes[1].Operation).Should(Equal("insert"))
-		Expect(changes[1].New).ShouldNot(BeNil())
-		Expect(changes[1].New["id"]).Should(Equal("basic tran 2"))
-		Expect(changes[1].New["varchars"]).Should(Equal("two"))
+		Expect(changes[1].NewRow).ShouldNot(BeNil())
+		Expect(changes[1].NewRow["id"].Value).Should(Equal("basic tran 2"))
+		Expect(changes[1].NewRow["varchars"].Value).Should(Equal("two"))
 
 		Expect(changes[1].CommitSequence).Should(Equal(changes[0].CommitSequence))
 	})
@@ -121,20 +121,20 @@ var _ = Describe("Logical Decoding Tests", func() {
 
 		changes := getChanges()
 		Expect(len(changes)).Should(Equal(1))
-		Expect(changes[0].Index).Should(BeEquivalentTo(0))
+		Expect(changes[0].CommitIndex).Should(BeEquivalentTo(0))
 		Expect(changes[0].Operation).Should(Equal("insert"))
-		Expect(changes[0].New).ShouldNot(BeNil())
+		Expect(changes[0].NewRow).ShouldNot(BeNil())
 
-		d := changes[0].New
-		Expect(d["id"]).Should(Equal("datatypes"))
-		Expect(d["bool"]).Should(Equal(true))
-		Expect(d["chars"]).Should(MatchRegexp("^hello.*"))
-		Expect(d["varchars"]).Should(Equal("world"))
-		Expect(d["int"]).Should(BeEquivalentTo(123))
-		Expect(d["smallint"]).Should(BeEquivalentTo(456))
-		Expect(d["bigint"]).Should(BeEquivalentTo(789))
-		Expect(d["float"]).Should(BeEquivalentTo(3.14))
-		Expect(d["double"]).Should(BeEquivalentTo(3.14159))
+		d := changes[0].NewRow
+		Expect(d["id"].Value).Should(Equal("datatypes"))
+		Expect(d["bool"].Value).Should(Equal(true))
+		Expect(d["chars"].Value).Should(MatchRegexp("^hello.*"))
+		Expect(d["varchars"].Value).Should(Equal("world"))
+		Expect(d["int"].Value).Should(BeEquivalentTo(123))
+		Expect(d["smallint"].Value).Should(BeEquivalentTo(456))
+		Expect(d["bigint"].Value).Should(BeEquivalentTo(789))
+		Expect(d["float"].Value).Should(BeEquivalentTo(3.14))
+		Expect(d["double"].Value).Should(BeEquivalentTo(3.14159))
 	})
 
 	It("Interleaving", func() {
@@ -148,14 +148,14 @@ var _ = Describe("Logical Decoding Tests", func() {
 		// Ensure we got changes in commit order, not insertion order
 		changes := getChanges()
 		Expect(len(changes)).Should(Equal(2))
-		Expect(changes[0].Index).Should(BeEquivalentTo(0))
+		Expect(changes[0].CommitIndex).Should(BeEquivalentTo(0))
 		Expect(changes[0].Operation).Should(Equal("insert"))
-		Expect(changes[0].New).ShouldNot(BeNil())
-		Expect(changes[0].New["id"]).Should(Equal("interleave 2"))
-		Expect(changes[1].Index).Should(BeEquivalentTo(0))
+		Expect(changes[0].NewRow).ShouldNot(BeNil())
+		Expect(changes[0].NewRow["id"].Value).Should(Equal("interleave 2"))
+		Expect(changes[1].CommitIndex).Should(BeEquivalentTo(0))
 		Expect(changes[1].Operation).Should(Equal("insert"))
-		Expect(changes[1].New).ShouldNot(BeNil())
-		Expect(changes[1].New["id"]).Should(Equal("interleave 1"))
+		Expect(changes[1].NewRow).ShouldNot(BeNil())
+		Expect(changes[1].NewRow["id"].Value).Should(Equal("interleave 1"))
 		Expect(changes[1].CommitSequence).Should(BeNumerically(">", changes[0].CommitSequence))
 	})
 
@@ -173,38 +173,33 @@ var _ = Describe("Logical Decoding Tests", func() {
 		// Ensure we got changes in commit order, not insertion order
 		changes := getChanges()
 		Expect(len(changes)).Should(Equal(4))
-		Expect(changes[0].Index).Should(BeEquivalentTo(0))
-		Expect(changes[0].New["id"]).Should(Equal("interleave 2-1"))
-		Expect(changes[1].Index).Should(BeEquivalentTo(1))
-		Expect(changes[1].New["id"]).Should(Equal("interleave 2-2"))
+		Expect(changes[0].CommitIndex).Should(BeEquivalentTo(0))
+		Expect(changes[0].NewRow["id"].Value).Should(Equal("interleave 2-1"))
+		Expect(changes[1].CommitIndex).Should(BeEquivalentTo(1))
+		Expect(changes[1].NewRow["id"].Value).Should(Equal("interleave 2-2"))
 		Expect(changes[1].CommitSequence).Should(Equal(changes[0].CommitSequence))
-		Expect(changes[1].FirstSequence).Should(Equal(changes[0].FirstSequence))
 
-		Expect(changes[2].Index).Should(BeEquivalentTo(0))
-		Expect(changes[2].New["id"]).Should(Equal("interleave 1-1"))
-		Expect(changes[3].Index).Should(BeEquivalentTo(1))
-		Expect(changes[3].New["id"]).Should(Equal("interleave 1-2"))
+		Expect(changes[2].CommitIndex).Should(BeEquivalentTo(0))
+		Expect(changes[2].NewRow["id"].Value).Should(Equal("interleave 1-1"))
+		Expect(changes[3].CommitIndex).Should(BeEquivalentTo(1))
+		Expect(changes[3].NewRow["id"].Value).Should(Equal("interleave 1-2"))
 		Expect(changes[2].CommitSequence).Should(Equal(changes[3].CommitSequence))
-		Expect(changes[2].FirstSequence).Should(Equal(changes[3].FirstSequence))
-
 		Expect(changes[2].CommitSequence).Should(BeNumerically(">", changes[0].CommitSequence))
-		Expect(changes[2].FirstSequence).Should(BeNumerically("<", changes[0].FirstSequence))
 	})
 })
 
-func getChanges() []EncodedChange {
+func getChanges() []common.Change {
 	schema, rows, err := dbConn.SimpleQuery(
 		"select * from pg_logical_slot_get_changes('transicator_decoding_test', NULL, NULL)")
 	Expect(err).Should(Succeed())
 	Expect(schema[2].Name).Should(Equal("data"))
 
-	var changes []EncodedChange
+	var changes []common.Change
 	for _, row := range rows {
 		fmt.Fprintf(GinkgoWriter, "Decoding %s\n", row[2])
-		var change EncodedChange
-		err := json.Unmarshal([]byte(row[2]), &change)
+		change, err := common.UnmarshalChange([]byte(row[2]))
 		Expect(err).Should(Succeed())
-		changes = append(changes, change)
+		changes = append(changes, *change)
 	}
 	return changes
 }

@@ -35,10 +35,6 @@ static void print_literal(StringInfo s, Oid typid, char *outputstr)
 		case FLOAT4OID:
 		case FLOAT8OID:
 		case NUMERICOID:
-      /* TODO what about Inf, NaN et al? */
-      appendStringInfoString(s, outputstr);
-      break;
-
 		case BITOID:
 		case VARBITOID:
       appendStringInfoChar(s, '"');
@@ -47,10 +43,11 @@ static void print_literal(StringInfo s, Oid typid, char *outputstr)
 			break;
 
 		case BOOLOID:
-			if (strcmp(outputstr, "t") == 0)
-				appendStringInfoString(s, "true");
-			else
-				appendStringInfoString(s, "false");
+			if (strcmp(outputstr, "t") == 0) {
+				appendStringInfoString(s, "\"true\"");
+			} else {
+				appendStringInfoString(s, "\"false\"");
+      }
 			break;
 
 		default:
@@ -59,8 +56,9 @@ static void print_literal(StringInfo s, Oid typid, char *outputstr)
 			{
 				char		ch = *valptr;
 
-				if (SQL_STR_DOUBLE(ch, false))
+				if (SQL_STR_DOUBLE(ch, false)) {
 					appendStringInfoChar(s, ch);
+        }
 				appendStringInfoChar(s, ch);
 			}
 			appendStringInfoChar(s, '"');
@@ -68,7 +66,7 @@ static void print_literal(StringInfo s, Oid typid, char *outputstr)
 	}
 }
 
-static void tuple_to_stringinfo(StringInfo s, TupleDesc tupdesc, HeapTuple tuple, bool skip_nulls)
+static void tuple_to_stringinfo(StringInfo s, TupleDesc tupdesc, HeapTuple tuple)
 {
 	int			natt;
 
@@ -103,16 +101,12 @@ static void tuple_to_stringinfo(StringInfo s, TupleDesc tupdesc, HeapTuple tuple
 		/* get Datum from tuple */
 		origval = heap_getattr(tuple, natt + 1, tupdesc, &isnull);
 
-		if (isnull && skip_nulls)
-			continue;
-
 		/* print attribute name */
     if (natt > 0) {
       appendStringInfoChar(s, ',');
     }
-    appendStringInfoChar(s, '"');
-		appendStringInfoString(s, NameStr(attr->attname));
-    appendStringInfoString(s, "\":");
+    appendStringInfo(s, "{\"key\":\"%s\",\"type\":%i,\"value\":",
+      NameStr(attr->attname), typid);
 
 		/* query output function */
 		getTypeOutputInfo(typid,
@@ -133,6 +127,7 @@ static void tuple_to_stringinfo(StringInfo s, TupleDesc tupdesc, HeapTuple tuple
 			val = PointerGetDatum(PG_DETOAST_DATUM(origval));
 			print_literal(s, typid, OidOutputFunctionCall(typoutput, val));
 		}
+    appendStringInfoChar(s, '}');
 	}
 }
 
@@ -192,6 +187,7 @@ static void outputChange(
 	tupdesc = RelationGetDescr(relation);
 
 	OutputPluginPrepareWrite(ctx, true);
+  appendStringInfoChar(ctx->out, '{');
 
   /* TODO will this produce double-quoted table names? */
   char* tableName =
@@ -200,68 +196,52 @@ static void outputChange(
         get_rel_namespace(RelationGetRelid(relation))),
         NameStr(class_form->relname));
 
-	appendStringInfoString(ctx->out, "{\"table\":\"");
-	appendStringInfoString(ctx->out, tableName);
-  appendStringInfoString(ctx->out, "\",\"sequence\":");
-  /* Invalid compiler warning produced here -- LSNs are "uint64" */
-  appendStringInfo(ctx->out, "%llu", change->lsn);
-  appendStringInfoString(ctx->out, ",\"commitSequence\":");
-  /* Invalid compiler warning produced here -- LSNs are "uint64" */
-  appendStringInfo(ctx->out, "%llu", txn->final_lsn);
-  appendStringInfoString(ctx->out, ",\"firstSequence\":");
-  /* Invalid compiler warning produced here -- LSNs are "uint64" */
-  appendStringInfo(ctx->out, "%llu", txn->first_lsn);
-  /* Append an index when there are multiple records in a transaction */
-  appendStringInfoString(ctx->out, ",\"index\":");
-  appendStringInfo(ctx->out, "%u", state->index);
-  appendStringInfoString(ctx->out, ",\"txid\":");
-  appendStringInfo(ctx->out, "%u", txn->xid);
-  appendStringInfoString(ctx->out, ",\"operation\":\"");
+  appendStringInfo(ctx->out, "\"table\":\"%s\"", tableName);
+  appendStringInfo(ctx->out, ",\"changeSequence\":%lu", change->lsn);
+  appendStringInfo(ctx->out, ",\"commitSequence\":%lu", txn->final_lsn);
+  appendStringInfo(ctx->out, ",\"commitIndex\":%u", state->index);
+  appendStringInfo(ctx->out, ",\"txid\":%u", txn->xid);
 
   state->index++;
 
 	switch (change->action)
 	{
 		case REORDER_BUFFER_CHANGE_INSERT:
-			appendStringInfoString(ctx->out, "insert\"");
+			appendStringInfoString(ctx->out, ",\"operation\":1");
 			if (change->data.tp.newtuple != NULL) {
-        appendStringInfoString(ctx->out, ",\"new\":{");
+        appendStringInfoString(ctx->out, ",\"newRow\":[");
 				tuple_to_stringinfo(ctx->out, tupdesc,
-									&change->data.tp.newtuple->tuple,
-									false);
-        appendStringInfoChar(ctx->out, '}');
+									&change->data.tp.newtuple->tuple);
+        appendStringInfoChar(ctx->out, ']');
       }
 			break;
+
 		case REORDER_BUFFER_CHANGE_UPDATE:
-			appendStringInfoString(ctx->out, "update\"");
+			appendStringInfoString(ctx->out, ",\"operation\":2");
 			if (change->data.tp.oldtuple != NULL) {
-        appendStringInfoString(ctx->out, ",\"old\":{");
+        appendStringInfoString(ctx->out, ",\"oldRow\":[");
 				tuple_to_stringinfo(ctx->out, tupdesc,
-									&change->data.tp.oldtuple->tuple,
-									true);
-				appendStringInfoChar(ctx->out, '}');
+									&change->data.tp.oldtuple->tuple);
+				appendStringInfoChar(ctx->out, ']');
 			}
-
 			if (change->data.tp.newtuple != NULL) {
-        appendStringInfoString(ctx->out, ",\"new\":{");
+        appendStringInfoString(ctx->out, ",\"newRow\":[");
 				tuple_to_stringinfo(ctx->out, tupdesc,
-									&change->data.tp.newtuple->tuple,
-									false);
-        appendStringInfoChar(ctx->out, '}');
+									&change->data.tp.newtuple->tuple);
+        appendStringInfoChar(ctx->out, ']');
       }
 			break;
-		case REORDER_BUFFER_CHANGE_DELETE:
-			appendStringInfoString(ctx->out, "delete\"");
 
-			/* if there was no PK, we only know that a delete happened */
+		case REORDER_BUFFER_CHANGE_DELETE:
+			appendStringInfoString(ctx->out, ",\"operation\":3");
 			if (change->data.tp.oldtuple != NULL) {
-        appendStringInfoString(ctx->out, ",\"old\":{");
+        appendStringInfoString(ctx->out, ",\"oldRow\":[");
 				tuple_to_stringinfo(ctx->out, tupdesc,
-									&change->data.tp.oldtuple->tuple,
-									true);
-        appendStringInfoChar(ctx->out, '}');
+									&change->data.tp.oldtuple->tuple);
+        appendStringInfoChar(ctx->out, ']');
       }
 			break;
+
 		default:
 			Assert(false);
 	}
