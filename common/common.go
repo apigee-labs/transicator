@@ -15,24 +15,23 @@ const (
 )
 
 /*
-A Column is a single column in a result.
+A ColumnVal is a single column value in a result. It just contains a
+value and a type.
 */
-type Column struct {
-	// Column name
-	Key string `json:"key"`
+type ColumnVal struct {
 	// Column value, in the string format that comes straight from Postgres
 	Value string `json:"value"`
 	// The Postgres type of the column, as defined in the Postgres source
-	Type int `json:"type"`
+	Type int32 `json:"type"`
 }
 
 /*
 A Row is a single row in a table. It may be aggregated into an entire set of rows
 for a snapshot of a table, or into a list of row operations in a change
-list. Rows are modelled as a list and not as a set of property / value pairs
-because each contains several values.
+list. The key for each property in the row is the name of the field, and the
+value is a ColumnVal that includes both the value and type.
 */
-type Row []Column
+type Row map[string]ColumnVal
 
 /*
 A Change is a list of changed rows. Each Change describes how the row changed
@@ -42,6 +41,8 @@ IDs from Postgres), and what changed (the new and/or old rows).
 type Change struct {
 	// Why the row was changed: insert, update, or delete
 	Operation Operation `json:"operation"`
+	// The name of the table that was updated
+	Table string `json:"table"`
 	// The Postgres LSN when the row changed. This will be interleaved
 	// in the change list because transactions commit at different times.
 	ChangeSequence int64 `json:"changeSequence"`
@@ -61,6 +62,9 @@ type Change struct {
 	// For an update oepration, the old value of the columns. For a delete, the
 	// value of the columns that are being deleted
 	OldRow Row `json:"oldRow,omitempty"`
+	// Sometimes we need to return an error instead of a change. If this is
+	// not null, then it means a replication error occurred.
+	Error error `json:"-"`
 }
 
 /*
