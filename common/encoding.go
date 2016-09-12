@@ -78,3 +78,19 @@ func (c *Change) Marshal() []byte {
 	}
 	panic(err.Error())
 }
+
+/*
+Helper function that inserts Tables in to a existing Snapshot
+*/
+func (sd *Snapshot) AddTables(tb Table) []Table {
+	sd.Tables = append(sd.Tables, tb)
+	return sd.Tables
+}
+
+/*
+Helper function that inserts rows to an existing table
+*/
+func (sid *Table) AddRowstoTable(rv Row) []Row {
+	sid.Rows = append(sid.Rows, rv)
+	return sid.Rows
+}

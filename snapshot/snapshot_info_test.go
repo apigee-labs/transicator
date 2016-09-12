@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/30x/transicator/common"
 	"github.com/30x/transicator/pgclient"
 	"github.com/30x/transicator/replication"
 
@@ -165,42 +166,24 @@ const testTableSQL = `
   );
   CREATE TABLE DEVELOPER (
 	org varchar(255),
-	email varchar(255),
 	id varchar(255),
-	sts varchar(255),
 	username varchar(255),
 	firstname varchar(255),
-	lastname varchar(255),
-	apigee_scope varchar(255),
-	enc_password varchar(255),
-	salt varchar(255),
 	created_at integer,
 	created_by varchar(255),
-	updated_at integer,
-	updated_by varchar(255),
- 	_scope varchar(255),
-	PRIMARY KEY (id, _scope)
+ 	_apid_scope varchar(255),
+	PRIMARY KEY (id, _apid_scope)
 );
   CREATE TABLE APP (
 	org varchar(255),
 	id varchar(255),
 	dev_id varchar(255) null,
-	cmp_id varchar(255) null,
 	display_name varchar(255),
-	apigee_scope varchar(255),
-	type varchar(255),
-	access_type varchar(255),
-	cback_url varchar(255),
-	status varchar(255),
 	name varchar(255),
-	app_family varchar(255),
 	created_at integer,
 	created_by varchar(255),
-	updated_at integer,
-	updated_by varchar(255),
- 	_scope varchar(255),
-	PRIMARY KEY (id, _scope),
-	FOREIGN KEY (dev_id, _scope) references DEVELOPER (id, _scope) ON DELETE CASCADE
+ 	_apid_scope varchar(255),
+	PRIMARY KEY (id, _apid_scope)
 );
 
 `
@@ -269,15 +252,18 @@ xip_list - Active txids at the time of the snapshot. The list includes only thos
 
 var _ = Describe("Taking a snapshot", func() {
 
+	tables := []string{"snapshot_test", "developer", "app"}
 	AfterEach(func() {
 		//fmt.Println("AfterEach: rollback conns")
 		//dbConn1.SimpleQuery("rollback")
 		//dbConn2.SimpleQuery("rollback")
 		//dbConn3.SimpleQuery("rollback")
 
-		fmt.Println("AfterEach: truncate table")
-		err := truncateTable("snapshot_test")
-		Expect(err).Should(Succeed())
+		fmt.Println("AfterEach: truncate tables")
+		for _, table := range tables {
+			err := truncateTable(table)
+			Expect(err).Should(Succeed())
+		}
 	})
 	/*
 		1. No pending tx:
@@ -522,25 +508,95 @@ var _ = Describe("Taking a snapshot", func() {
 				<-- xmin=3 xmax=3 xip=nil LSN(1)
 	*/
 
-	Context("Insert Tables (App & Developer), Get JSON data for ONE scope", func() {
-		It("Insert with multiple scopes, retrieve single scope data", func() {
-
-			doExecute1("begin")
-			doExecute1("insert into DEVELOPER (org, id, username, created_at, _scope) values ('Pepsi', 'xxx-yyy-zzz', 'sundar', 3231231, 'pepsi_##_dev')")
-			doExecute1("insert into DEVELOPER (org, id, username, created_at, _scope) values ('Pepsi', 'xxy-yyy-zzz', 'sundar', 3221231, 'pepsi_##_dev')")
-			doExecute1("insert into DEVELOPER (org, id, username, created_at, _scope) values ('Pepsi', 'xxz-yyy-zzz', 'sundar', 3231231, 'pepsi_##_test')")
-
-			doExecute1("insert into APP (org, id, dev_id, display_name, created_at, _scope) values ('Pepsi', 'aaa-bbb-ccc', 'xxx-yyy-zzz', 'Oracle', 9859348, 'pepsi_##_dev')")
-			doExecute1("commit")
-
-			scope := []string{"pepsi_##_dev", "pespsi_##_badchoice"}
-			_, err := GetTenantSnapshotData(dbURL, scope)
-			Expect(err).Should(Succeed())
-
-		})
-	})
 	/*
 		TBD: More test cases with decoding the data needs to be Checked in.
 	*/
+
+	Context("Insert Tables (App & Developer), Get JSON data for ONE scope", func() {
+		It("Insert with multiple scopes, retrieve single scope data", func() {
+			tables := []string{"app", "developer"}
+			keys := []string{"org", "id", "username", "created_at", "_apid_scope", "dev_id", "display_name", "created_by", "created_at", "firstname", "name"}
+			doExecute1("begin")
+			doExecute1("insert into APP (org, id, dev_id, display_name, created_at, _apid_scope) values ('Pepsi', 'aaa-bbb-ccc', 'xxx-yyy-zzz', 'Oracle', 9859348, 'pepsi_##_dev')")
+
+			doExecute1("commit")
+
+			scope := []string{"pepsi_##_dev"}
+			b, err := GetTenantSnapshotData(dbURL, scope)
+			Expect(err).Should(Succeed())
+
+			s, err := common.UnmarshalSnapshot(b)
+			Expect(err).Should(Succeed())
+
+			for _, table := range s.Tables {
+				Expect(tables).To(ContainElement(table.Name))
+				for _, row := range table.Rows {
+					for l, col := range row {
+						Expect(keys).To(ContainElement(l))
+						if l == "id" {
+							Expect(col.Value).To(Equal("aaa-bbb-ccc"))
+						}
+					}
+				}
+			}
+			scope = []string{"pepsi_bad"}
+			b, err = GetTenantSnapshotData(dbURL, scope)
+			Expect(err).Should(Succeed())
+
+			s, err = common.UnmarshalSnapshot(b)
+			Expect(err).Should(Succeed())
+
+			for _, table := range s.Tables {
+				Expect(tables).To(ContainElement(table.Name))
+				Expect(len(table.Rows)).To(Equal(0))
+			}
+		})
+
+	})
+	Context("Insert Tables (App & Developer), Get JSON data for Multi scopes", func() {
+		It("Insert with multiple scopes, retrieve single scope data", func() {
+			tables := []string{"app", "developer"}
+			keys := []string{"org", "id", "username", "created_at", "_apid_scope", "dev_id", "display_name", "created_by", "created_at", "firstname", "name"}
+			idvals := []string{"xxx-yyy-zzz", "xxy-yyy-zzz", "xxz-yyy-zzz", "aaa-bbb-ccc"}
+			doExecute1("begin")
+			doExecute1("insert into DEVELOPER (org, id, username, created_at, _apid_scope) values ('Pepsi', 'xxx-yyy-zzz', 'sundar', 3231231, 'pepsi_##_dev')")
+			doExecute1("insert into DEVELOPER (org, id, username, created_at, _apid_scope) values ('Pepsi', 'xxy-yyy-zzz', 'sundar', 3221231, 'pepsi_##_dev')")
+			doExecute1("insert into DEVELOPER (org, id, username, created_at, _apid_scope) values ('Pepsi', 'xxz-yyy-zzz', 'sundar', 3231231, 'pepsi_##_test')")
+			doExecute1("insert into APP (org, id, dev_id, display_name, created_at, _apid_scope) values ('Pepsi', 'aaa-bbb-ccc', 'xxx-yyy-zzz', 'Oracle', 9859348, 'pepsi_##_dev')")
+
+			doExecute1("commit")
+
+			scope := []string{"pepsi_##_dev", "pepsi_##_test"}
+			b, err := GetTenantSnapshotData(dbURL, scope)
+			Expect(err).Should(Succeed())
+
+			s, err := common.UnmarshalSnapshot(b)
+			Expect(err).Should(Succeed())
+
+			for _, table := range s.Tables {
+				Expect(tables).To(ContainElement(table.Name))
+				for _, row := range table.Rows {
+					for l, col := range row {
+						Expect(keys).To(ContainElement(l))
+						if l == "id" {
+							Expect(idvals).To(ContainElement(col.Value))
+						}
+					}
+				}
+			}
+			scope = []string{"pepsi_bad"}
+			b, err = GetTenantSnapshotData(dbURL, scope)
+			Expect(err).Should(Succeed())
+
+			s, err = common.UnmarshalSnapshot(b)
+			Expect(err).Should(Succeed())
+
+			for _, table := range s.Tables {
+				Expect(tables).To(ContainElement(table.Name))
+				Expect(len(table.Rows)).To(Equal(0))
+			}
+		})
+
+	})
 
 })

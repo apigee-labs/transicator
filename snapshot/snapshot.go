@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/30x/transicator/common"
 	"github.com/30x/transicator/pgclient"
 	"os"
 
@@ -14,46 +15,27 @@ type SnapshotClient struct {
 	conn *pgclient.PgConnection
 }
 
-type SingleColVal struct {
-	Key    string `json:"key"`
-	StrVal string `json:"strValue"`
-	Type   int32  `json:"type"`
-}
+func GetTenants(tenantId []string) string {
 
-type SingleRowVals struct {
-	Rowvals []SingleColVal `json:"rows"`
-}
+	var str bytes.Buffer
 
-type SingleTableData struct {
-	Tname string          `json:"table"`
-	Tbd   []SingleRowVals `json:"details"`
-}
+	str.WriteString("(")
+	for idx, tid := range tenantId {
+		log.Info("Get table id: ", tid, idx)
+		str.WriteString("'" + tid + "'")
+		if idx != len(tenantId)-1 {
+			str.WriteString(",")
+		}
+	}
+	str.WriteString(")")
+	return str.String()
 
-type SnapshotData struct {
-	LSN   string            `json:"lsn"`
-	Sdata []SingleTableData `json:"snapshotData"`
-}
-
-func (sd *SnapshotData) AddTables(tb SingleTableData) []SingleTableData {
-	sd.Sdata = append(sd.Sdata, tb)
-	return sd.Sdata
-}
-
-func (sid *SingleTableData) AddRowstoTable(rv SingleRowVals) []SingleRowVals {
-	sid.Tbd = append(sid.Tbd, rv)
-	return sid.Tbd
-}
-
-func (sco *SingleRowVals) CreateRow(rd SingleColVal) []SingleColVal {
-	sco.Rowvals = append(sco.Rowvals, rd)
-	return sco.Rowvals
 }
 
 func GetTenantSnapshotData(connect string, tenantId []string) (b []byte, err error) {
 
 	var (
-		snapInfo string
-		str      bytes.Buffer
+		snapInfo, snapTime string
 	)
 	conn, err := pgclient.Connect(connect) // + "?default_transaction_isolation=repeatable read")
 	if err != nil {
@@ -70,7 +52,13 @@ func GetTenantSnapshotData(connect string, tenantId []string) (b []byte, err err
 		return nil, err
 	}
 
-	_, s, err := sc.conn.SimpleQuery("select txid_current_snapshot()")
+	_, s, err := sc.conn.SimpleQuery("select now()")
+	if err != nil {
+		return nil, err
+	}
+	snapTime = s[0][0]
+
+	_, s, err = sc.conn.SimpleQuery("select txid_current_snapshot()")
 	if err != nil {
 		return nil, err
 	}
@@ -86,49 +74,35 @@ func GetTenantSnapshotData(connect string, tenantId []string) (b []byte, err err
 	}
 	log.Infof("Tables in snapshot %v", tables)
 
-	sdataItem := []SingleTableData{}
-	snapData := SnapshotData{
-		Sdata: sdataItem,
-		LSN:   snapInfo,
+	sdataItem := []common.Table{}
+	snapData := common.Snapshot{
+		Tables:       sdataItem,
+		SnapshotInfo: snapInfo,
+		Timestamp:    snapTime,
 	}
-
-	str.WriteString("(")
-	for idx, tid := range tenantId {
-		log.Info("Get table id: ", tid, idx)
-		str.WriteString("'" + tid + "'")
-		if idx != len(tenantId)-1 {
-			str.WriteString(",")
-		}
-	}
-	str.WriteString(")")
 
 	for _, t := range tables {
-		q := fmt.Sprintf("select * from %s where _scope in %s", t, str.String())
+		q := fmt.Sprintf("select * from %s where _apid_scope in %s", t, GetTenants(tenantId))
 		ci, s3, err := sc.conn.SimpleQuery(q)
 		if err != nil {
-			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
+			log.Infof("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
 			continue
 		}
 
-		srvItems := []SingleRowVals{}
-		stdItem := SingleTableData{
-			Tbd:   srvItems,
-			Tname: t,
+		srvItems := []common.Row{}
+		stdItem := common.Table{
+			Rows: srvItems,
+			Name: t,
 		}
+
 		for _, x := range s3 {
-
-			scvItems := []SingleColVal{}
-			srvItem := SingleRowVals{
-				Rowvals: scvItems,
-			}
-
+			srvItem := common.Row{}
 			for ind, y := range x {
-				scv := SingleColVal{
-					Key:    ci[ind].Name,
-					StrVal: y,
-					Type:   ci[ind].Type,
+				scv := common.ColumnVal{
+					Value: y,
+					Type:  ci[ind].Type,
 				}
-				srvItem.CreateRow(scv)
+				srvItem[ci[ind].Name] = scv
 			}
 			stdItem.AddRowstoTable(srvItem)
 		}
