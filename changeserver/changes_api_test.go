@@ -1,13 +1,18 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
-	"github.com/30x/transicator/replication"
+	"github.com/30x/transicator/common"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+)
+
+const (
+	testTimeout  = 5 * time.Second
+	testInterval = 250 * time.Millisecond
 )
 
 var _ = Describe("Changes API Tests", func() {
@@ -18,42 +23,45 @@ var _ = Describe("Changes API Tests", func() {
 		lastTestSequence++
 		fmt.Fprintf(GinkgoWriter, "Inserting sequence %d\n", lastTestSequence)
 		executeSQL(fmt.Sprintf(
-			"insert into changeserver_test (sequence, _scope) values(%d, 'foo')",
+			"insert into changeserver_test (sequence, _apid_scope) values(%d, 'foo')",
 			lastTestSequence))
 
 		Eventually(func() bool {
 			bod := executeGet(fmt.Sprintf(
 				"%s/changes?since=%d&scope=foo", baseURL, lastChangeSequence))
-			var changes []replication.EncodedChange
-			err := json.Unmarshal(bod, &changes)
+			cl, err := common.UnmarshalChangeList(bod)
 			Expect(err).Should(Succeed())
-			for _, c := range changes {
-				if c.New["sequence"] == float64(lastTestSequence) {
+			if len(cl.Changes) == 0 {
+				return false
+			}
+			for _, c := range cl.Changes {
+				ltss := strconv.FormatInt(lastTestSequence, 10)
+				if c.NewRow["sequence"].Value == ltss {
 					lastChangeSequence = c.CommitSequence
 					return true
 				}
 			}
-			fmt.Fprintf(GinkgoWriter, "Received %d changes last sequence = %v\n",
-				len(changes), changes[len(changes)-1].New["sequence"])
+			fmt.Fprintf(GinkgoWriter, "Received %d changes last sequence = %s\n",
+				len(cl.Changes), cl.Changes[len(cl.Changes)-1].NewRow["sequence"].Value)
 			return false
-		}).Should(BeTrue())
+		}, testTimeout, testInterval).Should(BeTrue())
 	})
 
 	It("Next change", func() {
 		lastTestSequence++
 		fmt.Fprintf(GinkgoWriter, "Inserting sequence %d\n", lastTestSequence)
 		executeSQL(fmt.Sprintf(
-			"insert into changeserver_test (sequence, _scope) values(%d, 'foo')",
+			"insert into changeserver_test (sequence, _apid_scope) values(%d, 'foo')",
 			lastTestSequence))
 
 		Eventually(func() bool {
-			changes := getChanges(fmt.Sprintf(
+			cl := getChanges(fmt.Sprintf(
 				"%s/changes?since=%d&scope=foo", baseURL, lastChangeSequence))
-			if len(changes) < 1 {
+			if len(cl.Changes) < 1 {
 				return false
 			}
-			if changes[0].New["sequence"] == float64(lastTestSequence) {
-				lastChangeSequence = changes[0].CommitSequence
+			if compareSequence(cl, 0, lastTestSequence) {
+				lastChangeSequence = cl.Changes[0].CommitSequence
 				return true
 			}
 			return false
@@ -64,7 +72,7 @@ var _ = Describe("Changes API Tests", func() {
 		for i := 0; i <= 3; i++ {
 			lastTestSequence++
 			executeSQL(fmt.Sprintf(
-				"insert into changeserver_test (sequence, _scope) values(%d, 'foo')",
+				"insert into changeserver_test (sequence, _apid_scope) values(%d, 'foo')",
 				lastTestSequence))
 		}
 		fmt.Fprintf(GinkgoWriter, "Last inserted sequence %d\n", lastTestSequence)
@@ -72,55 +80,55 @@ var _ = Describe("Changes API Tests", func() {
 		origLastSequence := lastChangeSequence
 
 		Eventually(func() bool {
-			changes := getChanges(fmt.Sprintf(
+			cl := getChanges(fmt.Sprintf(
 				"%s/changes?since=%d&scope=foo", baseURL, origLastSequence))
-			if len(changes) != 4 {
+			if len(cl.Changes) != 4 {
 				return false
 			}
-			if changes[3].New["sequence"] == float64(lastTestSequence) {
-				lastChangeSequence = changes[3].CommitSequence
+			if compareSequence(cl, 3, lastTestSequence) {
+				lastChangeSequence = cl.Changes[3].CommitSequence
 				return true
 			}
 			return false
 		}).Should(BeTrue())
 
 		// Un-matched scope
-		changes := getChanges(fmt.Sprintf(
+		cl := getChanges(fmt.Sprintf(
 			"%s/changes?since=%d&scope=bar", baseURL, origLastSequence))
-		Expect(changes).Should(BeEmpty())
+		Expect(cl.Changes).Should(BeEmpty())
 
 		// Out of range
-		changes = getChanges(fmt.Sprintf(
+		cl = getChanges(fmt.Sprintf(
 			"%s/changes?since=%d&scope=foo", baseURL, lastChangeSequence+10))
-		Expect(changes).Should(BeEmpty())
+		Expect(cl.Changes).Should(BeEmpty())
 
 		// Short limit
-		changes = getChanges(fmt.Sprintf(
+		cl = getChanges(fmt.Sprintf(
 			"%s/changes?since=%d&scope=foo&limit=0", baseURL, origLastSequence))
-		Expect(changes).Should(BeEmpty())
+		Expect(cl.Changes).Should(BeEmpty())
 
 		// Less short limit
-		changes = getChanges(fmt.Sprintf(
+		cl = getChanges(fmt.Sprintf(
 			"%s/changes?since=%d&scope=foo&limit=1", baseURL, origLastSequence))
-		Expect(len(changes)).Should(Equal(1))
-		Expect(changes[0].New["sequence"]).Should(BeEquivalentTo(lastTestSequence - 3))
+		Expect(len(cl.Changes)).Should(Equal(1))
+		Expect(compareSequence(cl, 0, lastTestSequence-3)).Should(BeTrue())
 	})
 
 	It("Long polling empty", func() {
 		lastCommit := lastChangeSequence
-		changes := getChanges(fmt.Sprintf(
+		cl := getChanges(fmt.Sprintf(
 			"%s/changes?since=%d&scope=foo", baseURL, lastChangeSequence))
-		if len(changes) > 0 {
-			lastCommit = changes[len(changes)-1].CommitSequence
+		if len(cl.Changes) > 0 {
+			lastCommit = cl.Changes[len(cl.Changes)-1].CommitSequence
 		}
 
-		changes = getChanges(fmt.Sprintf(
+		cl = getChanges(fmt.Sprintf(
 			"%s/changes?since=%d&scope=foo&block=1", baseURL, lastCommit+10))
-		Expect(changes).Should(BeEmpty())
+		Expect(cl.Changes).Should(BeEmpty())
 	})
 
 	It("Long polling", func() {
-		resultChan := make(chan []replication.EncodedChange, 1)
+		resultChan := make(chan *common.ChangeList, 1)
 
 		go func() {
 			lc := getChanges(fmt.Sprintf(
@@ -131,22 +139,22 @@ var _ = Describe("Changes API Tests", func() {
 			resultChan <- lc
 		}()
 
-		changes := <-resultChan
-		Expect(changes).Should(BeEmpty())
+		cl := <-resultChan
+		Expect(cl.Changes).Should(BeEmpty())
 
 		lastTestSequence++
 		executeSQL(fmt.Sprintf(
-			"insert into changeserver_test (sequence, _scope) values(%d, 'foo')",
+			"insert into changeserver_test (sequence, _apid_scope) values(%d, 'foo')",
 			lastTestSequence))
 
-		changes = <-resultChan
-		Expect(len(changes)).Should(Equal(1))
-		Expect(changes[0].New["sequence"]).Should(BeEquivalentTo(lastTestSequence))
-		lastChangeSequence = changes[0].CommitSequence
+		cl = <-resultChan
+		Expect(len(cl.Changes)).Should(Equal(1))
+		Expect(compareSequence(cl, 0, lastTestSequence)).Should(BeTrue())
+		lastChangeSequence = cl.Changes[0].CommitSequence
 	})
 
 	It("Long polling no scope", func() {
-		resultChan := make(chan []replication.EncodedChange, 1)
+		resultChan := make(chan *common.ChangeList, 1)
 
 		go func() {
 			lc := getChanges(fmt.Sprintf(
@@ -157,22 +165,22 @@ var _ = Describe("Changes API Tests", func() {
 			resultChan <- lc
 		}()
 
-		changes := <-resultChan
-		Expect(changes).Should(BeEmpty())
+		cl := <-resultChan
+		Expect(cl.Changes).Should(BeEmpty())
 
 		lastTestSequence++
 		executeSQL(fmt.Sprintf(
-			"insert into changeserver_test (sequence, _scope) values(%d, '')",
+			"insert into changeserver_test (sequence, _apid_scope) values(%d, '')",
 			lastTestSequence))
 
-		changes = <-resultChan
-		Expect(len(changes)).Should(Equal(1))
-		Expect(changes[0].New["sequence"]).Should(BeEquivalentTo(lastTestSequence))
-		lastChangeSequence = changes[0].CommitSequence
+		cl = <-resultChan
+		Expect(len(cl.Changes)).Should(Equal(1))
+		Expect(compareSequence(cl, 0, lastTestSequence)).Should(BeTrue())
+		lastChangeSequence = cl.Changes[0].CommitSequence
 	})
 
 	It("Long polling two scopes", func() {
-		resultChan := make(chan []replication.EncodedChange, 1)
+		resultChan := make(chan *common.ChangeList, 1)
 
 		go func() {
 			lc := getChanges(fmt.Sprintf(
@@ -183,27 +191,31 @@ var _ = Describe("Changes API Tests", func() {
 			resultChan <- lc
 		}()
 
-		changes := <-resultChan
-		Expect(changes).Should(BeEmpty())
+		cl := <-resultChan
+		Expect(cl.Changes).Should(BeEmpty())
 
 		lastTestSequence++
 		executeSQL(fmt.Sprintf(
-			"insert into changeserver_test (sequence, _scope) values(%d, 'bar')",
+			"insert into changeserver_test (sequence, _apid_scope) values(%d, 'bar')",
 			lastTestSequence))
 
-		changes = <-resultChan
-		Expect(len(changes)).Should(Equal(1))
-		Expect(changes[0].New["sequence"]).Should(BeEquivalentTo(lastTestSequence))
-		lastChangeSequence = changes[0].CommitSequence
+		cl = <-resultChan
+		Expect(len(cl.Changes)).Should(Equal(1))
+		Expect(compareSequence(cl, 0, lastTestSequence)).Should(BeTrue())
+		lastChangeSequence = cl.Changes[0].CommitSequence
 	})
 })
 
-func getChanges(url string) []replication.EncodedChange {
+func getChanges(url string) *common.ChangeList {
 	fmt.Fprintf(GinkgoWriter, "URL: %s\n", url)
 	bod := executeGet(url)
-	var changes []replication.EncodedChange
-	err := json.Unmarshal(bod, &changes)
+	cl, err := common.UnmarshalChangeList(bod)
 	Expect(err).Should(Succeed())
-	fmt.Fprintf(GinkgoWriter, "Num changes: %d\n", len(changes))
-	return changes
+	fmt.Fprintf(GinkgoWriter, "Num changes: %d\n", len(cl.Changes))
+	return cl
+}
+
+func compareSequence(cl *common.ChangeList, index int, lts int64) bool {
+	ltss := strconv.FormatInt(lts, 10)
+	return cl.Changes[index].NewRow["sequence"].Value == ltss
 }

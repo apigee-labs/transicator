@@ -65,6 +65,11 @@ var _ = BeforeSuite(func() {
 	testServer, err = startChangeServer(mux, testDataDir, dbURL, replicationSlot, "")
 	Expect(err).Should(Succeed())
 
+	// Poll until we are connected to PG and replication has begun
+	Eventually(func() replication.State {
+		return testServer.repl.State()
+	}).Should(Equal(replication.Running))
+
 	// Start listening for HTTP calls
 	go func() {
 		http.Serve(listener, mux)
@@ -78,14 +83,12 @@ var _ = AfterSuite(func() {
 	if testServer != nil {
 		testServer.stop()
 	}
-	err := replication.DropSlot(dbURL, replicationSlot)
-	Expect(err).Should(Succeed())
+	replication.DropSlot(dbURL, replicationSlot)
 
 	// Drop the test data table
 	executeSQL(dropTableSQL)
 	// And delete the storage
-	err = testServer.delete()
-	Expect(err).Should(Succeed())
+	testServer.delete()
 })
 
 func executeSQL(sql string) {
@@ -111,7 +114,7 @@ func executeGet(url string) []byte {
 const testTableSQL = `
   create table changeserver_test (
   sequence integer primary key,
-  _scope varchar
+  _apid_scope varchar
 )`
 
 const dropTableSQL = "drop table changeserver_test"

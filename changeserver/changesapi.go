@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/30x/transicator/common"
 	log "github.com/Sirupsen/logrus"
 	"github.com/golang/gddo/httputil"
 	"github.com/julienschmidt/httprouter"
@@ -78,15 +79,13 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 		log.Debugf("Received %d changes after blocking", len(entries))
 	}
 
-	bod := "["
-	for i, e := range entries {
-		if i > 0 {
-			bod += ","
-		}
-		bod += string(e)
+	changeList := common.ChangeList{}
+
+	for _, e := range entries {
+		change, _ := common.UnmarshalChange(e)
+		changeList.Changes = append(changeList.Changes, *change)
 	}
-	bod += "]"
 
 	resp.Header().Set("Content-Type", jsonContent)
-	resp.Write([]byte(bod))
+	resp.Write(changeList.Marshal())
 }

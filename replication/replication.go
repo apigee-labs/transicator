@@ -3,6 +3,7 @@ package replication
 import (
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/30x/transicator/common"
@@ -29,12 +30,27 @@ const (
 	acknowedgeCmd
 )
 
+//go:generate stringer -type State replication.go
+
+/*
+State represents whether the replicator is connected or reconnecting.
+*/
+type State int32
+
+// Values of replication state
+const (
+	Connecting State = iota
+	Running
+	Stopped
+)
+
 /*
 A Replicator is a client for the logical replication protocol.
 */
 type Replicator struct {
 	slotName      string
 	connectString string
+	state         int32
 	changeChan    chan *common.Change
 	updateChan    chan int64
 	cmdChan       chan replCommand
@@ -53,6 +69,7 @@ func Start(connect, sn string) (*Replicator, error) {
 	repl := &Replicator{
 		slotName:      slotName,
 		connectString: connectString,
+		state:         int32(Connecting),
 		changeChan:    make(chan *common.Change, 100),
 		updateChan:    make(chan int64, 100),
 		cmdChan:       make(chan replCommand, 1),
@@ -99,6 +116,20 @@ func (r *Replicator) Stop() {
 }
 
 /*
+State returns the current state of the replication.
+*/
+func (r *Replicator) State() State {
+	return State(atomic.LoadInt32(&r.state))
+}
+
+/*
+setState atomically updates the state
+*/
+func (r *Replicator) setState(s State) {
+	atomic.StoreInt32(&r.state, int32(s))
+}
+
+/*
 Acknowledge acknowledges to the server that we have committed a change, and
 will result in a message being sent back to the database to the same
 effect. It is important to periodically acknowledge changes so that the
@@ -116,6 +147,7 @@ connect to the database and either get replication started, or
 return an error.
 */
 func (r *Replicator) connect() (*pgclient.PgConnection, error) {
+	log.Debugf("Replication connecting to Postgres using %s", r.connectString)
 	success := false
 	conn, err := pgclient.Connect(r.connectString)
 	if err != nil {
@@ -196,6 +228,7 @@ func (r *Replicator) replLoop() {
 	defer hbTimer.Stop()
 
 	// First time through -- connect right away
+	log.Debug("Starting replLoop")
 	connectTimer := time.NewTimer(0)
 	defer connectTimer.Stop()
 
@@ -206,6 +239,7 @@ func (r *Replicator) replLoop() {
 			connection, err = r.connect()
 			if err == nil {
 				connected = true
+				r.setState(Running)
 				go r.readLoop(connection)
 			} else {
 				connectDelay *= 2
@@ -219,6 +253,7 @@ func (r *Replicator) replLoop() {
 
 		// Client called "Acknowledge" to ask us to update the high LSN
 		case newLSN := <-r.updateChan:
+			log.Debugf("Got updated LSN %d", newLSN)
 			if newLSN > highLSN {
 				highLSN = newLSN
 				// Send an update to the server
@@ -230,17 +265,20 @@ func (r *Replicator) replLoop() {
 
 		// Periodic timeout to keep replication connection alive.
 		case <-hbTimer.C:
+			log.Debug("Heartbeat timer expired")
 			if connected {
 				r.updateLSN(highLSN, connection)
 				hbTimer.Reset(heartbeatTimeout)
 			}
 
 		case cmd := <-r.cmdChan:
+			log.Debugf("Got command %d", cmd)
 			switch cmd {
 			// Read loop exiting due to connection failure.
 			case disconnectedCmd:
 				connected = false
 				log.Warning("Disconnected from Postgres.")
+				r.setState(Connecting)
 				connection.Close()
 				connectDelay = initialReconnectDelay
 				connectTimer.Reset(connectDelay)
@@ -265,6 +303,7 @@ func (r *Replicator) replLoop() {
 				if connected {
 					connection.Close()
 				}
+				r.setState(Stopped)
 				return
 			}
 		}
@@ -289,6 +328,7 @@ func (r *Replicator) readLoop(connection *pgclient.PgConnection) {
 			r.cmdChan <- disconnectedCmd
 			return
 		}
+		log.Debugf("Received message type %s", m.Type())
 
 		switch m.Type() {
 		case pgclient.NoticeResponse:

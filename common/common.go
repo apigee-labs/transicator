@@ -31,7 +31,7 @@ for a snapshot of a table, or into a list of row operations in a change
 list. The key for each property in the row is the name of the field, and the
 value is a ColumnVal that includes both the value and type.
 */
-type Row map[string]ColumnVal
+type Row map[string]*ColumnVal
 
 /*
 A Change is a list of changed rows. Each Change describes how the row changed

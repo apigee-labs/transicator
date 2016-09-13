@@ -86,26 +86,30 @@ static void tuple_to_stringinfo(StringInfo s, TupleDesc tupdesc, HeapTuple tuple
 		 * don't print dropped columns, we can't be sure everything is
 		 * available for them
 		 */
-		if (attr->attisdropped)
+		if (attr->attisdropped) {
 			continue;
+    }
 
 		/*
 		 * Don't print system columns, oid will already have been printed if
 		 * present.
 		 */
-		if (attr->attnum < 0)
+		if (attr->attnum < 0) {
 			continue;
+    }
 
 		typid = attr->atttypid;
 
 		/* get Datum from tuple */
 		origval = heap_getattr(tuple, natt + 1, tupdesc, &isnull);
+    if (isnull) {
+      continue;
+    }
 
-		/* print attribute name */
     if (natt > 0) {
       appendStringInfoChar(s, ',');
     }
-    appendStringInfo(s, "{\"key\":\"%s\",\"type\":%i,\"value\":",
+    appendStringInfo(s, "\"%s\":{\"type\":%i,\"value\":",
       NameStr(attr->attname), typid);
 
 		/* query output function */
@@ -119,12 +123,9 @@ static void tuple_to_stringinfo(StringInfo s, TupleDesc tupdesc, HeapTuple tuple
       /* TODO What does this mean? */
 			appendStringInfoString(s, "\"unchanged-toast-datum\"");
     }	else if (!typisvarlena) {
-			print_literal(s, typid,
-						  OidOutputFunctionCall(typoutput, origval));
+			print_literal(s, typid, OidOutputFunctionCall(typoutput, origval));
 		} else {
-			Datum		val;	/* definitely detoasted Datum */
-
-			val = PointerGetDatum(PG_DETOAST_DATUM(origval));
+			Datum val = PointerGetDatum(PG_DETOAST_DATUM(origval));
 			print_literal(s, typid, OidOutputFunctionCall(typoutput, val));
 		}
     appendStringInfoChar(s, '}');
@@ -209,36 +210,36 @@ static void outputChange(
 		case REORDER_BUFFER_CHANGE_INSERT:
 			appendStringInfoString(ctx->out, ",\"operation\":1");
 			if (change->data.tp.newtuple != NULL) {
-        appendStringInfoString(ctx->out, ",\"newRow\":[");
+        appendStringInfoString(ctx->out, ",\"newRow\":{");
 				tuple_to_stringinfo(ctx->out, tupdesc,
 									&change->data.tp.newtuple->tuple);
-        appendStringInfoChar(ctx->out, ']');
+        appendStringInfoChar(ctx->out, '}');
       }
 			break;
 
 		case REORDER_BUFFER_CHANGE_UPDATE:
 			appendStringInfoString(ctx->out, ",\"operation\":2");
 			if (change->data.tp.oldtuple != NULL) {
-        appendStringInfoString(ctx->out, ",\"oldRow\":[");
+        appendStringInfoString(ctx->out, ",\"oldRow\":{");
 				tuple_to_stringinfo(ctx->out, tupdesc,
 									&change->data.tp.oldtuple->tuple);
-				appendStringInfoChar(ctx->out, ']');
+				appendStringInfoChar(ctx->out, '}');
 			}
 			if (change->data.tp.newtuple != NULL) {
-        appendStringInfoString(ctx->out, ",\"newRow\":[");
+        appendStringInfoString(ctx->out, ",\"newRow\":{");
 				tuple_to_stringinfo(ctx->out, tupdesc,
 									&change->data.tp.newtuple->tuple);
-        appendStringInfoChar(ctx->out, ']');
+        appendStringInfoChar(ctx->out, '}');
       }
 			break;
 
 		case REORDER_BUFFER_CHANGE_DELETE:
 			appendStringInfoString(ctx->out, ",\"operation\":3");
 			if (change->data.tp.oldtuple != NULL) {
-        appendStringInfoString(ctx->out, ",\"oldRow\":[");
+        appendStringInfoString(ctx->out, ",\"oldRow\":{");
 				tuple_to_stringinfo(ctx->out, tupdesc,
 									&change->data.tp.oldtuple->tuple);
-        appendStringInfoChar(ctx->out, ']');
+        appendStringInfoChar(ctx->out, '}');
       }
 			break;
 

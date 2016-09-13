@@ -17,6 +17,7 @@ const (
 	jsonContent     = "application/json"
 	textContent     = "text/plain"
 	lastSequenceKey = "_ls"
+	scopeField      = "_apid_scope"
 )
 
 type server struct {

@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 
-	"github.com/30x/transicator/replication"
+	"github.com/30x/transicator/common"
 	log "github.com/Sirupsen/logrus"
 )
 
@@ -40,38 +40,34 @@ func (s *server) runReplication(firstChange int64) {
 	}
 }
 
-func (s *server) handleChange(c replication.Change, firstChange int64) int64 {
-	e, err := c.Decode()
-	if err != nil {
-		log.Errorf("Received an invalid change: %s", err)
-		return 0
-	}
-
-	if e.Sequence > firstChange {
-		scope := getScope(e)
-		log.Debugf("Received change %d for scope %s", e.Sequence, scope)
+func (s *server) handleChange(c *common.Change, firstChange int64) int64 {
+	// TODO Problem -- we need to save index too here
+	if c.CommitSequence > firstChange {
+		scope := getScope(c)
+		log.Debugf("Received change %d for scope %s", c.ChangeSequence, scope)
+		dataBuf := c.Marshal()
 		s.db.PutEntryAndMetadata(
-			scope, e.CommitSequence, e.Index, []byte(c.Data),
-			lastSequenceKey, e.Sequence)
-		s.tracker.update(e.CommitSequence, scope)
+			scope, c.CommitSequence, c.CommitIndex, dataBuf,
+			lastSequenceKey, c.CommitSequence)
+		s.tracker.update(c.CommitSequence, scope)
 	} else {
-		log.Debugf("Ignoring change %d which we already processed", e.Sequence)
+		log.Debugf("Ignoring change %d which we already processed", c.ChangeSequence)
 	}
-	return e.Sequence
+	return c.ChangeSequence
 }
 
-func getScope(e *replication.EncodedChange) string {
-	if e.New != nil {
-		if e.New["_scope"] == nil {
+func getScope(c *common.Change) string {
+	if c.NewRow != nil {
+		if c.NewRow[scopeField] == nil {
 			return ""
 		}
-		return e.New["_scope"].(string)
+		return c.NewRow[scopeField].Value
 	}
-	if e.Old != nil {
-		if e.Old["_scope"] == nil {
+	if c.OldRow != nil {
+		if c.OldRow[scopeField] == nil {
 			return ""
 		}
-		return e.Old["_scope"].(string)
+		return c.OldRow[scopeField].Value
 	}
 	return ""
 }
