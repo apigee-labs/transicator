@@ -8,14 +8,18 @@ import (
 	"github.com/30x/transicator/common"
 	"github.com/30x/transicator/pgclient"
 	"github.com/30x/transicator/replication"
+	"github.com/Sirupsen/logrus"
 
-	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+)
+
+const (
+	debugTests = true
 )
 
 var (
@@ -40,7 +44,9 @@ func TestSnapshot(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	//logrus.SetLevel(logrus.DebugLevel)
+	if debugTests {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
 
 	var err error
 	dbConn0, err = pgclient.Connect(dbURL)
@@ -68,28 +74,31 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	fmt.Println("AfterSuite: stop replication")
-	repl.Stop()
+	if repl != nil {
+		repl.Stop()
+	}
 
 	fmt.Println("AfterSuite: drop replication slot")
-	doExecute1("select * from pg_drop_replication_slot('snapshot_test_slot')")
+	dbConn1.SimpleQuery("select * from pg_drop_replication_slot('snapshot_test_slot')")
 
 	fmt.Println("AfterSuite: close conns")
 	if dbConn0 != nil {
 		dbConn0.SimpleQuery("close")
 		dbConn0.Close()
 	}
+	if dbConn2 != nil {
+		dbConn2.Close()
+	}
+	if dbConn3 != nil {
+		dbConn3.Close()
+	}
+
 	if dbConn1 != nil {
 		tables := []string{"snapshot_test", "APP", "DEVELOPER"}
 		for _, table := range tables {
 			dropTable(table)
 		}
 		dbConn1.Close()
-	}
-	if dbConn2 != nil {
-		dbConn2.Close()
-	}
-	if dbConn3 != nil {
-		dbConn3.Close()
 	}
 })
 
@@ -99,7 +108,8 @@ func tableExists(name string) bool {
 }
 
 func truncateTable(name string) error {
-	_, _, err := dbConn1.SimpleQuery(fmt.Sprintf("TRUNCATE table %s", name))
+	// Deleting all the rows of the table does not lock as much and does not block tests
+	_, _, err := dbConn1.SimpleQuery(fmt.Sprintf("delete from %s", name))
 	return err
 }
 
@@ -174,6 +184,7 @@ const testTableSQL = `
  	_apid_scope varchar(255),
 	PRIMARY KEY (id, _apid_scope)
 );
+alter table developer replica identity full;
   CREATE TABLE APP (
 	org varchar(255),
 	id varchar(255),
@@ -185,7 +196,7 @@ const testTableSQL = `
  	_apid_scope varchar(255),
 	PRIMARY KEY (id, _apid_scope)
 );
-
+alter table developer replica identity full;
 `
 
 func getCurrentTxid1() int32 {
@@ -214,9 +225,9 @@ func drainReplication(repl *replication.Replicator) {
 			timedOut = true
 		case change := <-repl.Changes():
 			Expect(change.Error).Should(Succeed())
-			fmt.Fprintf(GinkgoWriter, "LSN %d data %s\n", change.LSN, change.Data)
-			if change.LSN > maxLSN {
-				maxLSN = change.LSN
+			fmt.Fprintf(GinkgoWriter, "LSN %d\n", change.CommitSequence)
+			if change.CommitSequence > maxLSN {
+				maxLSN = change.CommitSequence
 			}
 		}
 	}
@@ -225,15 +236,12 @@ func drainReplication(repl *replication.Replicator) {
 	repl.Acknowledge(maxLSN)
 }
 
-func getReplChange(r *replication.Replicator) *replication.EncodedChange {
+func getReplChange(r *replication.Replicator) *common.Change {
 
-	var c replication.Change
+	var c *common.Change
 	Eventually(r.Changes()).Should(Receive(&c))
-	var enc replication.EncodedChange
-	err := json.Unmarshal([]byte(c.Data), &enc)
-	Expect(err).Should(Succeed())
 	Consistently(r.Changes()).ShouldNot(Receive())
-	return &enc
+	return c
 }
 
 /*
@@ -253,6 +261,12 @@ xip_list - Active txids at the time of the snapshot. The list includes only thos
 var _ = Describe("Taking a snapshot", func() {
 
 	tables := []string{"snapshot_test", "developer", "app"}
+
+	BeforeEach(func() {
+		// There may be records in the replication queue from deletes done in AfterEach
+		drainReplication(repl)
+	})
+
 	AfterEach(func() {
 		//fmt.Println("AfterEach: rollback conns")
 		//dbConn1.SimpleQuery("rollback")
@@ -281,18 +295,18 @@ var _ = Describe("Taking a snapshot", func() {
 			s0 := getCurrentSnapshotInfo()
 			enc := getReplChange(repl)
 			fmt.Printf("\nSnapshot info %+v Commit LSN = %d\n", s0, enc.CommitSequence)
-			Expect(enc.New["id"]).Should(Equal("no-pending-tx 0"))
-			Expect(s0.xmin).To(Equal(enc.Txid + 1))
-			Expect(s0.xmax).To(Equal(s0.xmin))
+			Expect(enc.NewRow["id"].Value).Should(Equal("no-pending-tx 0"))
+			Expect(s0.xmin).To(BeEquivalentTo(enc.TransactionID + 1))
+			Expect(s0.xmax).To(BeEquivalentTo(s0.xmin))
 			Expect(s0.xip_list).To(BeNil())
 
 			doExecute1("insert into snapshot_test (id) values ('no-pending-tx 1')")
 			s1 := getCurrentSnapshotInfo()
 			enc = getReplChange(repl)
 			fmt.Printf("\nSnapshot info %+v Commit LSN = %d\n", s1, enc.CommitSequence)
-			Expect(enc.New["id"]).Should(Equal("no-pending-tx 1"))
-			Expect(s1.xmin).To(Equal(enc.Txid + 1))
-			Expect(s1.xmax).To(Equal(s1.xmin))
+			Expect(enc.NewRow["id"].Value).Should(Equal("no-pending-tx 1"))
+			Expect(s1.xmin).To(BeEquivalentTo(enc.TransactionID + 1))
+			Expect(s1.xmax).To(BeEquivalentTo(s1.xmin))
 			Expect(s1.xip_list).To(BeNil())
 		})
 
@@ -317,33 +331,33 @@ var _ = Describe("Taking a snapshot", func() {
 			doExecute1("insert into snapshot_test (id) values ('single-pending-tx 1')")
 			s0 := getCurrentSnapshotInfo()
 			fmt.Printf("\nSnapshot info %+v\n", s0)
-			Expect(s0.xmax).To(Equal(s0.xmin))
+			Expect(s0.xmax).To(BeEquivalentTo(s0.xmin))
 			Expect(s0.xip_list).To(BeNil())
 
 			doExecute2("begin")
 			doExecute2("insert into snapshot_test (id) values ('single-pending-tx 2')")
 			s1 := getCurrentSnapshotInfo()
 			fmt.Printf("\nSnapshot info %+v\n", s1)
-			Expect(s1.xmin).To(Equal(s0.xmin))
-			Expect(s1.xmax).To(Equal(s1.xmin))
+			Expect(s1.xmin).To(BeEquivalentTo(s0.xmin))
+			Expect(s1.xmax).To(BeEquivalentTo(s1.xmin))
 			Expect(s1.xip_list).To(BeNil())
 
 			doExecute1("commit")
 			s2 := getCurrentSnapshotInfo()
 			enc := getReplChange(repl)
 			fmt.Printf("\nSnapshot info %+v Commit LSN = %d\n", s2, enc.CommitSequence)
-			Expect(enc.New["id"]).Should(Equal("single-pending-tx 1"))
-			Expect(s2.xmin).To(Equal(enc.Txid + 1))
-			Expect(s2.xmax).To(Equal(s2.xmin))
+			Expect(enc.NewRow["id"].Value).Should(Equal("single-pending-tx 1"))
+			Expect(s2.xmin).To(BeEquivalentTo(enc.TransactionID + 1))
+			Expect(s2.xmax).To(BeEquivalentTo(s2.xmin))
 			Expect(s2.xip_list).To(BeNil())
 
 			doExecute2("commit")
 			s3 := getCurrentSnapshotInfo()
 			enc = getReplChange(repl)
 			fmt.Printf("\nSnapshot info %+v Commit LSN = %d\n", s3, enc.CommitSequence)
-			Expect(enc.New["id"]).Should(Equal("single-pending-tx 2"))
-			Expect(s3.xmin).To(Equal(enc.Txid + 1))
-			Expect(s3.xmax).To(Equal(s3.xmin))
+			Expect(enc.NewRow["id"].Value).Should(Equal("single-pending-tx 2"))
+			Expect(s3.xmin).To(BeEquivalentTo(enc.TransactionID + 1))
+			Expect(s3.xmax).To(BeEquivalentTo(s3.xmin))
 			Expect(s3.xip_list).To(BeNil())
 		})
 	})
@@ -373,34 +387,34 @@ var _ = Describe("Taking a snapshot", func() {
 			doExecute3("insert into snapshot_test (id) values ('2-pending-tx 3')")
 			s0 := getCurrentSnapshotInfo()
 			fmt.Printf("\nSnapshot info %+v\n", s0)
-			Expect(s0.xmax).To(Equal(s0.xmin))
+			Expect(s0.xmax).To(BeEquivalentTo(s0.xmin))
 			Expect(s0.xip_list).To(BeNil())
 
 			doExecute2("commit")
 			s1 := getCurrentSnapshotInfo()
 			enc := getReplChange(repl)
 			fmt.Printf("\nSnapshot info %+v Commit LSN = %d\n", s1, enc.CommitSequence)
-			Expect(enc.New["id"]).Should(Equal("2-pending-tx 2"))
-			Expect(s1.xmin).To(Equal(s0.xmin))
-			Expect(s1.xmax).To(Equal(enc.Txid + 1))
+			Expect(enc.NewRow["id"].Value).Should(Equal("2-pending-tx 2"))
+			Expect(s1.xmin).To(BeEquivalentTo(s0.xmin))
+			Expect(s1.xmax).To(BeEquivalentTo(enc.TransactionID + 1))
 			Expect(s1.xip_list).To(Equal([]int32{s1.xmin}))
 
 			doExecute3("commit")
 			s2 := getCurrentSnapshotInfo()
 			enc = getReplChange(repl)
 			fmt.Printf("\nSnapshot info %+v Commit LSN = %d\n", s2, enc.CommitSequence)
-			Expect(enc.New["id"]).Should(Equal("2-pending-tx 3"))
-			Expect(s2.xmin).To(Equal(s0.xmin))
-			Expect(s2.xmax).To(Equal(enc.Txid + 1))
+			Expect(enc.NewRow["id"].Value).Should(Equal("2-pending-tx 3"))
+			Expect(s2.xmin).To(BeEquivalentTo(s0.xmin))
+			Expect(s2.xmax).To(BeEquivalentTo(enc.TransactionID + 1))
 			Expect(s2.xip_list).To(Equal([]int32{s1.xmin}))
 
 			doExecute1("commit")
 			s3 := getCurrentSnapshotInfo()
 			enc = getReplChange(repl)
 			fmt.Printf("\nSnapshot info %+v Commit LSN = %d\n", s3, enc.CommitSequence)
-			Expect(enc.New["id"]).Should(Equal("2-pending-tx 1"))
-			Expect(s3.xmin).To(Equal(s2.xmax))
-			Expect(s3.xmax).To(Equal(s3.xmin))
+			Expect(enc.NewRow["id"].Value).Should(Equal("2-pending-tx 1"))
+			Expect(s3.xmin).To(BeEquivalentTo(s2.xmax))
+			Expect(s3.xmax).To(BeEquivalentTo(s3.xmin))
 			Expect(s3.xip_list).To(BeNil())
 		})
 	})
@@ -439,27 +453,27 @@ var _ = Describe("Taking a snapshot", func() {
 			s1 := getCurrentSnapshotInfo()
 			enc := getReplChange(repl)
 			fmt.Printf("\nSnapshot info %+v Commit LSN = %d\n", s1, enc.CommitSequence)
-			Expect(enc.New["id"]).Should(Equal("2-pending-tx-reverse 3"))
-			Expect(s1.xmin).To(Equal(s0.xmin))
-			Expect(s1.xmax).To(Equal(enc.Txid + 1))
+			Expect(enc.NewRow["id"].Value).Should(Equal("2-pending-tx-reverse 3"))
+			Expect(s1.xmin).To(BeEquivalentTo(s0.xmin))
+			Expect(s1.xmax).To(BeEquivalentTo(enc.TransactionID + 1))
 			Expect(s1.xip_list).To(Equal([]int32{txid1, txid2}))
 
 			doExecute2("commit")
 			s2 := getCurrentSnapshotInfo()
 			enc = getReplChange(repl)
 			fmt.Printf("\nSnapshot info %+v Commit LSN = %d\n", s2, enc.CommitSequence)
-			Expect(enc.New["id"]).Should(Equal("2-pending-tx-reverse 2"))
-			Expect(s2.xmin).To(Equal(s0.xmin))
-			Expect(s2.xmax).To(Equal(s1.xmax))
+			Expect(enc.NewRow["id"].Value).Should(Equal("2-pending-tx-reverse 2"))
+			Expect(s2.xmin).To(BeEquivalentTo(s0.xmin))
+			Expect(s2.xmax).To(BeEquivalentTo(s1.xmax))
 			Expect(s2.xip_list).To(Equal([]int32{txid1}))
 
 			doExecute1("commit")
 			s3 := getCurrentSnapshotInfo()
 			enc = getReplChange(repl)
 			fmt.Printf("\nSnapshot info %+v Commit LSN = %d\n", s3, enc.CommitSequence)
-			Expect(enc.New["id"]).Should(Equal("2-pending-tx-reverse 1"))
-			Expect(s3.xmin).To(Equal(s1.xmax))
-			Expect(s3.xmax).To(Equal(s3.xmin))
+			Expect(enc.NewRow["id"].Value).Should(Equal("2-pending-tx-reverse 1"))
+			Expect(s3.xmin).To(BeEquivalentTo(s1.xmax))
+			Expect(s3.xmax).To(BeEquivalentTo(s3.xmin))
 			Expect(s3.xip_list).To(BeNil())
 		})
 	})
@@ -483,14 +497,14 @@ var _ = Describe("Taking a snapshot", func() {
 			doExecute1("insert into snapshot_test (id) values ('0-pending-tx-1')")
 			s0 := getCurrentSnapshotInfo()
 			fmt.Printf("\nSnapshot info %+v\n", s0)
-			Expect(s0.xmax).To(Equal(s0.xmin))
+			Expect(s0.xmax).To(BeEquivalentTo(s0.xmin))
 			Expect(s0.xip_list).To(BeNil())
 
 			doExecute1("rollback")
 			s1 := getCurrentSnapshotInfo()
 			fmt.Printf("\nSnapshot info %+v\n", s1)
-			Expect(s1.xmin).To(Equal(txid1 + 1))
-			Expect(s1.xmax).To(Equal(s1.xmin))
+			Expect(s1.xmin).To(BeEquivalentTo(txid1 + 1))
+			Expect(s1.xmax).To(BeEquivalentTo(s1.xmin))
 			Expect(s1.xip_list).To(BeNil())
 
 		})
@@ -574,6 +588,7 @@ var _ = Describe("Taking a snapshot", func() {
 			Expect(err).Should(Succeed())
 
 			for _, table := range s.Tables {
+				fmt.Fprintf(GinkgoWriter, "Got data for %s\n", table.Name)
 				Expect(tables).To(ContainElement(table.Name))
 				for _, row := range table.Rows {
 					for l, col := range row {

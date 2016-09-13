@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+
 	"github.com/30x/transicator/common"
 	"github.com/30x/transicator/pgclient"
-	"os"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -98,7 +99,7 @@ func GetTenantSnapshotData(connect string, tenantId []string) (b []byte, err err
 		for _, x := range s3 {
 			srvItem := common.Row{}
 			for ind, y := range x {
-				scv := common.ColumnVal{
+				scv := &common.ColumnVal{
 					Value: y,
 					Type:  ci[ind].Type,
 				}
