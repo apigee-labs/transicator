@@ -1,6 +1,6 @@
 {
-  "firstSequence": 123,
-  "lastSequence": 456,
+  "firstSequence": "abc.def.123",
+  "lastSequence": "abc.def.456",
   "changes": [
     {
       "operation": 1,
@@ -33,6 +33,7 @@
     {
       "operation": 3,
       "table":"two",
+      "sequence": "abc.def.123",
       "changeSequence": 125,
       "commitSequence": 140,
       "commitIndex": 1,

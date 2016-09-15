@@ -17,7 +17,7 @@ const (
 
 var _ = Describe("Changes API Tests", func() {
 	var lastTestSequence = time.Now().Unix()
-	var lastChangeSequence int64
+	lastChangeSequence := common.Sequence{}
 
 	It("First Change", func() {
 		lastTestSequence++
@@ -28,7 +28,7 @@ var _ = Describe("Changes API Tests", func() {
 
 		Eventually(func() bool {
 			bod := executeGet(fmt.Sprintf(
-				"%s/changes?since=%d&scope=foo", baseURL, lastChangeSequence))
+				"%s/changes?since=%s&scope=foo", baseURL, lastChangeSequence))
 			cl, err := common.UnmarshalChangeList(bod)
 			Expect(err).Should(Succeed())
 			if len(cl.Changes) == 0 {
@@ -37,7 +37,8 @@ var _ = Describe("Changes API Tests", func() {
 			for _, c := range cl.Changes {
 				ltss := strconv.FormatInt(lastTestSequence, 10)
 				if c.NewRow["sequence"].Value == ltss {
-					lastChangeSequence = c.CommitSequence
+					Expect(c.Sequence).Should(Equal(c.GetSequence().String()))
+					lastChangeSequence = c.GetSequence()
 					return true
 				}
 			}
@@ -56,12 +57,12 @@ var _ = Describe("Changes API Tests", func() {
 
 		Eventually(func() bool {
 			cl := getChanges(fmt.Sprintf(
-				"%s/changes?since=%d&scope=foo", baseURL, lastChangeSequence))
+				"%s/changes?since=%s&scope=foo", baseURL, lastChangeSequence))
 			if len(cl.Changes) < 1 {
 				return false
 			}
 			if compareSequence(cl, 0, lastTestSequence) {
-				lastChangeSequence = cl.Changes[0].CommitSequence
+				lastChangeSequence = cl.Changes[0].GetSequence()
 				return true
 			}
 			return false
@@ -81,12 +82,12 @@ var _ = Describe("Changes API Tests", func() {
 
 		Eventually(func() bool {
 			cl := getChanges(fmt.Sprintf(
-				"%s/changes?since=%d&scope=foo", baseURL, origLastSequence))
+				"%s/changes?since=%s&scope=foo", baseURL, origLastSequence))
 			if len(cl.Changes) != 4 {
 				return false
 			}
 			if compareSequence(cl, 3, lastTestSequence) {
-				lastChangeSequence = cl.Changes[3].CommitSequence
+				lastChangeSequence = cl.Changes[3].GetSequence()
 				return true
 			}
 			return false
@@ -94,22 +95,23 @@ var _ = Describe("Changes API Tests", func() {
 
 		// Un-matched scope
 		cl := getChanges(fmt.Sprintf(
-			"%s/changes?since=%d&scope=bar", baseURL, origLastSequence))
+			"%s/changes?since=%s&scope=bar", baseURL, origLastSequence))
 		Expect(cl.Changes).Should(BeEmpty())
 
 		// Out of range
+		oorSeq := common.MakeSequence(lastChangeSequence.LSN+10, lastChangeSequence.Index)
 		cl = getChanges(fmt.Sprintf(
-			"%s/changes?since=%d&scope=foo", baseURL, lastChangeSequence+10))
+			"%s/changes?since=%s&scope=foo", baseURL, oorSeq))
 		Expect(cl.Changes).Should(BeEmpty())
 
 		// Short limit
 		cl = getChanges(fmt.Sprintf(
-			"%s/changes?since=%d&scope=foo&limit=0", baseURL, origLastSequence))
+			"%s/changes?since=%s&scope=foo&limit=0", baseURL, origLastSequence))
 		Expect(cl.Changes).Should(BeEmpty())
 
 		// Less short limit
 		cl = getChanges(fmt.Sprintf(
-			"%s/changes?since=%d&scope=foo&limit=1", baseURL, origLastSequence))
+			"%s/changes?since=%s&scope=foo&limit=1", baseURL, origLastSequence))
 		Expect(len(cl.Changes)).Should(Equal(1))
 		Expect(compareSequence(cl, 0, lastTestSequence-3)).Should(BeTrue())
 	})
@@ -117,13 +119,14 @@ var _ = Describe("Changes API Tests", func() {
 	It("Long polling empty", func() {
 		lastCommit := lastChangeSequence
 		cl := getChanges(fmt.Sprintf(
-			"%s/changes?since=%d&scope=foo", baseURL, lastChangeSequence))
+			"%s/changes?since=%s&scope=foo", baseURL, lastChangeSequence))
 		if len(cl.Changes) > 0 {
-			lastCommit = cl.Changes[len(cl.Changes)-1].CommitSequence
+			lastCommit = cl.Changes[len(cl.Changes)-1].GetSequence()
 		}
 
+		oorSeq := common.MakeSequence(lastCommit.LSN+10, lastCommit.Index)
 		cl = getChanges(fmt.Sprintf(
-			"%s/changes?since=%d&scope=foo&block=1", baseURL, lastCommit+10))
+			"%s/changes?since=%s&scope=foo&block=1", baseURL, oorSeq))
 		Expect(cl.Changes).Should(BeEmpty())
 	})
 
@@ -132,10 +135,10 @@ var _ = Describe("Changes API Tests", func() {
 
 		go func() {
 			lc := getChanges(fmt.Sprintf(
-				"%s/changes?since=%d&scope=foo", baseURL, lastChangeSequence))
+				"%s/changes?since=%s&scope=foo", baseURL, lastChangeSequence))
 			resultChan <- lc
 			lc = getChanges(fmt.Sprintf(
-				"%s/changes?since=%d&scope=foo&block=30", baseURL, lastChangeSequence))
+				"%s/changes?since=%s&scope=foo&block=30", baseURL, lastChangeSequence))
 			resultChan <- lc
 		}()
 
@@ -150,7 +153,7 @@ var _ = Describe("Changes API Tests", func() {
 		cl = <-resultChan
 		Expect(len(cl.Changes)).Should(Equal(1))
 		Expect(compareSequence(cl, 0, lastTestSequence)).Should(BeTrue())
-		lastChangeSequence = cl.Changes[0].CommitSequence
+		lastChangeSequence = cl.Changes[0].GetSequence()
 	})
 
 	It("Long polling no scope", func() {
@@ -158,10 +161,10 @@ var _ = Describe("Changes API Tests", func() {
 
 		go func() {
 			lc := getChanges(fmt.Sprintf(
-				"%s/changes?since=%d", baseURL, lastChangeSequence))
+				"%s/changes?since=%s", baseURL, lastChangeSequence))
 			resultChan <- lc
 			lc = getChanges(fmt.Sprintf(
-				"%s/changes?since=%d&block=30", baseURL, lastChangeSequence))
+				"%s/changes?since=%s&block=30", baseURL, lastChangeSequence))
 			resultChan <- lc
 		}()
 
@@ -176,7 +179,7 @@ var _ = Describe("Changes API Tests", func() {
 		cl = <-resultChan
 		Expect(len(cl.Changes)).Should(Equal(1))
 		Expect(compareSequence(cl, 0, lastTestSequence)).Should(BeTrue())
-		lastChangeSequence = cl.Changes[0].CommitSequence
+		lastChangeSequence = cl.Changes[0].GetSequence()
 	})
 
 	It("Long polling two scopes", func() {
@@ -184,10 +187,10 @@ var _ = Describe("Changes API Tests", func() {
 
 		go func() {
 			lc := getChanges(fmt.Sprintf(
-				"%s/changes?since=%d&scope=foo&scope=bar", baseURL, lastChangeSequence))
+				"%s/changes?since=%s&scope=foo&scope=bar", baseURL, lastChangeSequence))
 			resultChan <- lc
 			lc = getChanges(fmt.Sprintf(
-				"%s/changes?since=%d&scope=foo&scope=bar&block=30", baseURL, lastChangeSequence))
+				"%s/changes?since=%s&scope=foo&scope=bar&block=30", baseURL, lastChangeSequence))
 			resultChan <- lc
 		}()
 
@@ -202,7 +205,7 @@ var _ = Describe("Changes API Tests", func() {
 		cl = <-resultChan
 		Expect(len(cl.Changes)).Should(Equal(1))
 		Expect(compareSequence(cl, 0, lastTestSequence)).Should(BeTrue())
-		lastChangeSequence = cl.Changes[0].CommitSequence
+		lastChangeSequence = cl.Changes[0].GetSequence()
 	})
 })
 

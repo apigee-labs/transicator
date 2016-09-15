@@ -11,23 +11,23 @@ const (
 	acknowledgeDelay = 500 * time.Millisecond
 )
 
-func (s *server) runReplication(firstChange int64) {
-	var lastAck int64
-	var lastChange int64
+func (s *server) runReplication(firstChange common.Sequence) {
+	var lastAck uint64
+	var lastChange common.Sequence
 	ackTimer := time.NewTimer(acknowledgeDelay)
 
 	for {
 		select {
 		case change := <-s.repl.Changes():
 			newChange := s.handleChange(change, firstChange)
-			if newChange > lastChange {
+			if newChange.Compare(lastChange) > 0 {
 				lastChange = newChange
 			}
 
 		case <-ackTimer.C:
-			if lastChange > lastAck {
-				s.repl.Acknowledge(lastChange)
-				lastAck = lastChange
+			if lastChange.LSN > lastAck {
+				lastAck = lastChange.LSN
+				s.repl.Acknowledge(int64(lastAck))
 			}
 			ackTimer.Reset(acknowledgeDelay)
 
@@ -40,20 +40,23 @@ func (s *server) runReplication(firstChange int64) {
 	}
 }
 
-func (s *server) handleChange(c *common.Change, firstChange int64) int64 {
-	// TODO Problem -- we need to save index too here
-	if c.CommitSequence > firstChange {
+func (s *server) handleChange(c *common.Change, firstChange common.Sequence) common.Sequence {
+
+	changeSeq := c.GetSequence()
+
+	if changeSeq.Compare(firstChange) > 0 {
 		scope := getScope(c)
 		log.Debugf("Received change %d for scope %s", c.ChangeSequence, scope)
 		dataBuf := c.Marshal()
 		s.db.PutEntryAndMetadata(
 			scope, c.CommitSequence, c.CommitIndex, dataBuf,
-			lastSequenceKey, c.CommitSequence)
-		s.tracker.update(c.CommitSequence, scope)
+			lastSequenceKey, changeSeq.Bytes())
+		s.tracker.update(changeSeq, scope)
+
 	} else {
-		log.Debugf("Ignoring change %d which we already processed", c.ChangeSequence)
+		log.Debugf("Ignoring change %s which we already processed", changeSeq)
 	}
-	return c.ChangeSequence
+	return changeSeq
 }
 
 func getScope(c *common.Change) string {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -27,18 +28,6 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 
 	q := req.URL.Query()
 
-	since, err := getInt64Param(q, "since", 0)
-	if err != nil {
-		sendError(resp, req, http.StatusBadRequest, "Invalid since parameter")
-		return
-	}
-
-	index, err := getInt32Param(q, "index", 0)
-	if err != nil {
-		sendError(resp, req, http.StatusBadRequest, "Invalid index parameter")
-		return
-	}
-
 	limit, err := getIntParam(q, "limit", defaultLimit)
 	if err != nil {
 		sendError(resp, req, http.StatusBadRequest, "Invalid limit parameter")
@@ -57,9 +46,24 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 		scopes = []string{""}
 	}
 
-	log.Debugf("Receiving changes: scopes = %v since = %d index = %d limit = %d block = %d",
-		scopes, since, index, limit, block)
-	entries, err := s.db.GetMultiEntries(scopes, since+1, index, limit)
+	var sinceSeq common.Sequence
+	since := q.Get("since")
+	if since == "" {
+		sinceSeq = common.Sequence{}
+	} else {
+		sinceSeq, err = common.ParseSequence(since)
+		if err != nil {
+			sendError(resp, req, http.StatusBadRequest, fmt.Sprintf("Invalid since value %s", since))
+			return
+		}
+	}
+
+	// Need to advance past a single "since" value
+	sinceSeq.Index++
+
+	log.Debugf("Receiving changes: scopes = %v since = %s limit = %d block = %d",
+		scopes, sinceSeq, limit, block)
+	entries, err := s.db.GetMultiEntries(scopes, int64(sinceSeq.LSN), int32(sinceSeq.Index), limit)
 	if err != nil {
 		sendError(resp, req, http.StatusInternalServerError, err.Error())
 		return
@@ -68,9 +72,9 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 
 	if len(entries) == 0 && block > 0 {
 		log.Debugf("Blocking for up to %d seconds", block)
-		newIndex := s.tracker.timedWait(since+1, time.Duration(block)*time.Second, scopes)
-		if newIndex > since {
-			entries, err = s.db.GetMultiEntries(scopes, since+1, index, limit)
+		newIndex := s.tracker.timedWait(sinceSeq, time.Duration(block)*time.Second, scopes)
+		if newIndex.Compare(sinceSeq) > 0 {
+			entries, err = s.db.GetMultiEntries(scopes, int64(sinceSeq.LSN), int32(sinceSeq.Index), limit)
 			if err != nil {
 				sendError(resp, req, http.StatusInternalServerError, err.Error())
 				return
@@ -83,6 +87,8 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 
 	for _, e := range entries {
 		change, _ := common.UnmarshalChange(e)
+		// Database doesn't have value of "Sequence" in it
+		change.Sequence = change.GetSequence().String()
 		changeList.Changes = append(changeList.Changes, *change)
 	}
 

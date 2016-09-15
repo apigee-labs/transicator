@@ -5,6 +5,9 @@ New API for changeserver:
   This will probably require another index in LDB.
   Greg can also work on this.
 
+Check out the work on storing sequence numbers so that it takes
+indices into consideration.
+
 # Other changes
 
 Consider what happens for a big transaction -- Postgres will return us

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"sync/atomic"
 
+	"github.com/30x/transicator/common"
 	"github.com/30x/transicator/replication"
 	"github.com/30x/transicator/storage"
 	"github.com/golang/gddo/httputil"
@@ -45,9 +46,19 @@ func startChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix strin
 		}
 	}()
 
-	firstChange, err := db.GetIntMetadata(lastSequenceKey)
+	fcBuf, err := db.GetMetadata(lastSequenceKey)
 	if err != nil {
 		return nil, err
+	}
+
+	var firstChange common.Sequence
+	if fcBuf == nil {
+		firstChange = common.Sequence{}
+	} else {
+		firstChange, err = common.ParseSequenceBytes(fcBuf)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	repl, err := replication.Start(pgURL, pgSlot)

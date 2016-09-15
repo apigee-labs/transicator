@@ -43,11 +43,15 @@ type Change struct {
 	Operation Operation `json:"operation"`
 	// The name of the table that was updated
 	Table string `json:"table"`
+	// A value that indicates when the row is changed. It includes the
+	// "commit LSN" and "CommitIndex" from below. This is the value that
+	// clients should return to the API when looking for a list of changes.
+	Sequence string `json:"sequence,omitempty"`
+	// The LSN when the change was committed.
+	CommitSequence int64 `json:"commitSequence"`
 	// The Postgres LSN when the row changed. This will be interleaved
 	// in the change list because transactions commit at different times.
 	ChangeSequence int64 `json:"changeSequence"`
-	// The LSN when the change was committed. Changes are delivered in this order.
-	CommitSequence int64 `json:"commitSequence"`
 	// The order in which the change happened within the commit. For a transaction
 	// affects multiple rows, changes will be listed in order, and this value
 	// will begin at zero and be incremented by one.
@@ -65,6 +69,13 @@ type Change struct {
 	// Sometimes we need to return an error instead of a change. If this is
 	// not null, then it means a replication error occurred.
 	Error error `json:"-"`
+}
+
+/*
+GetSequence returns an object that combines the commit LSN and index.
+*/
+func (c *Change) GetSequence() Sequence {
+	return MakeSequence(uint64(c.CommitSequence), uint32(c.CommitIndex))
 }
 
 /*
@@ -94,14 +105,14 @@ A ChangeList represents a set of changes returned from the change server.
 It contains a list of rows, and it also contains information about the list.
 */
 type ChangeList struct {
-	// The highest value for "CommitSequence" in the whole database. The
+	// The highest value for "Sequence" in the whole database. The
 	// client may use this to understand when they are at the end of the list
 	// of changes.
-	LastSequence int64 `json:"lastSequence"`
-	// The lowest value for "CommitSequence" in the whole database. The client
+	LastSequence string `json:"lastSequence"`
+	// The lowest value for "Sequence" in the whole database. The client
 	// may use this to determine if they are at the beginning of the whole
 	// change list and must request a new snapshot to get consistent data.
-	FirstSequence int64 `json:"firstSequence"`
+	FirstSequence string `json:"firstSequence"`
 	// All the changes, in order of "commit sequence" and "commit index"
 	Changes []Change `json:"changes"`
 }
