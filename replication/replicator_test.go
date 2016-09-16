@@ -54,7 +54,8 @@ func drainReplication(repl *Replicator) {
 			timedOut = true
 		case change := <-repl.Changes():
 			Expect(change.Error).Should(Succeed())
-			fmt.Fprintf(GinkgoWriter, "LSN %d\n", change.CommitSequence)
+			fmt.Fprintf(GinkgoWriter, "LSN %d TXID %d\n",
+				change.CommitSequence, change.TransactionID)
 			if change.CommitSequence > maxLSN {
 				maxLSN = change.CommitSequence
 			}

@@ -11,9 +11,14 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+const (
+	debugTests = false
+)
+
 var dbURL string
 var dbConn *pgclient.PgConnection
 var dbConn2 *pgclient.PgConnection
+var dbConn3 *pgclient.PgConnection
 
 func TestPGClient(t *testing.T) {
 	dbURL = os.Getenv("TEST_PG_URL")
@@ -27,12 +32,16 @@ func TestPGClient(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	logrus.SetLevel(logrus.DebugLevel)
+	if debugTests {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
 
 	var err error
 	dbConn, err = pgclient.Connect(dbURL)
 	Expect(err).Should(Succeed())
 	dbConn2, err = pgclient.Connect(dbURL)
+	Expect(err).Should(Succeed())
+	dbConn3, err = pgclient.Connect(dbURL)
 	Expect(err).Should(Succeed())
 
 	if !tableExists("transicator_test") {
@@ -44,10 +53,14 @@ var _ = BeforeSuite(func() {
 var _ = AfterSuite(func() {
 	if dbConn != nil {
 		dropTable("transicator_test")
+		dropTable("txid_test")
 		dbConn.Close()
 	}
 	if dbConn2 != nil {
 		dbConn2.Close()
+	}
+	if dbConn3 != nil {
+		dbConn3.Close()
 	}
 })
 
@@ -86,4 +99,7 @@ const testTableSQL = `
     time time with time zone,
     timestamp timestamp with time zone,
     timestampp timestamp
-  )`
+  );
+	create table txid_test (
+		id varchar(64) primary key
+	)`
