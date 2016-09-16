@@ -9,3 +9,4 @@ import:
 - package: github.com/golang/gddo
   subpackages:
   - httputil
+- package: github.com/gorilla/mux
