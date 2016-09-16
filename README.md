@@ -45,7 +45,7 @@ the database for a particular set of scopes at a particular point in time.
 
 # API Specifications:
 
-* changeserver [API](http://playground.apistudio.io/b1c7fe2f-8138-425a-8e3b-aca9f867e35a/#/) and [Swagger spec](./changeserver/api.yaml)
+* changeserver [API](http://playground.apistudio.io/b1c7fe2f-8138-425a-8e3b-aca9f867e35a/docs/) and [Swagger spec](./changeserver/api.yaml)
 
 # API Example
 
