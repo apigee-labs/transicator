@@ -1,0 +1,149 @@
+swagger: '2.0'
+
+info:
+  version: "0.0.1"
+  title: changeserver
+
+paths:
+  /changes:
+    get:
+      description:
+        Retrieve a list of changes. The query parameters may be used to
+        restrict the number of changes that are retrieved or return
+        only changes since a particular sequence. In addition, it
+        is possible to block (aka "long poll") until a new matching
+        change is available.
+      parameters:
+        - name: scope
+          in: query
+          description:
+            The scope limits the changes that are returned. It is
+            extracted from a database column whenever a change is
+            made. Every call to this API must contain at least one
+            scope. Multiple "scope" parameters may also be used.
+            if more than one "scope" is included, then the operation
+            is treated as an "OR" of all the scopes, and the results
+            are sorted by sequence regardless of scope.
+          required: true
+          type: string
+        - name: since
+          in: query
+          description:
+            The value of "sequence" from a previous invocation of
+            this API. If so specified, this API will only return changes
+            that happened after the change with the specified sequence.
+            Otherwise, this API will return changes since the
+            beginning.
+          required: false
+          type: string
+        - name: limit
+          in: query
+          description:
+            Limit the number of changes returned by a single API
+            call. The default limit is 100.
+          required: false
+          type: integer
+        - name: block
+          in: query
+          description:
+            If specified, this sets the number of seconds that the API
+            call will block if there are no changes available since the
+            "since" value for the set of specified scopes. In the
+            event that there are no changes available when the API call
+            is made, the API will block for the specified number of
+            seconds until a matching change appears. If no changes
+            appear in the specified number of seconds, then an
+            empty change list will be returned.
+          required: false
+          type: integer
+
+      responses:
+        200:
+          description: Successful response
+          schema:
+            $ref: '#/definitions/ChangeList'
+
+definitions:
+  Value:
+    description:
+      The value of a row in the "newRow" or "oldRow" property
+      of a change.
+    required:
+      - value
+      - type
+    properties:
+      value:
+        description: The row value in string form
+        type: string
+      type:
+        description: The Postgres numeric type of the field
+        type: integer
+
+  Change:
+    description: A single change.
+    properties:
+      operation:
+        description:
+          The type of change.
+          "1" denotes an insert.
+          "2" denotes an update.
+          "3" denotes a delete.
+        type: integer
+      table:
+        description: The name of the database table that was changed.
+        type: string
+      sequence:
+        description:
+          The unique, ordered identifier of the change in the list of
+          changes.
+        type: string
+      commitSequence:
+        description:
+          The order of this transaction's commit in the list of changes.
+        type: integer
+        format: int64
+      changeSequence:
+        description:
+          The order of this change in the list of changes. Since
+          transactions commit in different orders, changes are not
+          necessarily shown in this order
+        type: integer
+        format: int64
+      commitIndex:
+        description:
+          The order of this change in the list of changes for a
+          particular transaction. When multiple changes are made in
+          a transaction, they have the same commitSequence but
+          different values of commitIndex.
+        type: integer
+        format: int64
+      txid:
+        description:
+          The database transaction ID for this change
+        type: integer
+        format: int64
+      newRow:
+        description:
+          The new value of the row for an insert or update operation.
+          The fields in the object are named after the fields in the
+          row, and each field's value is a "Value" object.
+        type: object
+      oldRow:
+        description:
+          The old value of the row for a delete or update operation.
+        type: object
+
+  ChangeList:
+    description: A set of changes.
+    properties:
+      firstSequence:
+        description: The oldest sequence present in the databse
+        type: string
+      lastSequence:
+        description: The newest sequence present in the databse
+        type: string
+      changes:
+        description: A list of changes, in sequence order.
+        type: array
+        items:
+          $ref: '#/definitions/Change'
