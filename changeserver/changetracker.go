@@ -3,6 +3,8 @@ package main
 import (
 	"sync/atomic"
 	"time"
+
+	"github.com/30x/transicator/common"
 )
 
 const (
@@ -15,15 +17,15 @@ const (
 type trackerUpdate struct {
 	updateType int
 	key        int32
-	change     int64
+	change     common.Sequence
 	scope      string
 	waiter     changeWaiter
 }
 
 type changeWaiter struct {
-	change int64
+	change common.Sequence
 	scopes map[string]bool
-	rc     chan int64
+	rc     chan common.Sequence
 }
 
 /*
@@ -36,7 +38,7 @@ type changeTracker struct {
 	updateChan  chan trackerUpdate
 	lastKey     int32
 	waiters     map[int32]changeWaiter
-	lastChanges map[string]int64
+	lastChanges map[string]common.Sequence
 }
 
 /*
@@ -64,7 +66,7 @@ func (t *changeTracker) close() {
 Update indicates that the current sequence has changed. Wake up any waiting
 waiters and tell them about it.
 */
-func (t *changeTracker) update(change int64, scope string) {
+func (t *changeTracker) update(change common.Sequence, scope string) {
 	u := trackerUpdate{
 		updateType: update,
 		change:     change,
@@ -77,7 +79,7 @@ func (t *changeTracker) update(change int64, scope string) {
 Wait blocks the calling gorouting forever until the change tracker has reached a value at least as high as
 "curChange." Return the current value when that happens.
 */
-func (t *changeTracker) wait(curChange int64, scopes []string) int64 {
+func (t *changeTracker) wait(curChange common.Sequence, scopes []string) common.Sequence {
 	_, resultChan := t.doWait(curChange, scopes)
 	return <-resultChan
 }
@@ -87,7 +89,7 @@ TimedWait blocks the current gorouting until either a new value higher than
 "curChange" has been reached, or "maxWait" has been exceeded.
 */
 func (t *changeTracker) timedWait(
-	curChange int64, maxWait time.Duration, scopes []string) int64 {
+	curChange common.Sequence, maxWait time.Duration, scopes []string) common.Sequence {
 	key, resultChan := t.doWait(curChange, scopes)
 	timer := time.NewTimer(maxWait)
 	select {
@@ -99,13 +101,13 @@ func (t *changeTracker) timedWait(
 			key:        key,
 		}
 		t.updateChan <- u
-		return 0
+		return common.Sequence{}
 	}
 }
 
-func (t *changeTracker) doWait(curChange int64, scopes []string) (int32, chan int64) {
+func (t *changeTracker) doWait(curChange common.Sequence, scopes []string) (int32, chan common.Sequence) {
 	key := atomic.AddInt32(&t.lastKey, 1)
-	resultChan := make(chan int64, 1)
+	resultChan := make(chan common.Sequence, 1)
 	scopeMap := make(map[string]bool)
 	for _, s := range scopes {
 		scopeMap[s] = true
@@ -130,7 +132,7 @@ func (t *changeTracker) doWait(curChange int64, scopes []string) (int32, chan in
  */
 func (t *changeTracker) run() {
 	t.waiters = make(map[int32]changeWaiter)
-	t.lastChanges = make(map[string]int64)
+	t.lastChanges = make(map[string]common.Sequence)
 
 	running := true
 	for running {
@@ -156,7 +158,7 @@ func (t *changeTracker) run() {
 func (t *changeTracker) handleUpdate(up trackerUpdate) {
 	t.lastChanges[up.scope] = up.change
 	for k, w := range t.waiters {
-		if up.change >= w.change && w.scopes[up.scope] {
+		if up.change.Compare(w.change) >= 0 && w.scopes[up.scope] {
 			//log.Debugf("Waking up waiter waiting for change %d with change %d and tag %s",
 			//	w.change, up.change, up.tag)
 			w.rc <- up.change
@@ -167,7 +169,7 @@ func (t *changeTracker) handleUpdate(up trackerUpdate) {
 
 func (t *changeTracker) handleWaiter(u trackerUpdate) {
 	maxAlready := t.getMaxChange(u.waiter.scopes)
-	if maxAlready >= u.waiter.change {
+	if maxAlready.Compare(u.waiter.change) >= 0 {
 		u.waiter.rc <- maxAlready
 	} else {
 		t.waiters[u.key] = u.waiter
@@ -178,10 +180,10 @@ func (t *changeTracker) handleCancel(key int32) {
 	delete(t.waiters, key)
 }
 
-func (t *changeTracker) getMaxChange(scopes map[string]bool) int64 {
-	var max int64
+func (t *changeTracker) getMaxChange(scopes map[string]bool) common.Sequence {
+	var max common.Sequence
 	for scope := range scopes {
-		if t.lastChanges[scope] > max {
+		if t.lastChanges[scope].Compare(max) > 0 {
 			max = t.lastChanges[scope]
 		}
 	}

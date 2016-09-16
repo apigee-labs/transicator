@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/30x/transicator/common"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -22,7 +23,7 @@ var tracker *changeTracker
 var _ = Describe("Change tracker", func() {
 	BeforeEach(func() {
 		tracker = createTracker()
-		tracker.update(startIndex, "")
+		tracker.update(common.MakeSequence(uint64(startIndex), 0), "")
 	})
 
 	AfterEach(func() {
@@ -30,187 +31,185 @@ var _ = Describe("Change tracker", func() {
 	})
 
 	It("Behind", func() {
-		behind := tracker.wait(1, []string{""})
-		Expect(behind).Should(BeEquivalentTo(2))
+		behind := tracker.wait(common.MakeSequence(1, 0), []string{""})
+		Expect(behind.LSN).Should(BeEquivalentTo(2))
 	})
 
 	It("Behind with scopes", func() {
-		tracker.update(3, "foo")
-		tracker.update(4, "bar")
-		behind := tracker.wait(1, []string{"foo"})
-		Expect(behind).Should(BeEquivalentTo(3))
-		behind = tracker.wait(1, []string{"bar"})
-		Expect(behind).Should(BeEquivalentTo(4))
-		behind = tracker.wait(1, []string{"foo", "bar"})
-		Expect(behind).Should(BeEquivalentTo(4))
-		behind = tracker.wait(1, []string{"bar", "foo"})
-		Expect(behind).Should(BeEquivalentTo(4))
+		tracker.update(common.MakeSequence(3, 0), "foo")
+		tracker.update(common.MakeSequence(4, 0), "bar")
+		behind := tracker.wait(common.MakeSequence(1, 0), []string{"foo"})
+		Expect(behind.LSN).Should(BeEquivalentTo(3))
+		behind = tracker.wait(common.MakeSequence(1, 0), []string{"bar"})
+		Expect(behind.LSN).Should(BeEquivalentTo(4))
+		behind = tracker.wait(common.MakeSequence(1, 0), []string{"foo", "bar"})
+		Expect(behind.LSN).Should(BeEquivalentTo(4))
+		behind = tracker.wait(common.MakeSequence(1, 0), []string{"bar", "foo"})
+		Expect(behind.LSN).Should(BeEquivalentTo(4))
 	})
 
 	It("Caught up", func() {
-		behind := tracker.wait(2, []string{""})
-		Expect(behind).Should(BeEquivalentTo(2))
+		behind := tracker.wait(common.MakeSequence(2, 0), []string{""})
+		Expect(behind.LSN).Should(BeEquivalentTo(2))
 	})
 
 	It("Caught up with scopes", func() {
-		tracker.update(3, "foo")
-		tracker.update(4, "bar")
+		tracker.update(common.MakeSequence(3, 0), "foo")
+		tracker.update(common.MakeSequence(4, 0), "bar")
 		time.Sleep(time.Millisecond * 250)
 
-		behind := tracker.wait(2, []string{"foo"})
-		Expect(behind).Should(BeEquivalentTo(3))
-		behind = tracker.wait(2, []string{"bar"})
-		Expect(behind).Should(BeEquivalentTo(4))
-		behind = tracker.wait(2, []string{"foo", "bar"})
-		Expect(behind).Should(BeEquivalentTo(4))
+		behind := tracker.wait(common.MakeSequence(2, 0), []string{"foo"})
+		Expect(behind.LSN).Should(BeEquivalentTo(3))
+		behind = tracker.wait(common.MakeSequence(2, 0), []string{"bar"})
+		Expect(behind.LSN).Should(BeEquivalentTo(4))
+		behind = tracker.wait(common.MakeSequence(2, 0), []string{"foo", "bar"})
+		Expect(behind.LSN).Should(BeEquivalentTo(4))
 	})
 
 	It("Timeout", func() {
-		blocked := tracker.timedWait(3, 250*time.Millisecond, []string{""})
-		Expect(blocked).Should(BeEquivalentTo(0))
+		blocked := tracker.timedWait(common.MakeSequence(3, 0), 250*time.Millisecond, []string{""})
+		Expect(blocked.LSN).Should(BeEquivalentTo(0))
 	})
 
 	It("Up to date", func() {
-		doneChan := make(chan int64, 1)
+		doneChan := make(chan uint64, 1)
 
 		go func() {
-			new := tracker.wait(3, []string{""})
-			doneChan <- new
+			new := tracker.wait(common.MakeSequence(3, 0), []string{""})
+			doneChan <- new.LSN
 		}()
 
-		tracker.update(3, "")
+		tracker.update(common.MakeSequence(3, 0), "")
 		Eventually(doneChan).Should(Receive(BeEquivalentTo(3)))
 	})
 
 	It("Up to date with timeout", func() {
-		doneChan := make(chan int64, 1)
+		doneChan := make(chan uint64, 1)
 
 		go func() {
-			new := tracker.timedWait(3, 2*time.Second, []string{""})
-			doneChan <- new
+			new := tracker.timedWait(common.MakeSequence(3, 0), 2*time.Second, []string{""})
+			doneChan <- new.LSN
 		}()
 
-		tracker.update(3, "")
+		tracker.update(common.MakeSequence(3, 0), "")
 		Eventually(doneChan).Should(Receive(BeEquivalentTo(3)))
 	})
 
 	It("Behind with tags", func() {
-		doneChanFoo := make(chan int64, 1)
-		doneChanBar := make(chan int64, 1)
+		doneChanFoo := make(chan uint64, 1)
+		doneChanBar := make(chan uint64, 1)
 
 		go func() {
-			new := tracker.wait(4, []string{"foo"})
-			doneChanFoo <- new
+			new := tracker.wait(common.MakeSequence(4, 0), []string{"foo"})
+			doneChanFoo <- new.LSN
 		}()
 
 		go func() {
-			new := tracker.timedWait(4, 2*time.Second, []string{"bar"})
-			doneChanBar <- new
+			new := tracker.timedWait(common.MakeSequence(4, 0), 2*time.Second, []string{"bar"})
+			doneChanBar <- new.LSN
 		}()
 
 		time.Sleep(250 * time.Millisecond)
-		tracker.update(4, "foo")
+		tracker.update(common.MakeSequence(4, 0), "foo")
 
-		got := <-doneChanFoo
-		Expect(got).Should(BeEquivalentTo(4))
-		got = <-doneChanBar
-		Expect(got).Should(BeZero())
+		Eventually(doneChanFoo).Should(Receive(BeEquivalentTo(4)))
+		Eventually(doneChanBar, 5*time.Second).Should(Receive(BeZero()))
 	})
 
 	It("Tag never updated", func() {
-		blocked := tracker.timedWait(3, 250*time.Millisecond, []string{"baz"})
-		Expect(blocked).Should(BeEquivalentTo(0))
+		blocked := tracker.timedWait(common.MakeSequence(3, 0), 250*time.Millisecond, []string{"baz"})
+		Expect(blocked.LSN).Should(BeEquivalentTo(0))
 	})
 
 	It("Less up to date with timeout", func() {
-		doneChan := make(chan int64, 1)
+		doneChan := make(chan uint64, 1)
 
 		go func() {
-			new := tracker.timedWait(4, 2*time.Second, []string{""})
-			doneChan <- new
+			new := tracker.timedWait(common.MakeSequence(4, 0), 2*time.Second, []string{""})
+			doneChan <- new.LSN
 		}()
 
-		tracker.update(3, "")
-		tracker.update(4, "")
+		tracker.update(common.MakeSequence(3, 0), "")
+		tracker.update(common.MakeSequence(4, 0), "")
 		Eventually(doneChan).Should(Receive(BeEquivalentTo(4)))
 	})
 
 	It("Up to date timeout", func() {
-		doneChan := make(chan int64, 1)
+		doneChan := make(chan uint64, 1)
 
 		go func() {
-			new := tracker.timedWait(3, 250*time.Millisecond, []string{""})
-			doneChan <- new
+			new := tracker.timedWait(common.MakeSequence(3, 0), 250*time.Millisecond, []string{""})
+			doneChan <- new.LSN
 		}()
 
 		time.Sleep(1 * time.Second)
-		tracker.update(3, "")
+		tracker.update(common.MakeSequence(3, 0), "")
 		Eventually(doneChan).Should(Receive(BeEquivalentTo(0)))
 	})
 
 	It("Update", func() {
-		doneChan := make(chan int64, 1)
+		doneChan := make(chan uint64, 1)
 
 		go func() {
-			new := tracker.wait(4, []string{""})
-			doneChan <- new
+			new := tracker.wait(common.MakeSequence(4, 0), []string{""})
+			doneChan <- new.LSN
 		}()
 
 		time.Sleep(250 * time.Millisecond)
-		tracker.update(3, "")
+		tracker.update(common.MakeSequence(3, 0), "")
 		time.Sleep(250 * time.Millisecond)
-		tracker.update(4, "")
+		tracker.update(common.MakeSequence(4, 0), "")
 		Eventually(doneChan).Should(Receive(BeEquivalentTo(4)))
 	})
 
 	It("Update with scopes", func() {
-		doneChan := make(chan int64, 1)
+		doneChan := make(chan uint64, 1)
 
 		go func() {
-			new := tracker.wait(4, []string{"baz"})
-			doneChan <- new
+			new := tracker.wait(common.MakeSequence(4, 0), []string{"baz"})
+			doneChan <- new.LSN
 		}()
 
 		time.Sleep(250 * time.Millisecond)
-		tracker.update(3, "baz")
+		tracker.update(common.MakeSequence(3, 0), "baz")
 		time.Sleep(250 * time.Millisecond)
-		tracker.update(4, "baz")
+		tracker.update(common.MakeSequence(4, 0), "baz")
 		Eventually(doneChan).Should(Receive(BeEquivalentTo(4)))
 	})
 
 	It("Update with two scopes", func() {
-		doneChan := make(chan int64, 1)
+		doneChan := make(chan uint64, 1)
 
 		go func() {
-			new := tracker.wait(4, []string{"bar", "baz"})
-			doneChan <- new
+			new := tracker.wait(common.MakeSequence(4, 0), []string{"bar", "baz"})
+			doneChan <- new.LSN
 		}()
 
 		time.Sleep(250 * time.Millisecond)
-		tracker.update(3, "foo")
+		tracker.update(common.MakeSequence(3, 0), "foo")
 		time.Sleep(250 * time.Millisecond)
-		tracker.update(4, "baz")
+		tracker.update(common.MakeSequence(4, 0), "baz")
 		Eventually(doneChan).Should(Receive(BeEquivalentTo(4)))
 	})
 
 	It("Update twice", func() {
-		doneChan := make(chan int64, 1)
-		doneChan2 := make(chan int64, 1)
+		doneChan := make(chan uint64, 1)
+		doneChan2 := make(chan uint64, 1)
 
 		go func() {
-			new := tracker.wait(4, []string{""})
-			doneChan <- new
+			new := tracker.wait(common.MakeSequence(4, 0), []string{""})
+			doneChan <- new.LSN
 		}()
 
 		go func() {
-			new2 := tracker.wait(4, []string{""})
-			doneChan2 <- new2
+			new2 := tracker.wait(common.MakeSequence(4, 0), []string{""})
+			doneChan2 <- new2.LSN
 		}()
 
 		time.Sleep(250 * time.Millisecond)
-		tracker.update(3, "")
+		tracker.update(common.MakeSequence(3, 0), "")
 		time.Sleep(250 * time.Millisecond)
-		tracker.update(4, "")
+		tracker.update(common.MakeSequence(4, 0), "")
 		got := <-doneChan
 		Expect(got).Should(BeEquivalentTo(4))
 		got = <-doneChan2
@@ -218,23 +217,23 @@ var _ = Describe("Change tracker", func() {
 	})
 
 	It("Multi Update", func() {
-		prematureDoneChan := make(chan int64, 1)
-		doneChan := make(chan int64, 1)
+		prematureDoneChan := make(chan uint64, 1)
+		doneChan := make(chan uint64, 1)
 
 		go func() {
-			oldNew := tracker.wait(10, []string{""})
-			prematureDoneChan <- oldNew
+			oldNew := tracker.wait(common.MakeSequence(10, 0), []string{""})
+			prematureDoneChan <- oldNew.LSN
 		}()
 
 		go func() {
-			new := tracker.wait(4, []string{""})
-			doneChan <- new
+			new := tracker.wait(common.MakeSequence(4, 0), []string{""})
+			doneChan <- new.LSN
 		}()
 
 		time.Sleep(250 * time.Millisecond)
-		tracker.update(3, "")
+		tracker.update(common.MakeSequence(3, 0), "")
 		time.Sleep(250 * time.Millisecond)
-		tracker.update(4, "")
+		tracker.update(common.MakeSequence(4, 0), "")
 
 		// No loop -- we expect that the first case arrive before the second
 		select {
@@ -247,12 +246,12 @@ var _ = Describe("Change tracker", func() {
 
 	It("Close", func() {
 		tracker := createTracker()
-		tracker.update(2, "")
-		done := make(chan int64, 1)
+		tracker.update(common.MakeSequence(2, 0), "")
+		done := make(chan uint64, 1)
 
 		go func() {
-			new := tracker.wait(3, []string{""})
-			done <- new
+			new := tracker.wait(common.MakeSequence(3, 0), []string{""})
+			done <- new.LSN
 		}()
 
 		time.Sleep(250 * time.Millisecond)
@@ -298,7 +297,8 @@ func trackerStress(producers, consumers int, max int64) {
 				waitTime := rand.Int63n(int64(maxWait))
 				time.Sleep(time.Duration(waitTime))
 				val := atomic.AddInt64(&start, 1)
-				tracker.update(val, "")
+				seq := common.MakeSequence(uint64(val), 0)
+				tracker.update(seq, "")
 			}
 			prodDone <- true
 		}()
@@ -309,7 +309,9 @@ func trackerStress(producers, consumers int, max int64) {
 			var last int64 = startIndex
 			for last < max {
 				waitTime := rand.Int63n(int64(maxWait))
-				last = tracker.timedWait(last+1, time.Duration(waitTime), []string{""})
+				seq := common.MakeSequence(uint64(last+1), 0)
+				lastSeq := tracker.timedWait(seq, time.Duration(waitTime), []string{""})
+				last = int64(lastSeq.LSN)
 			}
 			consDone <- true
 		}()

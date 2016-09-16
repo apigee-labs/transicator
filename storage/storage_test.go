@@ -192,14 +192,14 @@ func testEntry(key string, lsn int64, index int32, val []byte) bool {
 }
 
 func testEntryAndData(key string, lsn int64, index int32, val []byte,
-	mkey string, mval int64) bool {
+	mkey string, mval []byte) bool {
 	err := testDB.PutEntryAndMetadata(key, lsn, index, val, mkey, mval)
 	Expect(err).Should(Succeed())
 	ret, err := testDB.GetEntry(key, lsn, index)
 	Expect(err).Should(Succeed())
 	Expect(bytes.Equal(val, ret)).Should(BeTrue())
-	mret, err := testDB.GetIntMetadata(mkey)
+	mret, err := testDB.GetMetadata(mkey)
 	Expect(err).Should(Succeed())
-	Expect(mret).Should(Equal(mval))
+	Expect(bytes.Equal(mval, mret)).Should(BeTrue())
 	return true
 }
