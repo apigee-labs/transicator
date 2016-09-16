@@ -1,20 +1,22 @@
-package snapshot
+package main
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
-
 	"github.com/30x/transicator/common"
 	"github.com/30x/transicator/pgclient"
+	"strings"
+	"time"
+	"net/http"
+	"math/rand"
+	"net/url"
 
+	"github.com/gorilla/mux"
 	log "github.com/Sirupsen/logrus"
 )
 
-type SnapshotClient struct {
-	conn *pgclient.PgConnection
-}
+var src = rand.NewSource(time.Now().UnixNano())
 
 func GetTenants(tenantId []string) string {
 
@@ -33,40 +35,36 @@ func GetTenants(tenantId []string) string {
 
 }
 
-func GetTenantSnapshotData(connect string, tenantId []string) (b []byte, err error) {
+func GetTenantSnapshotData(tenantId []string, conn *pgclient.PgConnection) (b []byte, err error) {
 
 	var (
 		snapInfo, snapTime string
 	)
-	conn, err := pgclient.Connect(connect) // + "?default_transaction_isolation=repeatable read")
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-	sc := &SnapshotClient{
-		conn: conn,
-	}
 
 	log.Info("Starting snapshot")
-	_, _, err = sc.conn.SimpleQuery("begin isolation level repeatable read")
+	_, _, err = conn.SimpleQuery("begin isolation level repeatable read")
 	if err != nil {
+		log.Errorf("Failed to set Isolation level : %+v", err)
 		return nil, err
 	}
-
-	_, s, err := sc.conn.SimpleQuery("select now()")
+	defer conn.SimpleQuery("commit")
+	_, s, err := conn.SimpleQuery("select now()")
 	if err != nil {
+		log.Errorf("Failed to get DB timestamp : %+v", err)
 		return nil, err
 	}
 	snapTime = s[0][0]
 
-	_, s, err = sc.conn.SimpleQuery("select txid_current_snapshot()")
+	_, s, err = conn.SimpleQuery("select txid_current_snapshot()")
 	if err != nil {
+		log.Errorf("Failed to get DB snapshot TXID : %+v", err)
 		return nil, err
 	}
 	snapInfo = s[0][0]
 
-	_, s2, err := sc.conn.SimpleQuery("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+	_, s2, err := conn.SimpleQuery("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
 	if err != nil {
+		log.Errorf("Failed to get tables from DB : %+v", err)
 		return nil, err
 	}
 	var tables []string
@@ -84,10 +82,10 @@ func GetTenantSnapshotData(connect string, tenantId []string) (b []byte, err err
 
 	for _, t := range tables {
 		q := fmt.Sprintf("select * from %s where _apid_scope in %s", t, GetTenants(tenantId))
-		ci, s3, err := sc.conn.SimpleQuery(q)
+		ci, s3, err := conn.SimpleQuery(q)
 		if err != nil {
-			log.Infof("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
-			continue
+			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
+			return nil, err
 		}
 
 		srvItems := []common.Row{}
@@ -116,30 +114,55 @@ func GetTenantSnapshotData(connect string, tenantId []string) (b []byte, err err
 	return b, nil
 }
 
-func GenerateSnapshotFile(connect string, tenantId []string, destDir string, file string) error {
+/*
+ * This operation is currently implemented in SYNC mode, where in, it
+ * simply returns the scope back the ID redirect URL to query upon,
+ * to get the snapshot - which is yet another SYNC operation
+ */
+func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 
-	data, err := GetTenantSnapshotData(connect, tenantId)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "GetOrgSnapshot error: %v\n", err)
-		return err
+	r.ParseForm()
+	scopes := r.URL.Query().Get("scopes")
+	if scopes == "" {
+		log.Errorf("'scopes' missing in Request")
+		return
 	}
-	if err = os.MkdirAll(destDir, 0700); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed dest directory creation: %v\n", err)
-		return err
-	}
-	destFileName := file + ".json"
-	destFilePath := destDir + "/" + destFileName
-	f, err := os.Create(destFilePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed dest file creation: %v\n", err)
-		return err
-	}
+	scopes, _ = url.QueryUnescape(scopes)
 
-	bw, err := f.Write(data)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to write to destination file: %v\n", err)
-		return err
-	}
-	log.Infof("Snapshot complete at %s [Bytes written %d]", destFilePath, bw)
-	return nil
+	redURL := "/data/" + scopes
+	http.Redirect(w, r, redURL, http.StatusSeeOther)
+
 }
+
+/*
+ * The JSON related to the scope is downloaded and returned
+ */
+func DownloadSnapshot(w http.ResponseWriter, r *http.Request, conn *pgclient.PgConnection) {
+
+	vars := mux.Vars(r)
+	sid := vars["snapshotid"]
+	if sid == "" {
+		log.Errorf("snapshot Id Missing, Request Ignored")
+		return
+	}
+	tenantIds := strings.Split(sid, ",")
+	log.Infof("'scopes' in Request %s", tenantIds)
+
+	data, err := GetTenantSnapshotData(tenantIds, conn)
+	if err != nil {
+		log.Errorf("GetOrgSnapshot error: %v", err)
+		return
+	}
+
+	size, err := w.Write(data)
+	if (err != nil) {
+		log.Errorf("Writing snapshot id %s : Err: ", sid, err)
+		return
+	}
+
+	log.Infof("Downloaded snapshot id %s, size %d", sid, size)
+	return
+
+}
+
+

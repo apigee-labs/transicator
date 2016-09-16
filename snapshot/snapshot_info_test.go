@@ -1,4 +1,4 @@
-package snapshot
+package main
 
 import (
 	"fmt"
@@ -171,6 +171,7 @@ const testTableSQL = `
     double float8,
     date date,
     time time with time zone,
+    _apid_scope varchar(255),
     timestamp timestamp with time zone,
     timestampp timestamp
   );
@@ -522,23 +523,42 @@ var _ = Describe("Taking a snapshot", func() {
 				<-- xmin=3 xmax=3 xip=nil LSN(1)
 	*/
 
-	/*
-		TBD: More test cases with decoding the data needs to be Checked in.
-	*/
+	tables = []string{"snapshot_test", "developer", "app"}
+
+	BeforeEach(func() {
+		// There may be records in the replication queue from deletes done in AfterEach
+
+	})
+
+	AfterEach(func() {
+		//fmt.Println("AfterEach: rollback conns")
+		//dbConn1.SimpleQuery("rollback")
+		//dbConn2.SimpleQuery("rollback")
+		//dbConn3.SimpleQuery("rollback")
+
+		fmt.Println("AfterEach: truncate tables")
+		for _, table := range tables {
+			err := truncateTable(table)
+			Expect(err).Should(Succeed())
+		}
+	})
 
 	Context("Insert Tables (App & Developer), Get JSON data for ONE scope", func() {
-		It("Insert with multiple scopes, retrieve single scope data", func() {
-			tables := []string{"app", "developer"}
+		It("Insert with single scope, retrieve single scope data", func() {
+			tables := []string{"app", "developer", "snapshot_test"}
 			keys := []string{"org", "id", "username", "created_at", "_apid_scope", "dev_id", "display_name", "created_by", "created_at", "firstname", "name"}
 			doExecute1("begin")
-			doExecute1("insert into APP (org, id, dev_id, display_name, created_at, _apid_scope) values ('Pepsi', 'aaa-bbb-ccc', 'xxx-yyy-zzz', 'Oracle', 9859348, 'pepsi_##_dev')")
+			doExecute1("insert into APP (org, id, dev_id, display_name, created_at, _apid_scope) values ('Pepsi', 'aaa-bbb-ccc', 'xxx-yyy-zzz', 'Oracle', 9859348, 'pepsi__dev')")
 
 			doExecute1("commit")
 
-			scope := []string{"pepsi_##_dev"}
-			b, err := GetTenantSnapshotData(dbURL, scope)
+			scope := []string{"pepsi__dev"}
+			conn, err := pgclient.Connect(dbURL)
 			Expect(err).Should(Succeed())
-
+			defer conn.Close()
+			b, err := GetTenantSnapshotData(scope, conn)
+			Expect(err).Should(Succeed())
+			Expect(conn).ShouldNot(BeNil())
 			s, err := common.UnmarshalSnapshot(b)
 			Expect(err).Should(Succeed())
 
@@ -554,7 +574,7 @@ var _ = Describe("Taking a snapshot", func() {
 				}
 			}
 			scope = []string{"pepsi_bad"}
-			b, err = GetTenantSnapshotData(dbURL, scope)
+			b, err = GetTenantSnapshotData(scope, conn)
 			Expect(err).Should(Succeed())
 
 			s, err = common.UnmarshalSnapshot(b)
@@ -567,21 +587,25 @@ var _ = Describe("Taking a snapshot", func() {
 		})
 
 	})
+
 	Context("Insert Tables (App & Developer), Get JSON data for Multi scopes", func() {
-		It("Insert with multiple scopes, retrieve single scope data", func() {
-			tables := []string{"app", "developer"}
+		It("Insert with multiple scopes, retrieve multiple scopes data", func() {
+			tables := []string{"app", "developer", "snapshot_test"}
 			keys := []string{"org", "id", "username", "created_at", "_apid_scope", "dev_id", "display_name", "created_by", "created_at", "firstname", "name"}
 			idvals := []string{"xxx-yyy-zzz", "xxy-yyy-zzz", "xxz-yyy-zzz", "aaa-bbb-ccc"}
 			doExecute1("begin")
-			doExecute1("insert into DEVELOPER (org, id, username, created_at, _apid_scope) values ('Pepsi', 'xxx-yyy-zzz', 'sundar', 3231231, 'pepsi_##_dev')")
-			doExecute1("insert into DEVELOPER (org, id, username, created_at, _apid_scope) values ('Pepsi', 'xxy-yyy-zzz', 'sundar', 3221231, 'pepsi_##_dev')")
-			doExecute1("insert into DEVELOPER (org, id, username, created_at, _apid_scope) values ('Pepsi', 'xxz-yyy-zzz', 'sundar', 3231231, 'pepsi_##_test')")
-			doExecute1("insert into APP (org, id, dev_id, display_name, created_at, _apid_scope) values ('Pepsi', 'aaa-bbb-ccc', 'xxx-yyy-zzz', 'Oracle', 9859348, 'pepsi_##_dev')")
+			doExecute1("insert into DEVELOPER (org, id, username, created_at, _apid_scope) values ('Pepsi', 'xxx-yyy-zzz', 'sundar', 3231231, 'pepsi__dev')")
+			doExecute1("insert into DEVELOPER (org, id, username, created_at, _apid_scope) values ('Pepsi', 'xxy-yyy-zzz', 'sundar', 3221231, 'pepsi__dev')")
+			doExecute1("insert into DEVELOPER (org, id, username, created_at, _apid_scope) values ('Pepsi', 'xxz-yyy-zzz', 'sundar', 3231231, 'pepsi__test')")
+			doExecute1("insert into APP (org, id, dev_id, display_name, created_at, _apid_scope) values ('Pepsi', 'aaa-bbb-ccc', 'xxx-yyy-zzz', 'Oracle', 9859348, 'pepsi__dev')")
 
 			doExecute1("commit")
 
-			scope := []string{"pepsi_##_dev", "pepsi_##_test"}
-			b, err := GetTenantSnapshotData(dbURL, scope)
+			scope := []string{"pepsi__dev", "pepsi__test"}
+			conn, err := pgclient.Connect(dbURL)
+			Expect(err).Should(Succeed())
+			defer conn.Close()
+			b, err := GetTenantSnapshotData(scope, conn)
 			Expect(err).Should(Succeed())
 
 			s, err := common.UnmarshalSnapshot(b)
@@ -600,7 +624,7 @@ var _ = Describe("Taking a snapshot", func() {
 				}
 			}
 			scope = []string{"pepsi_bad"}
-			b, err = GetTenantSnapshotData(dbURL, scope)
+			b, err = GetTenantSnapshotData(scope, conn)
 			Expect(err).Should(Succeed())
 
 			s, err = common.UnmarshalSnapshot(b)
