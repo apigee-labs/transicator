@@ -19,6 +19,7 @@ var dbURL string
 var dbConn *pgclient.PgConnection
 var dbConn2 *pgclient.PgConnection
 var dbConn3 *pgclient.PgConnection
+var dbConn4 *pgclient.PgConnection
 
 func TestPGClient(t *testing.T) {
 	dbURL = os.Getenv("TEST_PG_URL")
@@ -42,6 +43,8 @@ var _ = BeforeSuite(func() {
 	dbConn2, err = pgclient.Connect(dbURL)
 	Expect(err).Should(Succeed())
 	dbConn3, err = pgclient.Connect(dbURL)
+	Expect(err).Should(Succeed())
+	dbConn4, err = pgclient.Connect(dbURL)
 	Expect(err).Should(Succeed())
 
 	if !tableExists("transicator_test") {

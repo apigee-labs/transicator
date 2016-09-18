@@ -43,10 +43,12 @@ var _ = Describe("Replicator tests", func() {
 	})
 })
 
-func drainReplication(repl *Replicator) {
+func drainReplication(repl *Replicator) []*common.Change {
 	// Just pull stuff until we get a bit of a delay
 	var maxLSN int64
+	var ret []*common.Change
 	timedOut := false
+
 	for !timedOut {
 		timeout := time.After(1 * time.Second)
 		select {
@@ -54,14 +56,14 @@ func drainReplication(repl *Replicator) {
 			timedOut = true
 		case change := <-repl.Changes():
 			Expect(change.Error).Should(Succeed())
-			fmt.Fprintf(GinkgoWriter, "LSN %d TXID %d\n",
-				change.CommitSequence, change.TransactionID)
 			if change.CommitSequence > maxLSN {
 				maxLSN = change.CommitSequence
 			}
+			ret = append(ret, change)
 		}
 	}
 
 	fmt.Fprintf(GinkgoWriter, "Acknowledging %d\n", maxLSN)
 	repl.Acknowledge(maxLSN)
+	return ret
 }

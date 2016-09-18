@@ -252,11 +252,18 @@ x x x x - - x - - -
         ^     ^
         xmin  xmax
 
-xmin - Earliest transaction ID (txid) that is still active. All earlier transactions will either be committed and visible, or rolled back and dead.
+xmin - Earliest transaction ID (txid) that is still active. All earlier
+transactions will either be committed and visible, or rolled back and dead.
 
-xmax - First as-yet-unassigned txid. All txids greater than or equal to this are not yet started as of the time of the snapshot, and thus invisible.
+xmax - First as-yet-unassigned txid. All txids greater than or equal to this
+are not yet started as of the time of the snapshot, and thus invisible.
 
-xip_list - Active txids at the time of the snapshot. The list includes only those active txids between xmin and xmax; there might be active txids higher than xmax. A txid that is xmin <= txid < xmax and not in this list was already completed at the time of the snapshot, and thus either visible or dead according to its commit status. The list does not include txids of subtransactions.
+xip_list - Active txids at the time of the snapshot. The list includes only
+those active txids between xmin and xmax; there might be active txids higher
+than xmax. A txid that is xmin <= txid < xmax and not in this list was already
+completed at the time of the snapshot, and thus either visible or dead
+according to its commit status. The list does not include txids of
+subtransactions.
 */
 
 var _ = Describe("Taking a snapshot", func() {
