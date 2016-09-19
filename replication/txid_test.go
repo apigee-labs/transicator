@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"regexp"
@@ -38,140 +39,88 @@ var _ = Describe("TXID Tests", func() {
 		Expect(ips[1]).Should(BeEquivalentTo(3))
 	})
 
-	It("Running some transactions", func() {
+	/*
+		This test verifies that no matter what kind of transaction sequence we throw
+		at the database, given a set of snapshot TXID values, we can resolve to a
+		single place in the logical replication stream.
+	*/
+	It("Gather snapshots", func() {
 		repl, err := Start(dbURL, "unittestslot")
 		Expect(err).Should(Succeed())
 		defer repl.Stop()
 
-		fmt.Fprintf(GinkgoWriter, "One at a time 1\n")
-		_, _, err = dbConn.SimpleQuery("insert into txid_test values('1')")
-		Expect(err).Should(Succeed())
-		snap1 := getSnapshot()
+		var snaps []string
 
-		fmt.Fprintf(GinkgoWriter, "One at a time 2\n")
-		_, _, err = dbConn.SimpleQuery("insert into txid_test values('2')")
-		Expect(err).Should(Succeed())
-		snap2 := getSnapshot()
+		snaps = append(snaps, execCommands([]string{
+			"a", "insert into txid_test values('1')",
+			"a", "commit",
+			"b", "snapshot"}))
 
-		fmt.Fprintf(GinkgoWriter, "Out of order 3a\n")
-		_, _, err = dbConn.SimpleQuery("begin")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn.SimpleQuery("insert into txid_test values('3a')")
-		Expect(err).Should(Succeed())
-		snap3a := getSnapshot()
+		snaps = append(snaps, execCommands([]string{
+			"a", "insert into txid_test values('2')",
+			"a", "commit",
+			"b", "snapshot"}))
 
-		fmt.Fprintf(GinkgoWriter, "Out of order 3b\n")
-		_, _, err = dbConn2.SimpleQuery("begin")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("insert into txid_test values('3b')")
-		Expect(err).Should(Succeed())
-		snap3b := getSnapshot()
+		snaps = append(snaps, execCommands([]string{
+			"a", "insert into txid_test values('3a')",
+			"b", "insert into txid_test values('3b')",
+			"x", "snapshot",
+			"b", "commit",
+			"a", "commit"}))
 
-		fmt.Fprintf(GinkgoWriter, "Commit 3b\n")
-		_, _, err = dbConn2.SimpleQuery("commit")
-		Expect(err).Should(Succeed())
-		snap3b2 := getSnapshot()
+		snaps = append(snaps, execCommands([]string{
+			"a", "insert into txid_test values('4a')",
+			"b", "insert into txid_test values('4b')",
+			"c", "insert into txid_test values('4c')",
+			"d", "insert into txid_test values('4d')",
+			"b", "rollback",
+			"x", "snapshot",
+			"a", "commit",
+			"c", "commit",
+			"d", "commit"}))
 
-		fmt.Fprintf(GinkgoWriter, "Commit 3a\n")
-		_, _, err = dbConn.SimpleQuery("commit")
-		Expect(err).Should(Succeed())
-		snap3a2 := getSnapshot()
+		snaps = append(snaps, execCommands([]string{
+			"a", "insert into txid_test values('5a')",
+			"b", "insert into txid_test values('5b')",
+			"c", "insert into txid_test values('5c')",
+			"d", "insert into txid_test values('5d')",
+			"e", "insert into txid_test values('5e')",
+			"c", "commit",
+			"x", "snapshot",
+			"a", "commit",
+			"b", "commit",
+			"d", "commit",
+			"e", "commit"}))
 
-		fmt.Fprintf(GinkgoWriter, "Three in parallel\n")
-		_, _, err = dbConn.SimpleQuery("begin")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("begin")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn3.SimpleQuery("begin")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn.SimpleQuery("insert into txid_test values('4a')")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("insert into txid_test values('4b')")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn3.SimpleQuery("insert into txid_test values('4c')")
-		Expect(err).Should(Succeed())
-		snap4 := getSnapshot()
-		_, _, err = dbConn.SimpleQuery("commit")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("commit")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn3.SimpleQuery("commit")
-		Expect(err).Should(Succeed())
+		snaps = append(snaps, execCommands([]string{
+			"a", "insert into txid_test values('6a')",
+			"b", "insert into txid_test values('6b')",
+			"c", "insert into txid_test values('6c')",
+			"d", "insert into txid_test values('6d')",
+			"e", "insert into txid_test values('6e')",
+			"f", "insert into txid_test values('6f')",
+			"c", "commit",
+			"a", "commit",
+			"x", "snapshot",
+			"b", "commit",
+			"d", "commit",
+			"f", "commit",
+			"e", "commit"}))
 
-		fmt.Fprintf(GinkgoWriter, "Three in parallel one rolled back\n")
-		_, _, err = dbConn.SimpleQuery("begin")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("begin")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn3.SimpleQuery("begin")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn.SimpleQuery("insert into txid_test values('5a')")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("insert into txid_test values('5b')")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn3.SimpleQuery("insert into txid_test values('5c')")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("rollback")
-		Expect(err).Should(Succeed())
-		snap5 := getSnapshot()
-		_, _, err = dbConn.SimpleQuery("commit")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn3.SimpleQuery("commit")
-		Expect(err).Should(Succeed())
-
-		fmt.Fprintf(GinkgoWriter, "Three in parallel one rolled back 2\n")
-		_, _, err = dbConn.SimpleQuery("begin")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("begin")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn3.SimpleQuery("begin")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn.SimpleQuery("insert into txid_test values('6a')")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("insert into txid_test values('6b')")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn3.SimpleQuery("insert into txid_test values('6c')")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("rollback")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("begin")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("insert into txid_test values('6d')")
-		Expect(err).Should(Succeed())
-		snap6 := getSnapshot()
-		_, _, err = dbConn.SimpleQuery("commit")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("commit")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn3.SimpleQuery("commit")
-		Expect(err).Should(Succeed())
-
-		fmt.Fprintf(GinkgoWriter, "Three in parallel one committed 2\n")
-		_, _, err = dbConn.SimpleQuery("begin")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("begin")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn3.SimpleQuery("begin")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn.SimpleQuery("insert into txid_test values('7a')")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("insert into txid_test values('7b')")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn3.SimpleQuery("insert into txid_test values('7c')")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("commit")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("begin")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("insert into txid_test values('7d')")
-		Expect(err).Should(Succeed())
-		snap7 := getSnapshot()
-		_, _, err = dbConn.SimpleQuery("commit")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn2.SimpleQuery("commit")
-		Expect(err).Should(Succeed())
-		_, _, err = dbConn3.SimpleQuery("commit")
-		Expect(err).Should(Succeed())
+		snaps = append(snaps, execCommands([]string{
+			"a", "insert into txid_test values('7a')",
+			"b", "insert into txid_test values('7b')",
+			"c", "insert into txid_test values('7c')",
+			"d", "insert into txid_test values('7d')",
+			"e", "insert into txid_test values('7e')",
+			"f", "insert into txid_test values('7f')",
+			"c", "rollback",
+			"a", "rollback",
+			"d", "rollback",
+			"f", "rollback",
+			"x", "snapshot",
+			"b", "commit",
+			"e", "commit"}))
 
 		changes := drainReplication(repl)
 
@@ -182,37 +131,33 @@ var _ = Describe("TXID Tests", func() {
 				change.NewRow["id"].Value)
 		}
 
-		filtered := filterChanges(changes, snap1)
-		fmt.Fprintf(GinkgoWriter, "Snap1: %s %v\n", snap1, filtered)
-		filtered = filterChanges(changes, snap2)
-		fmt.Fprintf(GinkgoWriter, "Snap2: %s %v\n", snap2, filtered)
-		filtered = filterChanges(changes, snap3a)
-		fmt.Fprintf(GinkgoWriter, "Snap3a: %s %v\n", snap3a, filtered)
-		filtered = filterChanges(changes, snap3a2)
-		fmt.Fprintf(GinkgoWriter, "Snap3a2: %s %v\n", snap3a2, filtered)
-		filtered = filterChanges(changes, snap3b)
-		fmt.Fprintf(GinkgoWriter, "Snap3b: %s %v\n", snap3b, filtered)
-		filtered = filterChanges(changes, snap3b2)
-		fmt.Fprintf(GinkgoWriter, "Snap3b2: %s %v\n", snap3b2, filtered)
-		filtered = filterChanges(changes, snap4)
-		fmt.Fprintf(GinkgoWriter, "Snap4: %s %v\n", snap4, filtered)
-		filtered = filterChanges(changes, snap5)
-		fmt.Fprintf(GinkgoWriter, "Snap5: %s %v\n", snap5, filtered)
-		filtered = filterChanges(changes, snap6)
-		fmt.Fprintf(GinkgoWriter, "Snap6: %s %v\n", snap6, filtered)
-		filtered = filterChanges(changes, snap7)
-		fmt.Fprintf(GinkgoWriter, "Snap7: %s %v\n", snap7, filtered)
+		for i, snap := range snaps {
+			filtered := filterChanges(changes, snap)
+			fmt.Fprintf(GinkgoWriter, "%d: %s: %v\n", i, snap, filtered)
+		}
 	})
 })
 
+func assertSequential(vals []int) {
+	if len(vals) > 1 {
+		for i := 1; i < len(vals); i++ {
+			Expect(vals[i]).Should(Equal(vals[i-1] + 1))
+		}
+	}
+}
+
 func getSnapshot() string {
-	_, _, err := dbConn4.SimpleQuery("begin isolation level repeatable read")
+	tx, err := db.Begin()
 	Expect(err).Should(Succeed())
-	_, rows, err := dbConn4.SimpleQuery("select * from txid_current_snapshot()")
+	row := tx.QueryRow("select * from txid_current_snapshot()")
+
+	var snap string
+	err = row.Scan(&snap)
 	Expect(err).Should(Succeed())
-	_, _, err = dbConn4.SimpleQuery("commit")
+
+	err = tx.Commit()
 	Expect(err).Should(Succeed())
-	return rows[0][0]
+	return snap
 }
 
 func filterChanges(changes []*common.Change, snap string) []int {
@@ -283,4 +228,38 @@ func parseSnap(snap string) (int64, int64, []int64, error) {
 	}
 
 	return min, max, ips, nil
+}
+
+func execCommands(commands []string) string {
+	trans := make(map[string]*sql.Tx)
+	var snap string
+	var err error
+
+	for i := 0; i < len(commands); i += 2 {
+		txn := commands[i]
+		sql := commands[i+1]
+
+		tran := trans[txn]
+		if tran == nil {
+			tran, err = db.Begin()
+			Expect(err).Should(Succeed())
+			trans[txn] = tran
+		}
+
+		if sql == "commit" {
+			err = tran.Commit()
+			Expect(err).Should(Succeed())
+		} else if sql == "rollback" {
+			err = tran.Rollback()
+			Expect(err).Should(Succeed())
+		} else if sql == "snapshot" {
+			row := tran.QueryRow("select * from txid_current_snapshot()")
+			err = row.Scan(&snap)
+			Expect(err).Should(Succeed())
+		} else {
+			_, err = tran.Exec(sql)
+			Expect(err).Should(Succeed())
+		}
+	}
+	return snap
 }

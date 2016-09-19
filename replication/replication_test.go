@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"testing"
@@ -16,10 +17,7 @@ const (
 )
 
 var dbURL string
-var dbConn *pgclient.PgConnection
-var dbConn2 *pgclient.PgConnection
-var dbConn3 *pgclient.PgConnection
-var dbConn4 *pgclient.PgConnection
+var db *sql.DB
 
 func TestPGClient(t *testing.T) {
 	dbURL = os.Getenv("TEST_PG_URL")
@@ -38,52 +36,38 @@ var _ = BeforeSuite(func() {
 	}
 
 	var err error
-	dbConn, err = pgclient.Connect(dbURL)
+	db, err = sql.Open("transicator", dbURL)
 	Expect(err).Should(Succeed())
-	dbConn2, err = pgclient.Connect(dbURL)
-	Expect(err).Should(Succeed())
-	dbConn3, err = pgclient.Connect(dbURL)
-	Expect(err).Should(Succeed())
-	dbConn4, err = pgclient.Connect(dbURL)
-	Expect(err).Should(Succeed())
+	pgdriver := db.Driver().(*pgclient.PgDriver)
+	pgdriver.SetIsolationLevel("repeatable read")
 
 	if !tableExists("transicator_test") {
-		_, _, err = dbConn.SimpleQuery(testTableSQL)
+		_, err = db.Exec(testTableSQL)
 		Expect(err).Should(Succeed())
 	}
 })
 
 var _ = AfterSuite(func() {
-	if dbConn != nil {
-		dropTable("transicator_test")
-		dropTable("txid_test")
-		dbConn.Close()
-	}
-	if dbConn2 != nil {
-		dbConn2.Close()
-	}
-	if dbConn3 != nil {
-		dbConn3.Close()
-	}
+	err := dropTable("transicator_test")
+	Expect(err).Should(Succeed())
+	err = dropTable("txid_test")
+	Expect(err).Should(Succeed())
+	err = db.Close()
+	Expect(err).Should(Succeed())
 })
 
 func tableExists(name string) bool {
-	_, _, err := dbConn.SimpleQuery(fmt.Sprintf("select * from %s limit 0", name))
+	_, err := db.Exec(fmt.Sprintf("select * from %s limit 0", name))
 	return err == nil
 }
 
 func dropTable(name string) error {
-	_, _, err := dbConn.SimpleQuery(fmt.Sprintf("drop table %s", name))
+	_, err := db.Exec(fmt.Sprintf("drop table %s", name))
 	return err
 }
 
 func doExecute(query string) {
-	_, _, err := dbConn.SimpleQuery(query)
-	Expect(err).Should(Succeed())
-}
-
-func doExecute2(query string) {
-	_, _, err := dbConn2.SimpleQuery(query)
+	_, err := db.Exec(query)
 	Expect(err).Should(Succeed())
 }
 

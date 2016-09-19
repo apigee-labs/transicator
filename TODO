@@ -8,6 +8,12 @@ New API for changeserver:
 Check out the work on storing sequence numbers so that it takes
 indices into consideration.
 
+Add an API call that takes a set of TXIDs from the current snapshot, and
+returns the sequence of the LAST change that was in that snapshot. We can then
+start retrieving changes using that value as the "since". Do this using
+a linear scan of the various scopes. Some day we might be able to use an
+index or timestamp to make this faster.
+
 # Other changes
 
 Consider what happens for a big transaction -- Postgres will return us

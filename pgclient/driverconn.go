@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"io"
 )
 
@@ -16,6 +17,7 @@ func registerDriver() bool {
 
 // PgDriver implements the standard driver interface
 type PgDriver struct {
+	isolationLevel string
 }
 
 // Open takes a Postgres URL as used elsewhere in this package
@@ -25,13 +27,20 @@ func (d *PgDriver) Open(url string) (driver.Conn, error) {
 		return nil, err
 	}
 	return &PgDriverConn{
-		conn: pgc,
+		driver: d,
+		conn:   pgc,
 	}, nil
+}
+
+// SetIsolationLevel controls what is passed to the "begin" statement
+func (d *PgDriver) SetIsolationLevel(level string) {
+	d.isolationLevel = level
 }
 
 // PgDriverConn implements Conn
 type PgDriverConn struct {
-	conn *PgConnection
+	driver *PgDriver
+	conn   *PgConnection
 }
 
 // Prepare creates a statement. Right now it just saves the SQL.
@@ -50,7 +59,15 @@ func (c *PgDriverConn) Close() error {
 
 // Begin just runs the SQL "begin" statement
 func (c *PgDriverConn) Begin() (driver.Tx, error) {
-	_, _, err := c.conn.SimpleQuery("begin")
+	var err error
+
+	if c.driver.isolationLevel == "" {
+		_, _, err = c.conn.SimpleQuery("begin")
+	} else {
+		_, _, err = c.conn.SimpleQuery(
+			fmt.Sprintf("begin isolation level %s", c.driver.isolationLevel))
+	}
+
 	if err != nil {
 		return nil, err
 	}

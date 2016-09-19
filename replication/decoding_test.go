@@ -76,12 +76,16 @@ var _ = Describe("Logical Decoding Tests", func() {
 	})
 
 	It("Transactional insert", func() {
-		doExecute("begin")
-		doExecute(
+		tx, err := db.Begin()
+		Expect(err).Should(Succeed())
+		_, err = tx.Exec(
 			"insert into transicator_test (id, varchars) values ('basic tran 1', 'one')")
-		doExecute(
+		Expect(err).Should(Succeed())
+		_, err = tx.Exec(
 			"insert into transicator_test (id, varchars) values ('basic tran 2', 'two')")
-		doExecute("commit")
+		Expect(err).Should(Succeed())
+		err = tx.Commit()
+		Expect(err).Should(Succeed())
 
 		changes := getChanges()
 		Expect(len(changes)).Should(Equal(2))
@@ -101,12 +105,16 @@ var _ = Describe("Logical Decoding Tests", func() {
 	})
 
 	It("Transactional rollback", func() {
-		doExecute("begin")
-		doExecute(
+		tx, err := db.Begin()
+		Expect(err).Should(Succeed())
+		_, err = tx.Exec(
 			"insert into transicator_test (id, varchars) values ('rollback tran 1', 'one')")
-		doExecute(
+		Expect(err).Should(Succeed())
+		_, err = tx.Exec(
 			"insert into transicator_test (id, varchars) values ('rollback tran 2', 'two')")
-		doExecute("rollback")
+		Expect(err).Should(Succeed())
+		err = tx.Rollback()
+		Expect(err).Should(Succeed())
 
 		changes := getChanges()
 		Expect(changes).Should(BeEmpty())
@@ -138,12 +146,16 @@ var _ = Describe("Logical Decoding Tests", func() {
 	})
 
 	It("Interleaving", func() {
-		doExecute("begin")
-		doExecute("insert into transicator_test (id) values ('interleave 1')")
+		tx, err := db.Begin()
+		Expect(err).Should(Succeed())
+		_, err = tx.Exec("insert into transicator_test (id) values ('interleave 1')")
+		Expect(err).Should(Succeed())
 		// This is a separate connection, aka separate transaction
-		doExecute2(
+		_, err = db.Exec(
 			"insert into transicator_test (id) values ('interleave 2')")
-		doExecute("commit")
+		Expect(err).Should(Succeed())
+		err = tx.Commit()
+		Expect(err).Should(Succeed())
 
 		// Ensure we got changes in commit order, not insertion order
 		changes := getChanges()
@@ -160,15 +172,23 @@ var _ = Describe("Logical Decoding Tests", func() {
 	})
 
 	It("Interleaving 2", func() {
-		doExecute("begin")
-		doExecute("insert into transicator_test (id) values ('interleave 1-1')")
-		// This is a separate connection, aka separate transaction
-		doExecute2("begin")
-		doExecute2("insert into transicator_test (id) values ('interleave 2-1')")
-		doExecute("insert into transicator_test (id) values ('interleave 1-2')")
-		doExecute2("insert into transicator_test (id) values ('interleave 2-2')")
-		doExecute2("commit")
-		doExecute("commit")
+		tx1, err := db.Begin()
+		Expect(err).Should(Succeed())
+		_, err = tx1.Exec("insert into transicator_test (id) values ('interleave 1-1')")
+		Expect(err).Should(Succeed())
+
+		tx2, err := db.Begin()
+		Expect(err).Should(Succeed())
+		_, err = tx2.Exec("insert into transicator_test (id) values ('interleave 2-1')")
+		Expect(err).Should(Succeed())
+		_, err = tx1.Exec("insert into transicator_test (id) values ('interleave 1-2')")
+		Expect(err).Should(Succeed())
+		_, err = tx2.Exec("insert into transicator_test (id) values ('interleave 2-2')")
+		Expect(err).Should(Succeed())
+		err = tx2.Commit()
+		Expect(err).Should(Succeed())
+		err = tx1.Commit()
+		Expect(err).Should(Succeed())
 
 		// Ensure we got changes in commit order, not insertion order
 		changes := getChanges()
@@ -189,15 +209,22 @@ var _ = Describe("Logical Decoding Tests", func() {
 })
 
 func getChanges() []common.Change {
-	schema, rows, err := dbConn.SimpleQuery(
+	rows, err := db.Query(
 		"select * from pg_logical_slot_get_changes('transicator_decoding_test', NULL, NULL)")
 	Expect(err).Should(Succeed())
-	Expect(schema[2].Name).Should(Equal("data"))
+	cols, err := rows.Columns()
+	Expect(err).Should(Succeed())
+	Expect(cols[2]).Should(Equal("data"))
 
 	var changes []common.Change
-	for _, row := range rows {
-		fmt.Fprintf(GinkgoWriter, "Decoding %s\n", row[2])
-		change, err := common.UnmarshalChange([]byte(row[2]))
+	for rows.Next() {
+		var ignore1 string
+		var ignore2 string
+		var changeDesc string
+		err = rows.Scan(&ignore1, &ignore2, &changeDesc)
+		Expect(err).Should(Succeed())
+		fmt.Fprintf(GinkgoWriter, "Decoding %s\n", changeDesc)
+		change, err := common.UnmarshalChange([]byte(changeDesc))
 		Expect(err).Should(Succeed())
 		changes = append(changes, *change)
 	}
