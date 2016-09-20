@@ -1,0 +1,59 @@
+---
+# These are the fields required to setup, build, and run tests in the jenkins job
+jenkins_ci:
+  # This is information about the build environment such as the language
+  machine:
+    # The supported languages are java, go, node
+    language: "go"
+  setup_commands:
+    # setup commands not needed here, handled in Dockerfile
+    - "echo nothing to setup here"
+  build_commands:
+    # build commands not needed here, handled in Dockerfile
+    - "echo nothing to build here"
+  unit_test:
+    - "echo go test ./communication ./discovery ./storage ./raft"
+  # functional tests
+  functional_tests:
+    - "echo go test ./agent"
+
+# NOTE:
+# As with the rest of the files in this repo, you can sub out ${APP_NAME} for what ever works when testing locally.
+# ${APP_NAME} is required for the jenkins job.
+
+rpm_info:
+  # REQUIRED: The name of the application
+  name: changeserver 
+  description: Change Tracker for APIGEE products.
+  version: 1.0.0
+  type: app
+
+  # REQUIRED: This is the location of the binary with respect to the docker container
+  bin: /changeserver
+
+  # REQUIRED: This is the command to run the binary with respect to the docker container
+  # Generally the value of CMD in the Dockerfile
+  start: ./changeserver
+
+  # NOTE: Below this comment are other field that can be specified
+  # these are the spaces separate arguements that you would use with a base start command
+  # For example, "./asf-go-example" would be run as "./asf-go-example ARG1"
+  #
+  start_args: "-p 9000 -d ./data -u postgres://docker@localhost/postgres -s replication1"
+
+  # These dependecies have to be able to be compatible with "yum install <comp>"
+  #
+  # depends:
+  #   - gcc
+
+  # environment variables needed by the application
+  # VAR1 will assume the user supplies the variable beforehand
+  # VAR1=HELLO will set the variable when the application runs
+  #
+  # env:
+  #  - DB_NAME=database
+  #  - DB_USER=admin
+  #  - DB_PASS=password
+  #  - SPECHUB_DB_NAME=spechub
+  #  - SPECHUB_DB_PASS=spechub
+  #  - RANDOM=TEST
