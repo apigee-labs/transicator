@@ -11,7 +11,14 @@ jenkins_ci:
 
   build_commands:
     # build commands not needed here, handled in Dockerfile
-    - "sudo yum install -y gcc"
+    - "sudo yum install -y gcc wget"
+    - "sudo yum groupinstall -y 'Development Tools'"
+    - "wget http://pkgs.fedoraproject.org/repo/pkgs/leveldb/leveldb-1.9.0.tar.gz/12f11385cb58ae0de66d4bc2cc7f8194/leveldb-1.9.0.tar.gz"
+    - "tar -xzf leveldb-1.9.0.tar.gz"
+    - "cd leveldb-1.9.0"
+    - "make all"
+    - "sudo cp libleveldb.* /usr/local/lib"
+    - "sudo cp -R leveldb /usr/local/include"
     - "glide install"
     - "GOOS=linux go build -o changeserver"
   unit_test:
