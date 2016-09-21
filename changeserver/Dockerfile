@@ -25,4 +25,4 @@ COPY metadata/apigee-file.yaml /
 EXPOSE 9000
 VOLUME [ "/data" ]
 
-ENTRYPOINT [ "/changeserver", "-p", "9000", "-d", "/data"]
+ENTRYPOINT [ "/changeserver", "-p", "9000", "-d", "/data", "-u", "postgres://docker@localhost/postgres", "-s", "replication"]
