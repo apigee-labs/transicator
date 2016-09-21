@@ -15,7 +15,7 @@ jenkins_ci:
     - "sudo yum groupinstall -y 'Development Tools'"
     - "sudo wget http://pkgs.fedoraproject.org/repo/pkgs/leveldb/leveldb-1.9.0.tar.gz/12f11385cb58ae0de66d4bc2cc7f8194/leveldb-1.9.0.tar.gz -P /tmp"
     - "sudo tar xf /tmp/leveldb-1.9.0.tar.gz -C /tmp"
-    - "make -C /tmp/leveldb-1.9.0"
+    - "sudo make -C /tmp/leveldb-1.9.0"
     - "sudo cp /tmp/leveldb-1.9.0/libleveldb.* /usr/local/lib"
     - "sudo cp -R /tmp/leveldb-1.9.0/incude/leveldb /usr/local/include"
     - "glide install"
