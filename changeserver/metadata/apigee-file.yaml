@@ -45,8 +45,8 @@ rpm_info:
 
   # These dependecies have to be able to be compatible with "yum install <comp>"
   #
-  # depends:
-     - gcc
+  depends:
+    - gcc
 
   # environment variables needed by the application
   # VAR1 will assume the user supplies the variable beforehand
