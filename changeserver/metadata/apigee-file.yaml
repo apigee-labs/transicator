@@ -14,7 +14,7 @@ jenkins_ci:
     - "sudo yum install -y gcc wget"
     - "sudo yum groupinstall -y 'Development Tools'"
     - "sudo wget http://pkgs.fedoraproject.org/repo/pkgs/leveldb/leveldb-1.9.0.tar.gz/12f11385cb58ae0de66d4bc2cc7f8194/leveldb-1.9.0.tar.gz -P /tmp"
-    - "sudo tar -xzf /tmp/leveldb-1.9.0.tar.gz"
+    - "sudo tar xf /tmp/leveldb-1.9.0.tar.gz -C /tmp"
     - "pushd ."
     - "pwd"
     - "ls /tmp"
