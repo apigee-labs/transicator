@@ -292,7 +292,7 @@ func (r *Replicator) replLoop() {
 			// We think that the server wants us to disconnect
 			case shutdownCmd:
 				if connected {
-					cd := pgclient.NewOutputMessage(pgclient.CopyDone)
+					cd := pgclient.NewOutputMessage(pgclient.CopyDoneOut)
 					connection.WriteMessage(cd)
 					r.cmdChan <- disconnectedCmd
 				}
@@ -421,8 +421,8 @@ func (r *Replicator) handleKeepalive(m *pgclient.InputMessage) bool {
 
 func (r *Replicator) updateLSN(highLSN int64, conn *pgclient.PgConnection) {
 	log.Debugf("Updating server with last LSN %d", highLSN)
-	om := pgclient.NewOutputMessage(pgclient.CopyData)
-	om.WriteByte(pgclient.StandbyStatusUpdate)
+	om := pgclient.NewOutputMessage(pgclient.CopyDataOut)
+	om.WriteByte(byte(pgclient.StandbyStatusUpdate))
 	om.WriteInt64(highLSN)                           // last written to disk
 	om.WriteInt64(highLSN)                           // last flushed to disk
 	om.WriteInt64(highLSN)                           // last applied

@@ -22,89 +22,6 @@ const (
 )
 
 /*
-PgMessageType is the one-byte type of the postgres message.
-*/
-type PgMessageType byte
-
-// Various types of messages that represent one-byte message types.
-const (
-	AuthenticationResponse PgMessageType = 'R'
-	BackEndKeyData                       = 'K'
-	ParameterStatus                      = 'S'
-	NoticeResponse                       = 'N'
-	ErrorResponse                        = 'E'
-	Query                                = 'Q'
-	ReadyForQuery                        = 'Z'
-	CommandComplete                      = 'C'
-	CopyInResponse                       = 'G'
-	CopyOutResponse                      = 'H'
-	CopyBothResponse                     = 'W'
-	RowDescription                       = 'T'
-	DataRow                              = 'D'
-	EmptyQueryResponse                   = 'I'
-	Terminate                            = 'X'
-	CopyData                             = 'd'
-	CopyDone                             = 'c'
-	WALData                              = 'w'
-	SenderKeepalive                      = 'k'
-	StandbyStatusUpdate                  = 'r'
-	HotStandbyFeedback                   = 'h'
-	PasswordMessage                      = 'p'
-)
-
-func (t PgMessageType) String() string {
-	// Unfortunately "stringer" doesn't seem to be able to generate this
-	switch t {
-	case AuthenticationResponse:
-		return "AuthenticationResponse"
-	case BackEndKeyData:
-		return "BackEndKeyData"
-	case ParameterStatus:
-		return "ParameterStatus"
-	case NoticeResponse:
-		return "NoticeResponse"
-	case ErrorResponse:
-		return "ErrorResponse"
-	case Query:
-		return "Query"
-	case ReadyForQuery:
-		return "ReadyForQuery"
-	case CommandComplete:
-		return "CommandComplete"
-	case CopyInResponse:
-		return "CopyInResponse"
-	case CopyOutResponse:
-		return "CopyOutResponse"
-	case CopyBothResponse:
-		return "CopyBothResponse"
-	case CopyDone:
-		return "CopyDone"
-	case RowDescription:
-		return "RowDescription"
-	case DataRow:
-		return "DataRow"
-	case EmptyQueryResponse:
-		return "EmptyQueryResponse"
-	case Terminate:
-		return "Terminate"
-	case CopyData:
-		return "CopyData"
-	case WALData:
-		return "WALData"
-	case SenderKeepalive:
-		return "SenderKeepalive"
-	case StandbyStatusUpdate:
-		return "StandbyStatusUpdate"
-	case HotStandbyFeedback:
-		return "HotStandbyFeedback"
-	case PasswordMessage:
-		return "PasswordMessage"
-	default:
-		return fmt.Sprintf("PgMessageType(%d)", t)
-	}
-}
-
-/*
 A PgConnection represents a connection to the database.
 */
 type PgConnection struct {
@@ -322,12 +239,20 @@ to see what comes back.
 */
 func (c *PgConnection) WriteMessage(m *OutputMessage) error {
 	buf := m.Encode()
-	log.Debugf("Sending message type %s length %d", m.Type(), len(buf))
+	log.Debugf("Sending message type %s (%d) length %d", m.Type(), m.Type(), len(buf))
 	_, err := c.conn.Write(buf)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+/*
+sendFlush just sends a "flush" message
+*/
+func (c *PgConnection) sendFlush() error {
+	flushMsg := NewOutputMessage(Flush)
+	return c.WriteMessage(flushMsg)
 }
 
 /*
@@ -346,14 +271,14 @@ func (c *PgConnection) ReadMessage() (*InputMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	msgType := PgMessageType(msgTypeVal)
+	msgType := PgInputType(msgTypeVal)
 
 	var msgLen int32
 	err = binary.Read(hdrBuf, networkByteOrder, &msgLen)
 	if err != nil {
 		return nil, err
 	}
-	//log.Debugf("Got message type %s length %d", msgType, msgLen)
+	log.Debugf("Got message type %s (%d) length %d", msgType, msgType, msgLen)
 
 	if msgLen < 4 {
 		return nil, fmt.Errorf("Invalid message length %d", msgLen)

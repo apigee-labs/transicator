@@ -3,6 +3,8 @@ package pgclient
 import (
 	"bytes"
 	"errors"
+	"regexp"
+	"strconv"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -12,11 +14,12 @@ ParseError looks at an input message that represents an error and returns
 a Go error.
 */
 func ParseError(m *InputMessage) error {
-	if m.Type() != 'E' {
+	if m.Type() != ErrorResponse {
 		return errors.New("Message type is not Error")
 	}
 	msg, err := ParseNotice(m)
 	if err == nil {
+		log.Debugf("Received error: %s", msg)
 		return errors.New(msg)
 	}
 	return err
@@ -97,7 +100,7 @@ func ParseCopyData(m *InputMessage) (*InputMessage, error) {
 
 	buf := m.buf.Bytes()
 	typeByte := buf[0]
-	return NewInputMessage(PgMessageType(typeByte), buf[1:]), nil
+	return NewInputMessage(PgInputType(typeByte), buf[1:]), nil
 }
 
 // ParseRowDescription looks at a RowDescription message and parses it
@@ -157,19 +160,39 @@ func ParseDataRow(m *InputMessage) ([]string, error) {
 	return fields, nil
 }
 
-// ParseCommandComplete parses the CommandComplete message
-func ParseCommandComplete(m *InputMessage) (string, error) {
+// ParseCommandComplete parses the CommandComplete message and returns
+// the row count that it contains
+func ParseCommandComplete(m *InputMessage) (int64, error) {
 	if m.Type() != CommandComplete {
-		return "", errors.New("Message type is not CommandComplete")
+		return 0, errors.New("Message type is not CommandComplete")
 	}
 
 	s, err := m.ReadString()
 	if err != nil {
-		return "", err
+		return 0, err
+	}
+	log.Debugf("CommandComplete %s", s)
+
+	return parseRowCount(s), nil
+}
+
+var insertCompleteRe = regexp.MustCompile("^INSERT [0-9]+ ([0-9]+)$")
+var otherCompleteRe = regexp.MustCompile("^[A-Z]+ ([0-9]+)$")
+
+func parseRowCount(completeMsg string) int64 {
+	match := insertCompleteRe.FindStringSubmatch(completeMsg)
+	if match == nil {
+		match = otherCompleteRe.FindStringSubmatch(completeMsg)
+	}
+	if match == nil {
+		return 0
 	}
 
-	log.Debugf("CommandComplete %s", s)
-	return s, nil
+	ret, err := strconv.ParseInt(match[1], 10, 64)
+	if err == nil {
+		return ret
+	}
+	return 0
 }
 
 // ParseParameterStatus parses the ParameterStatus message

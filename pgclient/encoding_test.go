@@ -148,4 +148,17 @@ var _ = Describe("Encoding Tests", func() {
 		Expect(err).Should(Succeed())
 		Expect(val).Should(Equal("Start me up!"))
 	})
+
+	It("Row Count", func() {
+		c := parseRowCount("INSERT 123 45")
+		Expect(c).Should(BeEquivalentTo(45))
+		c = parseRowCount("UPDATE 45")
+		Expect(c).Should(BeEquivalentTo(45))
+		c = parseRowCount("DELETE 45")
+		Expect(c).Should(BeEquivalentTo(45))
+		c = parseRowCount("SELECT 45")
+		Expect(c).Should(BeEquivalentTo(45))
+		c = parseRowCount("FOO BAR 45")
+		Expect(c).Should(BeZero())
+	})
 })

@@ -1,7 +1,6 @@
 package pgclient
 
 import (
-	"errors"
 	"fmt"
 	"io"
 
@@ -85,7 +84,7 @@ func (c *PgConnection) CopyTo(wr io.Writer, query string, cf CopyFormat) (io.Wri
 			}
 
 		case CommandComplete:
-			msg, _ = ParseCommandComplete(m)
+			ParseCommandComplete(m)
 
 		case CopyDone:
 			// no more data, so wait for ReadyForQuery
@@ -95,7 +94,7 @@ func (c *PgConnection) CopyTo(wr io.Writer, query string, cf CopyFormat) (io.Wri
 			return wr, nil
 
 		default:
-			return nil, errors.New("Unknown message type from server: " + m.Type().String())
+			return nil, fmt.Errorf("Unknown message type from server: %d", m.Type())
 		}
 		if msg != "" {
 			log.Infof("Info from server: %s", msg)

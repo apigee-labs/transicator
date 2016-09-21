@@ -10,7 +10,7 @@ all: ./bin/changeserver ./bin/snapshotserver
 	mkdir bin
 
 test:
-	go test `glide nv`
+	go test ./replication ./common ./storage ./pgclient ./snapshot ./changeserver
 
 clean:
 	rm -f bin/changeserver
