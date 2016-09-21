@@ -11,7 +11,6 @@ jenkins_ci:
 
   build_commands:
     # build commands not needed here, handled in Dockerfile
-    - "yum install gcc"
     - "glide install"
     - "GOOS=linux go build -o changeserver"
   unit_test:
@@ -47,7 +46,7 @@ rpm_info:
   # These dependecies have to be able to be compatible with "yum install <comp>"
   #
   # depends:
-  #   - gcc
+     - gcc
 
   # environment variables needed by the application
   # VAR1 will assume the user supplies the variable beforehand
