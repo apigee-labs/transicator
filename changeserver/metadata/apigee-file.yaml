@@ -13,6 +13,7 @@ jenkins_ci:
     - "go get github.com/30x/transicator/storage"
     - "go get github.com/golang/gddo/httputil"
     - "go get github.com/julienschmidt/httprouter"
+    - "yum install gcc make"
 
   build_commands:
     # build commands not needed here, handled in Dockerfile
