@@ -7,13 +7,13 @@ jenkins_ci:
     language: "go"
   setup_commands:
     # setup commands not needed here, handled in Dockerfile
+    - "yum install gcc make"
     - "go get github.com/tools/godep"
     - "go get github.com/30x/transicator/common"
     - "go get github.com/30x/transicator/replication"
     - "go get github.com/30x/transicator/storage"
     - "go get github.com/golang/gddo/httputil"
     - "go get github.com/julienschmidt/httprouter"
-    - "yum install gcc make"
 
   build_commands:
     # build commands not needed here, handled in Dockerfile
