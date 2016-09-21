@@ -12,7 +12,7 @@ jenkins_ci:
   build_commands:
     # build commands not needed here, handled in Dockerfile
     - "glide install"
-    - "GOOS=linux CGO_ENABLED=0 go build -o changeserver"
+    - "GOOS=linux go build -o changeserver"
   unit_test:
     - "echo go test ./communication ./discovery ./storage ./raft"
   # functional tests
