@@ -1,0 +1,38 @@
+hash: 3dbdbf6a89ebfbb5023ecd7b7badade28ecf9e520d39ba9a420939f0137845af
+updated: 2016-09-21T11:06:04.439404371-07:00
+imports:
+- name: cloud.google.com/go
+  version: 0a9baebe991e5ff35dd9f35578eb002cf07d229c
+  subpackages:
+  - compute/metadata
+  - internal
+- name: github.com/30x/transicator
+  version: 21a829b8b1e3c87af1273d0f835e1301dc0cd328
+  subpackages:
+  - common
+  - replication
+  - storage
+  - pgclient
+- name: github.com/golang/gddo
+  version: aa8084e58a66f26ac6f479a75f0da68ed2067d4e
+  subpackages:
+  - httputil
+  - httputil/header
+- name: github.com/gorilla/mux
+  version: 757bef944d0f21880861c2dd9c871ca543023cba
+- name: github.com/julienschmidt/httprouter
+  version: 8c199fb6259ffc1af525cc3ad52ee60ba8359669
+- name: github.com/Sirupsen/logrus
+  version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
+- name: github.com/tylerb/graceful
+  version: 50a48b6e73fcc75b45e22c05b79629a67c79e938
+- name: golang.org/x/net
+  version: f4fe4abe3c785295ddf81c7f1823bcd3bad391b6
+  subpackages:
+  - context
+  - context/ctxhttp
+- name: golang.org/x/sys
+  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  subpackages:
+  - unix
+devImports: []
