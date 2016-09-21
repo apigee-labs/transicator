@@ -11,6 +11,7 @@ jenkins_ci:
 
   build_commands:
     # build commands not needed here, handled in Dockerfile
+    - "yum install gcc"
     - "glide install"
     - "GOOS=linux go build -o changeserver"
   unit_test:
