@@ -14,14 +14,14 @@ length.
 */
 type OutputMessage struct {
 	buf     *bytes.Buffer
-	msgType PgMessageType
+	msgType PgOutputType
 	hasType bool
 }
 
 /*
 NewOutputMessage constructs a new message with the given type byte
 */
-func NewOutputMessage(msgType PgMessageType) *OutputMessage {
+func NewOutputMessage(msgType PgOutputType) *OutputMessage {
 	return &OutputMessage{
 		buf:     &bytes.Buffer{},
 		msgType: msgType,
@@ -43,7 +43,7 @@ func NewStartupMessage() *OutputMessage {
 Type returns the message type byte from the message that was passed in to
 the "NewOutputMessage" function.
 */
-func (m *OutputMessage) Type() PgMessageType {
+func (m *OutputMessage) Type() PgOutputType {
 	return m.msgType
 }
 
@@ -68,10 +68,28 @@ func (m *OutputMessage) WriteInt32(i int32) {
 }
 
 /*
+WriteInt16 writes a single "int16" to the output.
+*/
+func (m *OutputMessage) WriteInt16(i int16) {
+	err := binary.Write(m.buf, networkByteOrder, &i)
+	if err != nil {
+		panic(err.Error())
+	}
+}
+
+/*
 WriteByte writes a single byte to the output.
 */
 func (m *OutputMessage) WriteByte(b byte) error {
 	return m.buf.WriteByte(b)
+}
+
+/*
+WriteBytes writes a bunch of bytes to the output.
+*/
+func (m *OutputMessage) WriteBytes(b []byte) error {
+	_, err := m.buf.Write(b)
+	return err
 }
 
 /*
@@ -117,14 +135,14 @@ message.
 */
 type InputMessage struct {
 	buf     *bytes.Buffer
-	msgType PgMessageType
+	msgType PgInputType
 }
 
 /*
 NewInputMessage generates a new input message from the specified byte array,
 which must be the correct length for the message.
 */
-func NewInputMessage(msgType PgMessageType, b []byte) *InputMessage {
+func NewInputMessage(msgType PgInputType, b []byte) *InputMessage {
 	return &InputMessage{
 		buf:     bytes.NewBuffer(b),
 		msgType: msgType,
@@ -135,7 +153,7 @@ func NewInputMessage(msgType PgMessageType, b []byte) *InputMessage {
 Type returns the message type byte from the message that was passed in to
 the "NewInputMessage" function.
 */
-func (m *InputMessage) Type() PgMessageType {
+func (m *InputMessage) Type() PgInputType {
 	return m.msgType
 }
 

@@ -3,7 +3,7 @@ package pgclient
 import (
 	"database/sql"
 	"database/sql/driver"
-	"errors"
+	"fmt"
 	"io"
 )
 
@@ -31,15 +31,45 @@ func (d *PgDriver) Open(url string) (driver.Conn, error) {
 
 // PgDriverConn implements Conn
 type PgDriverConn struct {
-	conn *PgConnection
+	conn      *PgConnection
+	stmtIndex int
 }
 
 // Prepare creates a statement. Right now it just saves the SQL.
 func (c *PgDriverConn) Prepare(query string) (driver.Stmt, error) {
-	return &PgStmt{
-		conn: c.conn,
-		sql:  query,
-	}, nil
+	c.stmtIndex++
+	stmtName := fmt.Sprintf("transicator-%x", c.stmtIndex)
+	return makeStatement(stmtName, query, c.conn)
+}
+
+// Query is the fast path for queries with no parameters
+func (c *PgDriverConn) Query(query string, args []driver.Value) (driver.Rows, error) {
+	if len(args) > 0 {
+		return nil, driver.ErrSkip
+	}
+
+	rawCols, rawRows, err := c.conn.SimpleQuery(query)
+	if err == nil {
+		return &PgRows{
+			cols:   rawCols,
+			rows:   rawRows,
+			curRow: 0,
+		}, nil
+	}
+	return nil, err
+}
+
+// Exec is the fast path for sql with no parameters
+func (c *PgDriverConn) Exec(query string, args []driver.Value) (driver.Result, error) {
+	if len(args) > 0 {
+		return nil, driver.ErrSkip
+	}
+
+	rowCount, err := c.conn.SimpleExec(query)
+	if err == nil {
+		return driver.RowsAffected(rowCount), nil
+	}
+	return nil, err
 }
 
 // Close closes the connection
@@ -50,59 +80,13 @@ func (c *PgDriverConn) Close() error {
 
 // Begin just runs the SQL "begin" statement
 func (c *PgDriverConn) Begin() (driver.Tx, error) {
-	_, _, err := c.conn.SimpleQuery("begin")
+	_, err := c.conn.SimpleExec("begin")
 	if err != nil {
 		return nil, err
 	}
 	return &PgTransaction{
 		conn: c.conn,
 	}, nil
-}
-
-// PgStmt implements the Stmt interface. It does only "simple" queries now
-type PgStmt struct {
-	sql  string
-	conn *PgConnection
-}
-
-// Close does nothing right now
-func (s *PgStmt) Close() error {
-	return nil
-}
-
-// NumInput does nothing special right now
-func (s *PgStmt) NumInput() int {
-	return -1
-}
-
-// Exec executes the SQL immediately
-func (s *PgStmt) Exec(args []driver.Value) (driver.Result, error) {
-	if len(args) > 0 {
-		return nil, errors.New("Input values not yet supported by the driver")
-	}
-
-	_, _, err := s.conn.SimpleQuery(s.sql)
-	if err == nil {
-		return &PgResult{}, nil
-	}
-	return nil, err
-}
-
-// Query executes the SQL immediately and remembers the rows to return
-func (s *PgStmt) Query(args []driver.Value) (driver.Rows, error) {
-	if len(args) > 0 {
-		return nil, errors.New("Input values not yet supported by the driver")
-	}
-
-	cols, rows, err := s.conn.SimpleQuery(s.sql)
-	if err == nil {
-		return &PgRows{
-			cols:   cols,
-			rows:   rows,
-			curRow: 0,
-		}, nil
-	}
-	return nil, err
 }
 
 // PgTransaction is a simple wrapper for transaction SQL
@@ -112,13 +96,13 @@ type PgTransaction struct {
 
 // Commit just runs the "commit" statement
 func (t *PgTransaction) Commit() error {
-	_, _, err := t.conn.SimpleQuery("commit")
+	_, err := t.conn.SimpleExec("commit")
 	return err
 }
 
 // Rollback just runs the "rollback" statement
 func (t *PgTransaction) Rollback() error {
-	_, _, err := t.conn.SimpleQuery("rollback")
+	_, err := t.conn.SimpleExec("rollback")
 	return err
 }
 
@@ -158,18 +142,4 @@ func (r *PgRows) Next(dest []driver.Value) error {
 // Close does nothing.
 func (r *PgRows) Close() error {
 	return nil
-}
-
-// PgResult implements the Result interface
-type PgResult struct {
-}
-
-// LastInsertId does nothing right now
-func (r *PgResult) LastInsertId() (int64, error) {
-	return 0, nil
-}
-
-// RowsAffected does nothing right now
-func (r *PgResult) RowsAffected() (int64, error) {
-	return 0, nil
 }
