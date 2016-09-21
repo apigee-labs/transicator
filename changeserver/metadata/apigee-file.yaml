@@ -24,7 +24,7 @@ jenkins_ci:
     - "glide install"
     - "GOOS=linux go build -o changeserver"
   unit_test:
-    - "echo go test ./communication ./discovery ./storage ./raft"
+    - "echo go test ./discovery ./storage ./raft"
   # functional tests
   functional_tests:
     - "echo go test ./agent"
