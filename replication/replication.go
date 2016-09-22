@@ -52,7 +52,7 @@ type Replicator struct {
 	connectString string
 	state         int32
 	changeChan    chan *common.Change
-	updateChan    chan int64
+	updateChan    chan uint64
 	cmdChan       chan replCommand
 }
 
@@ -71,7 +71,7 @@ func Start(connect, sn string) (*Replicator, error) {
 		connectString: connectString,
 		state:         int32(Connecting),
 		changeChan:    make(chan *common.Change, 100),
-		updateChan:    make(chan int64, 100),
+		updateChan:    make(chan uint64, 100),
 		cmdChan:       make(chan replCommand, 1),
 	}
 
@@ -138,7 +138,7 @@ However, changes that happened before the specified LSN might still be
 delivered on a reconnect, so it is important that consumers of this class
 be prepared to handle and ignore duplicates.
 */
-func (r *Replicator) Acknowledge(lsn int64) {
+func (r *Replicator) Acknowledge(lsn uint64) {
 	r.updateChan <- lsn
 }
 
@@ -218,7 +218,7 @@ This is the main loop. It handles connecting and reconnecting, and then
 receives commands from the client and passes them on as appropriate.
 */
 func (r *Replicator) replLoop() {
-	var highLSN int64
+	var highLSN uint64
 	var connected bool
 	var connection *pgclient.PgConnection
 	var err error
@@ -419,13 +419,13 @@ func (r *Replicator) handleKeepalive(m *pgclient.InputMessage) bool {
 	return false
 }
 
-func (r *Replicator) updateLSN(highLSN int64, conn *pgclient.PgConnection) {
+func (r *Replicator) updateLSN(highLSN uint64, conn *pgclient.PgConnection) {
 	log.Debugf("Updating server with last LSN %d", highLSN)
 	om := pgclient.NewOutputMessage(pgclient.CopyDataOut)
 	om.WriteByte(byte(pgclient.StandbyStatusUpdate))
-	om.WriteInt64(highLSN)                           // last written to disk
-	om.WriteInt64(highLSN)                           // last flushed to disk
-	om.WriteInt64(highLSN)                           // last applied
+	om.WriteUint64(highLSN)                          // last written to disk
+	om.WriteUint64(highLSN)                          // last flushed to disk
+	om.WriteUint64(highLSN)                          // last applied
 	om.WriteInt64(time.Now().UnixNano() - epoch2000) // Timestamp!
 	om.WriteByte(0)
 

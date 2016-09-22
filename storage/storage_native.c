@@ -76,8 +76,8 @@ static int compare_index_key(
     ap += strlen(ap) + 1;
     bp += strlen(bp) + 1;
 
-    long long* lsna = (long long*)ap;
-    long long* lsnb = (long long*)bp;
+    unsigned long long* lsna = (unsigned long long*)ap;
+    unsigned long long* lsnb = (unsigned long long*)bp;
 
     if (*lsna < *lsnb) {
       return -1;
@@ -89,8 +89,8 @@ static int compare_index_key(
     ap += 8;
     bp += 8;
 
-    int* indexa = (int*)ap;
-    int* indexb = (int*)bp;
+    unsigned int* indexa = (unsigned int*)ap;
+    unsigned int* indexb = (unsigned int*)bp;
 
     if (*indexa < *indexb) {
       return -1;

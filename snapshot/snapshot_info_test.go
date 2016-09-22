@@ -217,7 +217,7 @@ func getCurrentTxid(conn *pgclient.PgConnection) int32 {
 
 func drainReplication(repl *replication.Replicator) {
 	// Just pull stuff until we get a bit of a delay
-	var maxLSN int64
+	var maxLSN uint64
 	timedOut := false
 	for !timedOut {
 		timeout := time.After(1 * time.Second)

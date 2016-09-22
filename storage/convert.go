@@ -116,7 +116,7 @@ func keyToString(ptr unsafe.Pointer, l C.size_t) (int, string, error) {
 /*
 Create an entry key.
 */
-func indexToKey(keyType int, tag string, lsn int64, index int32) (unsafe.Pointer, C.size_t) {
+func indexToKey(keyType int, tag string, lsn uint64, index uint32) (unsafe.Pointer, C.size_t) {
 	// TODO convert to ASCII here?
 	buf := &bytes.Buffer{}
 	binary.Write(buf, storageByteOrder, keyPrefix(keyType)[0])

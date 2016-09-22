@@ -80,8 +80,8 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 
 	log.Debugf("Receiving changes: scopes = %v since = %s limit = %d block = %d",
 		scopes, sinceSeq, limit, block)
-	entries, err := s.db.GetMultiEntries(scopes, int64(sinceSeq.LSN),
-		int32(sinceSeq.Index), limit, snapshotFilter)
+	entries, err := s.db.GetMultiEntries(scopes, sinceSeq.LSN,
+		sinceSeq.Index, limit, snapshotFilter)
 	if err != nil {
 		sendError(resp, req, http.StatusInternalServerError, err.Error())
 		return
@@ -92,8 +92,8 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 		log.Debugf("Blocking for up to %d seconds", block)
 		newIndex := s.tracker.timedWait(sinceSeq, time.Duration(block)*time.Second, scopes)
 		if newIndex.Compare(sinceSeq) > 0 {
-			entries, err = s.db.GetMultiEntries(scopes, int64(sinceSeq.LSN),
-				int32(sinceSeq.Index), limit, snapshotFilter)
+			entries, err = s.db.GetMultiEntries(scopes, sinceSeq.LSN,
+				sinceSeq.Index, limit, snapshotFilter)
 			if err != nil {
 				sendError(resp, req, http.StatusInternalServerError, err.Error())
 				return

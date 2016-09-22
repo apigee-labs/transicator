@@ -74,7 +74,7 @@ func testStringKey(kt int, key string) bool {
 	return true
 }
 
-func testIndexKeyCompare(tag1, tag2 string, lsn1, lsn2 int64, seq1, seq2 int32) bool {
+func testIndexKeyCompare(tag1, tag2 string, lsn1, lsn2 uint64, seq1, seq2 uint32) bool {
 	kb1, kl1 := indexToKey(IndexKey, tag1, lsn1, seq1)
 	defer freePtr(kb1)
 	kb2, kl2 := indexToKey(IndexKey, tag2, lsn2, seq2)

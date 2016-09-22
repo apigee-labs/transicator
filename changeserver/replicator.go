@@ -27,7 +27,7 @@ func (s *server) runReplication(firstChange common.Sequence) {
 		case <-ackTimer.C:
 			if lastChange.LSN > lastAck {
 				lastAck = lastChange.LSN
-				s.repl.Acknowledge(int64(lastAck))
+				s.repl.Acknowledge(lastAck)
 			}
 			ackTimer.Reset(acknowledgeDelay)
 

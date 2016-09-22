@@ -58,6 +58,16 @@ func (m *OutputMessage) WriteInt64(i int64) {
 }
 
 /*
+WriteUint64 writes a single "uint64" to the output.
+*/
+func (m *OutputMessage) WriteUint64(i uint64) {
+	err := binary.Write(m.buf, networkByteOrder, &i)
+	if err != nil {
+		panic(err.Error())
+	}
+}
+
+/*
 WriteInt32 writes a single "int32" to the output.
 */
 func (m *OutputMessage) WriteInt32(i int32) {

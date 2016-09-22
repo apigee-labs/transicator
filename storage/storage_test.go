@@ -67,21 +67,21 @@ var _ = Describe("Storage Main Test", func() {
 	})
 
 	It("Entries same tag", func() {
-		err := quick.Check(func(lsn int64, index int32, data []byte) bool {
+		err := quick.Check(func(lsn uint64, index uint32, data []byte) bool {
 			return testEntry("tag", lsn, index, data)
 		}, nil)
 		Expect(err).Should(Succeed())
 	})
 
 	It("Entries empty tag", func() {
-		err := quick.Check(func(lsn int64, index int32, data []byte) bool {
+		err := quick.Check(func(lsn uint64, index uint32, data []byte) bool {
 			return testEntry("", lsn, index, data)
 		}, nil)
 		Expect(err).Should(Succeed())
 	})
 
 	It("Entries same LSN", func() {
-		err := quick.Check(func(index int32, data []byte) bool {
+		err := quick.Check(func(index uint32, data []byte) bool {
 			return testEntry("tag", 8675309, index, data)
 		}, nil)
 		Expect(err).Should(Succeed())
@@ -148,8 +148,8 @@ var _ = Describe("Storage Main Test", func() {
 	})
 })
 
-func testGetSequence(tag string, lsn int64,
-	index int32, limit int, expected [][]byte) {
+func testGetSequence(tag string, lsn uint64,
+	index uint32, limit int, expected [][]byte) {
 	ret, err := testDB.GetEntries(tag, lsn, index, limit, nil)
 	Expect(err).Should(Succeed())
 	Expect(len(ret)).Should(Equal(len(expected)))
@@ -158,8 +158,8 @@ func testGetSequence(tag string, lsn int64,
 	}
 }
 
-func testGetSequenceFilter(tag string, lsn int64,
-	index int32, limit int, expected [][]byte, rejected []byte) {
+func testGetSequenceFilter(tag string, lsn uint64,
+	index uint32, limit int, expected [][]byte, rejected []byte) {
 	ret, err := testDB.GetEntries(tag, lsn, index, limit,
 		func(rej []byte) bool {
 			if bytes.Equal(rej, rejected) {
@@ -174,8 +174,8 @@ func testGetSequenceFilter(tag string, lsn int64,
 	}
 }
 
-func testGetSequences(tags []string, lsn int64,
-	index int32, limit int, expected [][]byte) {
+func testGetSequences(tags []string, lsn uint64,
+	index uint32, limit int, expected [][]byte) {
 	ret, err := testDB.GetMultiEntries(tags, lsn, index, limit, nil)
 	Expect(err).Should(Succeed())
 	Expect(len(ret)).Should(Equal(len(expected)))
@@ -202,7 +202,7 @@ func testIntMetadata(key string, val int64) bool {
 	return true
 }
 
-func testEntry(key string, lsn int64, index int32, val []byte) bool {
+func testEntry(key string, lsn uint64, index uint32, val []byte) bool {
 	err := testDB.PutEntry(key, lsn, index, val)
 	Expect(err).Should(Succeed())
 	ret, err := testDB.GetEntry(key, lsn, index)
@@ -211,7 +211,7 @@ func testEntry(key string, lsn int64, index int32, val []byte) bool {
 	return true
 }
 
-func testEntryAndData(key string, lsn int64, index int32, val []byte,
+func testEntryAndData(key string, lsn uint64, index uint32, val []byte,
 	mkey string, mval []byte) bool {
 	err := testDB.PutEntryAndMetadata(key, lsn, index, val, mkey, mval)
 	Expect(err).Should(Succeed())

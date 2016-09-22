@@ -185,7 +185,7 @@ func (s *DB) SetMetadata(key string, val []byte) error {
 /*
 PutEntry writes an entry to the database indexed by scope, lsn, and index in order
 */
-func (s *DB) PutEntry(scope string, lsn int64, index int32, data []byte) error {
+func (s *DB) PutEntry(scope string, lsn uint64, index uint32, data []byte) error {
 	keyBuf, keyLen := indexToKey(IndexKey, scope, lsn, index)
 	defer freePtr(keyBuf)
 	valBuf, valLen := bytesToPtr(data)
@@ -198,7 +198,7 @@ func (s *DB) PutEntry(scope string, lsn int64, index int32, data []byte) error {
 PutEntryAndMetadata writes an entry to the database in the same batch as
 a metadata write.
 */
-func (s *DB) PutEntryAndMetadata(scope string, lsn int64, index int32,
+func (s *DB) PutEntryAndMetadata(scope string, lsn uint64, index uint32,
 	data []byte, metaKey string, metaVal []byte) error {
 
 	batch := C.leveldb_writebatch_create()
@@ -229,7 +229,7 @@ func (s *DB) PutEntryAndMetadata(scope string, lsn int64, index int32,
 /*
 GetEntry returns what was written by PutEntry.
 */
-func (s *DB) GetEntry(scope string, lsn int64, index int32) ([]byte, error) {
+func (s *DB) GetEntry(scope string, lsn uint64, index uint32) ([]byte, error) {
 	keyBuf, keyLen := indexToKey(IndexKey, scope, lsn, index)
 	defer freePtr(keyBuf)
 
@@ -248,8 +248,8 @@ startLSN and startIndex. No more than "limit" entries will be returned.
 To retrieve the very next entry after an entry, simply increment the index
 by 1.
 */
-func (s *DB) GetEntries(scope string, startLSN int64,
-	startIndex int32, limit int, filter func([]byte) bool) ([][]byte, error) {
+func (s *DB) GetEntries(scope string, startLSN uint64,
+	startIndex uint32, limit int, filter func([]byte) bool) ([][]byte, error) {
 
 	rr, err := s.readOneRange(scope, startLSN, startIndex, limit,
 		defaultReadOptions, filter)
@@ -273,8 +273,8 @@ by 1. This method uses a snapshot to guarantee consistency even if data is
 being inserted to the database -- as long as the data is being inserted
 in LSN order!
 */
-func (s *DB) GetMultiEntries(scopes []string, startLSN int64,
-	startIndex int32, limit int, filter func([]byte) bool) ([][]byte, error) {
+func (s *DB) GetMultiEntries(scopes []string, startLSN uint64,
+	startIndex uint32, limit int, filter func([]byte) bool) ([][]byte, error) {
 
 	// Do this all inside a level DB snapshot so that we get a repeatable read
 	snap := C.leveldb_create_snapshot(s.db)
@@ -304,8 +304,8 @@ func (s *DB) GetMultiEntries(scopes []string, startLSN int64,
 	return final, nil
 }
 
-func (s *DB) readOneRange(scope string, startLSN int64,
-	startIndex int32, limit int, ro *C.leveldb_readoptions_t,
+func (s *DB) readOneRange(scope string, startLSN uint64,
+	startIndex uint32, limit int, ro *C.leveldb_readoptions_t,
 	filter func([]byte) bool) (readResults, error) {
 	startKeyBuf, startKeyLen := indexToKey(IndexKey, scope, startLSN, startIndex)
 	defer freePtr(startKeyBuf)

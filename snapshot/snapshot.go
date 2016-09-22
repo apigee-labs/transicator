@@ -4,16 +4,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/30x/transicator/common"
-	"github.com/30x/transicator/pgclient"
+	"math/rand"
+	"net/http"
+	"net/url"
 	"strings"
 	"time"
-	"net/http"
-	"math/rand"
-	"net/url"
 
-	"github.com/gorilla/mux"
+	"github.com/30x/transicator/common"
+	"github.com/30x/transicator/pgclient"
+
 	log "github.com/Sirupsen/logrus"
+	"github.com/gorilla/mux"
 )
 
 var src = rand.NewSource(time.Now().UnixNano())
@@ -155,8 +156,8 @@ func DownloadSnapshot(w http.ResponseWriter, r *http.Request, conn *pgclient.PgC
 	}
 
 	size, err := w.Write(data)
-	if (err != nil) {
-		log.Errorf("Writing snapshot id %s : Err: ", sid, err)
+	if err != nil {
+		log.Errorf("Writing snapshot id %s : Err: %s", sid, err)
 		return
 	}
 
@@ -164,5 +165,3 @@ func DownloadSnapshot(w http.ResponseWriter, r *http.Request, conn *pgclient.PgC
 	return
 
 }
-
-

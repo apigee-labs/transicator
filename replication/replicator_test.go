@@ -57,7 +57,7 @@ var _ = Describe("Replicator tests", func() {
 
 func drainReplication(repl *Replicator) []*common.Change {
 	// Just pull stuff until we get a bit of a delay
-	var maxLSN int64
+	var maxLSN uint64
 	var ret []*common.Change
 	timedOut := false
 
