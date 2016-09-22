@@ -2,41 +2,35 @@ package replication
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
-	"regexp"
-	"strconv"
-	"strings"
 
 	"github.com/30x/transicator/common"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
-var snapRe = regexp.MustCompile("^([0-9]*):([0-9]*):(([0-9],?)+)?$")
-
 var _ = Describe("TXID Tests", func() {
 	It("Snapshot parse", func() {
-		min, max, ips, err := parseSnap("1:1:")
+		snap, err := MakeSnapshot("1:1:")
 		Expect(err).Should(Succeed())
-		Expect(max).Should(BeEquivalentTo(1))
-		Expect(min).Should(BeEquivalentTo(1))
-		Expect(ips).Should(BeEmpty())
+		Expect(snap.Xmax).Should(BeEquivalentTo(1))
+		Expect(snap.Xmin).Should(BeEquivalentTo(1))
+		Expect(snap.Xips).Should(BeEmpty())
 
-		min, max, ips, err = parseSnap("1:1:2")
+		snap, err = MakeSnapshot("1:1:2")
 		Expect(err).Should(Succeed())
-		Expect(max).Should(BeEquivalentTo(1))
-		Expect(min).Should(BeEquivalentTo(1))
-		Expect(len(ips)).Should(Equal(1))
-		Expect(ips[0]).Should(BeEquivalentTo(2))
+		Expect(snap.Xmax).Should(BeEquivalentTo(1))
+		Expect(snap.Xmin).Should(BeEquivalentTo(1))
+		Expect(len(snap.Xips)).Should(Equal(1))
+		Expect(snap.Xips[2]).Should(BeTrue())
 
-		min, max, ips, err = parseSnap("1:1:2,3")
+		snap, err = MakeSnapshot("1:1:2,3")
 		Expect(err).Should(Succeed())
-		Expect(max).Should(BeEquivalentTo(1))
-		Expect(min).Should(BeEquivalentTo(1))
-		Expect(len(ips)).Should(Equal(2))
-		Expect(ips[0]).Should(BeEquivalentTo(2))
-		Expect(ips[1]).Should(BeEquivalentTo(3))
+		Expect(snap.Xmax).Should(BeEquivalentTo(1))
+		Expect(snap.Xmin).Should(BeEquivalentTo(1))
+		Expect(len(snap.Xips)).Should(Equal(2))
+		Expect(snap.Xips[2]).Should(BeTrue())
+		Expect(snap.Xips[3]).Should(BeTrue())
 	})
 
 	/*
@@ -126,9 +120,9 @@ var _ = Describe("TXID Tests", func() {
 
 		fmt.Fprintf(GinkgoWriter, "Changes:\n")
 		for i, change := range changes {
-			fmt.Fprintf(GinkgoWriter, "%d Change %d Commit %d TXID %d Row = %s\n",
+			fmt.Fprintf(GinkgoWriter, "%d Change %d Commit %d TXID %d Row = %v\n",
 				i, change.ChangeSequence, change.CommitSequence, change.TransactionID,
-				change.NewRow["id"].Value)
+				change.NewRow["id"])
 		}
 
 		for i, snap := range snaps {
@@ -163,71 +157,15 @@ func getSnapshot() string {
 func filterChanges(changes []*common.Change, snap string) []int {
 	var ret []int
 
+	ss, err := MakeSnapshot(snap)
+	Expect(err).Should(Succeed())
+
 	for i, change := range changes {
-		if !inSnap(snap, change.TransactionID) {
+		if !ss.Contains(uint32(change.TransactionID)) {
 			ret = append(ret, i)
 		}
 	}
 	return ret
-}
-
-/*
-inSnapshot tells us whether a particular transaction's changes would
-be visible in the specified snapshot.
-*/
-func inSnap(snap string, txid int64) bool {
-	min, max, ips, err := parseSnap(snap)
-	if err != nil {
-		fmt.Fprintf(GinkgoWriter, "Invalid snapshot %s\n", snap)
-		return false
-	}
-
-	if txid < min {
-		return true
-	}
-	if txid >= max {
-		return false
-	}
-
-	for _, ip := range ips {
-		if txid == ip {
-			return false
-		}
-	}
-
-	return true
-}
-
-func parseSnap(snap string) (int64, int64, []int64, error) {
-	pre := snapRe.FindStringSubmatch(snap)
-	if pre == nil {
-		return 0, 0, nil, errors.New("Invalid snapshot")
-	}
-
-	min, err := strconv.ParseInt(pre[1], 10, 64)
-	if err != nil {
-		return 0, 0, nil, err
-	}
-	max, err := strconv.ParseInt(pre[2], 10, 64)
-	if err != nil {
-		return 0, 0, nil, err
-	}
-
-	ipss := strings.Split(pre[3], ",")
-	var ips []int64
-
-	for _, s := range ipss {
-		if s == "" {
-			continue
-		}
-		ip, err := strconv.ParseInt(s, 10, 64)
-		if err != nil {
-			return 0, 0, nil, err
-		}
-		ips = append(ips, ip)
-	}
-
-	return min, max, ips, nil
 }
 
 func execCommands(commands []string) string {

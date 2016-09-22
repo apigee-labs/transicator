@@ -17,17 +17,28 @@ var _ = Describe("Replicator tests", func() {
 		// There may be duplicates, so always drain first
 		drainReplication(repl)
 
-		doExecute("insert into transicator_test (id) values ('basic replication')")
+		is, err := db.Prepare("insert into transicator_test (id) values ($1)")
+		Expect(err).Should(Succeed())
+
+		_, err = is.Exec("basic replication")
+		Expect(err).Should(Succeed())
 
 		var change *common.Change
 		Eventually(repl.Changes()).Should(Receive(&change))
 		Expect(change.NewRow["id"].Value).Should(Equal("basic replication"))
 		Consistently(repl.Changes()).ShouldNot(Receive())
 
-		doExecute("begin")
-		doExecute("insert into transicator_test (id) values ('replication 1')")
-		doExecute("insert into transicator_test (id) values ('replication 2')")
-		doExecute("commit")
+		tx, err := db.Begin()
+		Expect(err).Should(Succeed())
+		tis := tx.Stmt(is)
+
+		_, err = tis.Exec("replication 1")
+		Expect(err).Should(Succeed())
+		_, err = tis.Exec("replication 2")
+		Expect(err).Should(Succeed())
+
+		err = tx.Commit()
+		Expect(err).Should(Succeed())
 
 		Eventually(repl.Changes()).Should(Receive(&change))
 		Expect(change.NewRow["id"].Value).Should(Equal("replication 1"))
