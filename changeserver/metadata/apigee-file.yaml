@@ -11,15 +11,16 @@ jenkins_ci:
 
   build_commands:
     # build commands not needed here, handled in Dockerfile
-    - "sudo yum install -y gcc wget"
-    - "sudo yum groupinstall -y 'Development Tools'"
-    - "sudo wget http://pkgs.fedoraproject.org/repo/pkgs/leveldb/leveldb-1.9.0.tar.gz/12f11385cb58ae0de66d4bc2cc7f8194/leveldb-1.9.0.tar.gz -P /tmp"
-    - "sudo tar xf /tmp/leveldb-1.9.0.tar.gz -C /tmp"
-    - "sudo make -C /tmp/leveldb-1.9.0"
-    - "sudo cp /tmp/leveldb-1.9.0/libleveldb.* /usr/local/lib"
-    - "sudo cp -R /tmp/leveldb-1.9.0/include/leveldb /usr/local/include"
-    - "glide install"
-    - "GOOS=linux go build -o changeserver"
+#    - "sudo yum install -y gcc wget"
+#    - "sudo yum groupinstall -y 'Development Tools'"
+#    - "sudo wget http://pkgs.fedoraproject.org/repo/pkgs/leveldb/leveldb-1.9.0.tar.gz/12f11385cb58ae0de66d4bc2cc7f8194/leveldb-1.9.0.tar.gz -P /tmp"
+#    - "sudo tar xf /tmp/leveldb-1.9.0.tar.gz -C /tmp"
+#    - "sudo make -C /tmp/leveldb-1.9.0"
+#    - "sudo cp /tmp/leveldb-1.9.0/libleveldb.* /usr/local/lib"
+#    - "sudo cp -R /tmp/leveldb-1.9.0/include/leveldb /usr/local/include"
+#    - "glide install"
+#    - "GOOS=linux go build -o changeserver"
+    - "sudo ./extract_binary.sh"
   unit_test:
     - "echo go test ./discovery ./storage ./raft"
   # functional tests
