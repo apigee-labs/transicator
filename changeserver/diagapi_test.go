@@ -39,6 +39,11 @@ var _ = Describe("Diag API tests", func() {
 		Expect(resp.StatusCode).Should(Equal(503))
 		Expect(string(bod)).Should(Equal("Marked down"))
 
+		resp, err = http.Get(fmt.Sprintf("%s/changes", baseURL))
+		Expect(err).Should(Succeed())
+		resp.Body.Close()
+		Expect(resp.StatusCode).Should(Equal(503))
+
 		resp, err = http.PostForm(url, map[string][]string{
 			"up":     []string{"false"},
 			"reason": []string{"verklempt"},

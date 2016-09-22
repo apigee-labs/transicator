@@ -21,6 +21,11 @@ func (s *server) initChangesAPI(prefix string, router *httprouter.Router) {
 }
 
 func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
+	if s.isMarkedDown() {
+		sendError(resp, req, http.StatusServiceUnavailable, "Marked down")
+		return
+	}
+
 	enc := httputil.NegotiateContentEncoding(req, []string{jsonContent})
 	if enc == "" {
 		resp.WriteHeader(http.StatusUnsupportedMediaType)

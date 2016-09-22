@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
+	"sync/atomic"
 
 	"github.com/golang/gddo/httputil"
 	"github.com/julienschmidt/httprouter"
@@ -17,19 +18,20 @@ func (s *server) initDiagAPI(prefix string, router *httprouter.Router) {
 }
 
 func (s *server) handleGetHealth(resp http.ResponseWriter, req *http.Request) {
-	rawReason := s.markdownReason.Load()
-
-	if rawReason == nil {
+	if !s.isMarkedDown() {
 		resp.Write([]byte("OK"))
-	} else {
-		markdownReason := rawReason.(*string)
-		if *markdownReason == "" {
-			resp.Write([]byte("OK"))
-		} else {
-			resp.WriteHeader(http.StatusServiceUnavailable)
-			resp.Write([]byte(*markdownReason))
-		}
+		return
 	}
+
+	var reason string
+	rawReason := s.markdownReason.Load()
+	if rawReason == nil {
+		reason = "marked down"
+	} else {
+		reason = *(rawReason.(*string))
+	}
+	resp.WriteHeader(http.StatusServiceUnavailable)
+	resp.Write([]byte(reason))
 }
 
 func (s *server) handleSetHealth(resp http.ResponseWriter, req *http.Request) {
@@ -57,11 +59,15 @@ func (s *server) handleSetHealth(resp http.ResponseWriter, req *http.Request) {
 	var reason string
 	if up {
 		reason = ""
+		atomic.StoreInt32(&s.markedDown, 0)
+
 	} else {
 		reason = req.Form.Get("reason")
 		if reason == "" {
 			reason = "Marked down"
 		}
+		s.markdownReason.Store(&reason)
+		atomic.StoreInt32(&s.markedDown, 1)
 	}
 
 	s.markdownReason.Store(&reason)

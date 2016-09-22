@@ -27,6 +27,7 @@ type server struct {
 	repl           *replication.Replicator
 	tracker        *changeTracker
 	markdownReason atomic.Value
+	markedDown     int32
 	stopChan       chan chan<- bool
 }
 
@@ -102,6 +103,11 @@ func (s *server) stop() {
 
 func (s *server) delete() error {
 	return s.db.Delete()
+}
+
+func (s *server) isMarkedDown() bool {
+	md := atomic.LoadInt32(&s.markedDown)
+	return md != 0
 }
 
 func getIntParam(q url.Values, key string, dflt int) (int, error) {
