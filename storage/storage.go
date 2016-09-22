@@ -249,9 +249,10 @@ To retrieve the very next entry after an entry, simply increment the index
 by 1.
 */
 func (s *DB) GetEntries(scope string, startLSN int64,
-	startIndex int32, limit int) ([][]byte, error) {
+	startIndex int32, limit int, filter func([]byte) bool) ([][]byte, error) {
 
-	rr, err := s.readOneRange(scope, startLSN, startIndex, limit, defaultReadOptions)
+	rr, err := s.readOneRange(scope, startLSN, startIndex, limit,
+		defaultReadOptions, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +274,7 @@ being inserted to the database -- as long as the data is being inserted
 in LSN order!
 */
 func (s *DB) GetMultiEntries(scopes []string, startLSN int64,
-	startIndex int32, limit int) ([][]byte, error) {
+	startIndex int32, limit int, filter func([]byte) bool) ([][]byte, error) {
 
 	// Do this all inside a level DB snapshot so that we get a repeatable read
 	snap := C.leveldb_create_snapshot(s.db)
@@ -286,7 +287,7 @@ func (s *DB) GetMultiEntries(scopes []string, startLSN int64,
 	// Read range for each scope
 	var results readResults
 	for _, scope := range scopes {
-		rr, err := s.readOneRange(scope, startLSN, startIndex, limit, ropts)
+		rr, err := s.readOneRange(scope, startLSN, startIndex, limit, ropts, filter)
 		if err != nil {
 			return nil, err
 		}
@@ -304,7 +305,8 @@ func (s *DB) GetMultiEntries(scopes []string, startLSN int64,
 }
 
 func (s *DB) readOneRange(scope string, startLSN int64,
-	startIndex int32, limit int, ro *C.leveldb_readoptions_t) (readResults, error) {
+	startIndex int32, limit int, ro *C.leveldb_readoptions_t,
+	filter func([]byte) bool) (readResults, error) {
 	startKeyBuf, startKeyLen := indexToKey(IndexKey, scope, startLSN, startIndex)
 	defer freePtr(startKeyBuf)
 	endKeyBuf, endKeyLen := indexToKey(IndexKey, scope, math.MaxInt64, math.MaxInt32)
@@ -316,7 +318,7 @@ func (s *DB) readOneRange(scope string, startLSN int64,
 
 	var results readResults
 
-	for count := 0; count < limit && C.leveldb_iter_valid(it) != 0; count++ {
+	for len(results) < limit && C.leveldb_iter_valid(it) != 0 {
 		var keyLen C.size_t
 		iterKey := C.leveldb_iter_key(it, &keyLen)
 
@@ -334,12 +336,14 @@ func (s *DB) readOneRange(scope string, startLSN int64,
 		iterData := C.leveldb_iter_value(it, &dataLen)
 		newVal := ptrToBytes(unsafe.Pointer(iterData), dataLen)
 
-		result := readResult{
-			lsn:   iterLSN,
-			index: iterIx,
-			data:  newVal,
+		if filter == nil || filter(newVal) {
+			result := readResult{
+				lsn:   iterLSN,
+				index: iterIx,
+				data:  newVal,
+			}
+			results = append(results, result)
 		}
-		results = append(results, result)
 		C.leveldb_iter_next(it)
 	}
 

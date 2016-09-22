@@ -19,6 +19,7 @@ var _ = Describe("Replicator tests", func() {
 
 		is, err := db.Prepare("insert into transicator_test (id) values ($1)")
 		Expect(err).Should(Succeed())
+		defer is.Close()
 
 		_, err = is.Exec("basic replication")
 		Expect(err).Should(Succeed())

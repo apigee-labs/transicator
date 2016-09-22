@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/30x/transicator/common"
+	"github.com/30x/transicator/replication"
 	log "github.com/Sirupsen/logrus"
 	"github.com/golang/gddo/httputil"
 	"github.com/julienschmidt/httprouter"
@@ -58,12 +59,24 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	var snapshotFilter func([]byte) bool
+	snapStr := q.Get("snapshot")
+	if snapStr != "" {
+		snapshot, err := replication.MakeSnapshot(snapStr)
+		if err != nil {
+			sendError(resp, req, http.StatusBadRequest, fmt.Sprintf("Invalid snapshot %s", snapStr))
+			return
+		}
+		snapshotFilter = makeSnapshotFilter(snapshot)
+	}
+
 	// Need to advance past a single "since" value
 	sinceSeq.Index++
 
 	log.Debugf("Receiving changes: scopes = %v since = %s limit = %d block = %d",
 		scopes, sinceSeq, limit, block)
-	entries, err := s.db.GetMultiEntries(scopes, int64(sinceSeq.LSN), int32(sinceSeq.Index), limit)
+	entries, err := s.db.GetMultiEntries(scopes, int64(sinceSeq.LSN),
+		int32(sinceSeq.Index), limit, snapshotFilter)
 	if err != nil {
 		sendError(resp, req, http.StatusInternalServerError, err.Error())
 		return
@@ -74,7 +87,8 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 		log.Debugf("Blocking for up to %d seconds", block)
 		newIndex := s.tracker.timedWait(sinceSeq, time.Duration(block)*time.Second, scopes)
 		if newIndex.Compare(sinceSeq) > 0 {
-			entries, err = s.db.GetMultiEntries(scopes, int64(sinceSeq.LSN), int32(sinceSeq.Index), limit)
+			entries, err = s.db.GetMultiEntries(scopes, int64(sinceSeq.LSN),
+				int32(sinceSeq.Index), limit, snapshotFilter)
 			if err != nil {
 				sendError(resp, req, http.StatusInternalServerError, err.Error())
 				return
@@ -94,4 +108,14 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 
 	resp.Header().Set("Content-Type", jsonContent)
 	resp.Write(changeList.Marshal())
+}
+
+func makeSnapshotFilter(ss *replication.Snapshot) func([]byte) bool {
+	return func(buf []byte) bool {
+		change, err := common.UnmarshalChange(buf)
+		if err == nil {
+			return !ss.Contains(uint32(change.TransactionID))
+		}
+		return false
+	}
 }

@@ -235,4 +235,27 @@ var _ = Describe("Driver tests", func() {
 		err = rows.Close()
 		Expect(err).Should(Succeed())
 	})
+
+	It("Bad SQL", func() {
+		_, err := db.Exec("this is not sql")
+		Expect(err).ShouldNot(Succeed())
+		_, err = db.Exec("This is not sql either")
+		Expect(err).ShouldNot(Succeed())
+		_, err = db.Query("select neither this")
+		Expect(err).ShouldNot(Succeed())
+	})
+
+	It("Bad params", func() {
+		_, err := db.Exec("insert into client_test (id) values($1)")
+		Expect(err).ShouldNot(Succeed())
+		_, err = db.Query("select id from client_test where id = $1")
+		Expect(err).ShouldNot(Succeed())
+		st, err := db.Prepare("insert into client_test (id) values($1)")
+		Expect(err).Should(Succeed())
+		defer st.Close()
+		_, err = st.Exec()
+		Expect(err).ShouldNot(Succeed())
+		_, err = st.Exec("one", "two", "three")
+		Expect(err).ShouldNot(Succeed())
+	})
 })

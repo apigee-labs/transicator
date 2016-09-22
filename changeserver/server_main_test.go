@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -17,7 +18,7 @@ import (
 )
 
 const (
-	debugTests      = true
+	debugTests      = false
 	replicationSlot = "change_server_test"
 	testDataDir     = "./changeservertestdata"
 )
@@ -26,6 +27,7 @@ var dbURL string
 var baseURL string
 var listener net.Listener
 var testServer *server
+var db *sql.DB
 
 func TestServer(t *testing.T) {
 	if debugTests {
@@ -44,8 +46,12 @@ func TestServer(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	// Listen on an anonymous port
 	var err error
+	db, err = sql.Open("transicator", dbURL)
+	Expect(err).Should(Succeed())
+	db.Driver().(*pgclient.PgDriver).SetIsolationLevel("repeatable read")
+
+	// Listen on an anonymous port
 	listener, err = net.ListenTCP("tcp", &net.TCPAddr{})
 	Expect(err).Should(Succeed())
 
@@ -89,15 +95,14 @@ var _ = AfterSuite(func() {
 	executeSQL(dropTableSQL)
 	// And delete the storage
 	testServer.delete()
+	if db != nil {
+		db.Close()
+	}
 })
 
 func executeSQL(sql string) {
 	fmt.Fprintf(GinkgoWriter, "Executing SQL: \"%s\"\n", sql)
-	dbConn, err := pgclient.Connect(dbURL)
-	Expect(err).Should(Succeed())
-	defer dbConn.Close()
-
-	_, _, err = dbConn.SimpleQuery(sql)
+	_, err := db.Exec(sql)
 	Expect(err).Should(Succeed())
 }
 

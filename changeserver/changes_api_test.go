@@ -22,9 +22,8 @@ var _ = Describe("Changes API Tests", func() {
 	It("First Change", func() {
 		lastTestSequence++
 		fmt.Fprintf(GinkgoWriter, "Inserting sequence %d\n", lastTestSequence)
-		executeSQL(fmt.Sprintf(
-			"insert into changeserver_test (sequence, _apid_scope) values(%d, 'foo')",
-			lastTestSequence))
+		db.Exec("insert into changeserver_test (sequence, _apid_scope) values($1, 'foo')",
+			lastTestSequence)
 
 		Eventually(func() bool {
 			bod := executeGet(fmt.Sprintf(
@@ -51,9 +50,9 @@ var _ = Describe("Changes API Tests", func() {
 	It("Next change", func() {
 		lastTestSequence++
 		fmt.Fprintf(GinkgoWriter, "Inserting sequence %d\n", lastTestSequence)
-		executeSQL(fmt.Sprintf(
-			"insert into changeserver_test (sequence, _apid_scope) values(%d, 'foo')",
-			lastTestSequence))
+		db.Exec(
+			"insert into changeserver_test (sequence, _apid_scope) values($1, 'foo')",
+			lastTestSequence)
 
 		Eventually(func() bool {
 			cl := getChanges(fmt.Sprintf(
@@ -69,12 +68,78 @@ var _ = Describe("Changes API Tests", func() {
 		}).Should(BeTrue())
 	})
 
+	It("Snapshot filter", func() {
+		st, err := db.Prepare(
+			"insert into changeserver_test (sequence, _apid_scope) values($1, 'foo')")
+		Expect(err).Should(Succeed())
+		defer st.Close()
+		lastTestSequence++
+		fmt.Fprintf(GinkgoWriter, "Inserting sequence %d\n", lastTestSequence)
+		_, err = st.Exec(lastTestSequence)
+
+		tx, err := db.Begin()
+		Expect(err).Should(Succeed())
+		tst := tx.Stmt(st)
+		defer tst.Close()
+		lastTestSequence++
+		fmt.Fprintf(GinkgoWriter, "Transactionally inserting sequence %d\n", lastTestSequence)
+		tst.Exec(lastTestSequence)
+		row := tx.QueryRow("select * from txid_current_snapshot()")
+		var snap string
+		err = row.Scan(&snap)
+		Expect(err).Should(Succeed())
+		err = tx.Commit()
+		Expect(err).Should(Succeed())
+
+		finalChangeSequence := lastChangeSequence
+
+		// Without snapshot ID, should get two changes
+		Eventually(func() bool {
+			cl := getChanges(fmt.Sprintf(
+				"%s/changes?since=%s&scope=foo", baseURL, lastChangeSequence))
+			if len(cl.Changes) < 2 {
+				return false
+			}
+			fmt.Fprintf(GinkgoWriter, "Seq 0: %s %d\n",
+				cl.Changes[0].NewRow["sequence"].Value, cl.Changes[0].TransactionID)
+			fmt.Fprintf(GinkgoWriter, "Seq 1: %s %d\n",
+				cl.Changes[1].NewRow["sequence"].Value, cl.Changes[1].TransactionID)
+			if compareSequence(cl, 0, lastTestSequence-1) &&
+				compareSequence(cl, 1, lastTestSequence) {
+				finalChangeSequence = cl.Changes[1].GetSequence()
+				return true
+			}
+			return false
+		}).Should(BeTrue())
+
+		// With snapshot ID, should get only the second change
+		Eventually(func() bool {
+			fmt.Fprintf(GinkgoWriter, "Reading with snapshot %s\n", snap)
+			cl := getChanges(fmt.Sprintf(
+				"%s/changes?since=%s&scope=foo&snapshot=%s",
+				baseURL, lastChangeSequence, snap))
+			if len(cl.Changes) < 1 {
+				return false
+			}
+			fmt.Fprintf(GinkgoWriter, "Seq 0: %s %d\n",
+				cl.Changes[0].NewRow["sequence"].Value, cl.Changes[0].TransactionID)
+			if compareSequence(cl, 0, lastTestSequence) {
+				return true
+			}
+			return false
+		}).Should(BeTrue())
+
+		lastChangeSequence = finalChangeSequence
+	})
+
 	It("Group of changes", func() {
+		stmt, err := db.Prepare(
+			"insert into changeserver_test (sequence, _apid_scope) values($1, 'foo')")
+		defer stmt.Close()
+		Expect(err).Should(Succeed())
 		for i := 0; i <= 3; i++ {
 			lastTestSequence++
-			executeSQL(fmt.Sprintf(
-				"insert into changeserver_test (sequence, _apid_scope) values(%d, 'foo')",
-				lastTestSequence))
+			stmt.Exec(lastTestSequence)
 		}
 		fmt.Fprintf(GinkgoWriter, "Last inserted sequence %d\n", lastTestSequence)
 
@@ -146,9 +211,9 @@ var _ = Describe("Changes API Tests", func() {
 		Expect(cl.Changes).Should(BeEmpty())
 
 		lastTestSequence++
-		executeSQL(fmt.Sprintf(
-			"insert into changeserver_test (sequence, _apid_scope) values(%d, 'foo')",
-			lastTestSequence))
+		db.Exec(
+			"insert into changeserver_test (sequence, _apid_scope) values($1, 'foo')",
+			lastTestSequence)
 
 		cl = <-resultChan
 		Expect(len(cl.Changes)).Should(Equal(1))
@@ -172,9 +237,9 @@ var _ = Describe("Changes API Tests", func() {
 		Expect(cl.Changes).Should(BeEmpty())
 
 		lastTestSequence++
-		executeSQL(fmt.Sprintf(
-			"insert into changeserver_test (sequence, _apid_scope) values(%d, '')",
-			lastTestSequence))
+		db.Exec(
+			"insert into changeserver_test (sequence, _apid_scope) values($1, '')",
+			lastTestSequence)
 
 		cl = <-resultChan
 		Expect(len(cl.Changes)).Should(Equal(1))
@@ -198,9 +263,9 @@ var _ = Describe("Changes API Tests", func() {
 		Expect(cl.Changes).Should(BeEmpty())
 
 		lastTestSequence++
-		executeSQL(fmt.Sprintf(
-			"insert into changeserver_test (sequence, _apid_scope) values(%d, 'bar')",
-			lastTestSequence))
+		db.Exec(
+			"insert into changeserver_test (sequence, _apid_scope) values($1, 'bar')",
+			lastTestSequence)
 
 		cl = <-resultChan
 		Expect(len(cl.Changes)).Should(Equal(1))

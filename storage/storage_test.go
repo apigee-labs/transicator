@@ -120,6 +120,10 @@ var _ = Describe("Storage Main Test", func() {
 		testGetSequence("a", 3, 0, 100, [][]byte{})
 
 		// Read with limit
+		testGetSequenceFilter("a", 0, 0, 2, [][]byte{val2, val2}, val1)
+		testGetSequenceFilter("a", 0, 0, 1, [][]byte{val2}, val1)
+
+		// Read with limit and filter
 		testGetSequence("a", 0, 0, 4, [][]byte{val1, val2, val1, val2})
 		testGetSequence("a", 0, 0, 3, [][]byte{val1, val2, val1})
 		testGetSequence("a", 0, 0, 2, [][]byte{val1, val2})
@@ -146,7 +150,23 @@ var _ = Describe("Storage Main Test", func() {
 
 func testGetSequence(tag string, lsn int64,
 	index int32, limit int, expected [][]byte) {
-	ret, err := testDB.GetEntries(tag, lsn, index, limit)
+	ret, err := testDB.GetEntries(tag, lsn, index, limit, nil)
+	Expect(err).Should(Succeed())
+	Expect(len(ret)).Should(Equal(len(expected)))
+	for i := range expected {
+		Expect(bytes.Equal(expected[i], ret[i])).Should(BeTrue())
+	}
+}
+
+func testGetSequenceFilter(tag string, lsn int64,
+	index int32, limit int, expected [][]byte, rejected []byte) {
+	ret, err := testDB.GetEntries(tag, lsn, index, limit,
+		func(rej []byte) bool {
+			if bytes.Equal(rej, rejected) {
+				return false
+			}
+			return true
+		})
 	Expect(err).Should(Succeed())
 	Expect(len(ret)).Should(Equal(len(expected)))
 	for i := range expected {
@@ -156,7 +176,7 @@ func testGetSequence(tag string, lsn int64,
 
 func testGetSequences(tags []string, lsn int64,
 	index int32, limit int, expected [][]byte) {
-	ret, err := testDB.GetMultiEntries(tags, lsn, index, limit)
+	ret, err := testDB.GetMultiEntries(tags, lsn, index, limit, nil)
 	Expect(err).Should(Succeed())
 	Expect(len(ret)).Should(Equal(len(expected)))
 	for i := range expected {
