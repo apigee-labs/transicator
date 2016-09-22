@@ -16,6 +16,7 @@ import (
 
 const (
 	jsonContent     = "application/json"
+	formContent     = "application/www-form-urlencoded"
 	textContent     = "text/plain"
 	lastSequenceKey = "_ls"
 	scopeField      = "_apid_scope"
