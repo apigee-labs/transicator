@@ -1,12 +1,13 @@
 ALLDEPS = \
  *.go
 
-all: snapshotserver
+docker:
+	./extract_binary.sh
 
-snapshotserver: $(ALLDEPS)
-	go build -o $@ ./
+local: $(ALLDEPS)
+	go build -o snapshotserver ./
 
-test: snapshotserver
+localtest: local
 	go test -v `glide nv`
 
 clean:

@@ -18,7 +18,7 @@
 
 FROM golang:1.7.1-alpine
 
-COPY changeserver .
+COPY changeserver /
 COPY metadata/apigee-file.yaml /
 
 EXPOSE 9000
