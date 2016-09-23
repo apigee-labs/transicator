@@ -4,7 +4,7 @@ all: ./bin/changeserver ./bin/snapshotserver
 	go build -o $@ ./changeserver
 
 ./bin/snapshotserver: ./bin ./*/*.go
-	go build -o $@ ./snapshot
+	go build -o $@ ./snapshotserver
 
 ./bin:
 	mkdir bin
@@ -14,4 +14,5 @@ test:
 
 clean:
 	rm -f bin/changeserver
+	rm -f bin/snapshotserver
 
