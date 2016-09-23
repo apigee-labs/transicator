@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y python-software-properties software-pro
 
 
 RUN mkdir /tmp/postgressplugin
-COPY pgoutput /tmp/postgressplugin/pgoutput
+COPY ../pgoutput /tmp/postgressplugin/pgoutput
 
 RUN (cd /tmp/postgressplugin/pgoutput; make; make install)
 
