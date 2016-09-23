@@ -32,6 +32,27 @@ var _ = Describe("Encoding Tests", func() {
 		ms := ss.Marshal()
 		Expect(ms).Should(MatchJSON(s))
 	})
+
+	It("Encode changes", func() {
+		s := readFile("./testfiles/changelist.json")
+		ss, err := UnmarshalChangeList(s)
+		Expect(err).Should(Succeed())
+
+		for _, change := range ss.Changes {
+			proto := change.MarshalProto()
+			nc, err := UnmarshalChangeProto(proto)
+			Expect(err).Should(Succeed())
+			Expect(nc.Sequence).Should(Equal(change.Sequence))
+			Expect(nc.ChangeSequence).Should(Equal(change.ChangeSequence))
+			Expect(nc.CommitSequence).Should(Equal(change.CommitSequence))
+			Expect(nc.CommitIndex).Should(Equal(change.CommitIndex))
+			Expect(nc.TransactionID).Should(Equal(change.TransactionID))
+			Expect(nc.Operation).Should(Equal(change.Operation))
+			Expect(nc.Table).Should(Equal(change.Table))
+			Expect(nc.NewRow).Should(Equal(change.NewRow))
+			Expect(nc.OldRow).Should(Equal(change.OldRow))
+		}
+	})
 })
 
 func readFile(name string) []byte {

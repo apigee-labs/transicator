@@ -1,0 +1,19 @@
+package common;
+
+message ColumnPb {
+  required string name = 1;
+  required string value = 2;
+  optional int32 type = 3;
+}
+
+message ChangePb {
+  required int32 operation = 1;
+  required string table = 2;
+  optional string sequence = 3;
+  optional uint64 commitSequence = 4;
+  optional uint64 changeSequence = 5;
+  optional uint32 commitIndex = 6;
+  optional uint32 transactionID = 7;
+  repeated ColumnPb newColumns = 8;
+  repeated ColumnPb oldColumns = 9;
+}

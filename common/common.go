@@ -1,6 +1,7 @@
 package common
 
 //go:generate stringer -type Operation .
+//go:generate protoc --go_out=. transicator.proto
 
 /*
 Operation lists the types of operations on each row in a change list.
