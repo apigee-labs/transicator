@@ -11,8 +11,10 @@ jenkins_ci:
 
   build_commands:
     # build commands not needed here, handled in Dockerfile
-    - "glide install"
-    - "GOOS=linux go build -o snapshotserver"
+#    - "glide install"
+#    - "GOOS=linux go build -o snapshotserver"
+    - "sudo ./extract_binary.sh"
+
   unit_test:
     - "echo go test ./discovery ./storage ./raft"
   # functional tests
@@ -45,8 +47,8 @@ rpm_info:
 
   # These dependecies have to be able to be compatible with "yum install <comp>"
   #
-  #depends:
-  #  - gcc
+  depends:
+    - gcc
 
   # environment variables needed by the application
   # VAR1 will assume the user supplies the variable beforehand

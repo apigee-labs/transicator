@@ -1,0 +1,37 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: snapshotserver
+  labels:
+    name: snapshotserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      component: snapshotserver
+  template:
+    metadata:
+      labels:
+        component: snapshotserver
+    spec:
+      imagePullSecrets:
+      - name: ecr-key
+      containers:
+      - name: snapshotserver
+        image: 977777657611.dkr.ecr.us-west-2.amazonaws.com/snapshotservice 
+        imagePullPolicy: Always
+        env:
+          - name: DEPLOY_STATE
+            value: "PROD"
+          - name: ECR_SECRET
+            value: "true"
+          - name: ECR_SECRET_NAME
+            value: "ecr-key"
+          - name: AUTH_API_HOST
+            value: "api.e2e.apigee.net"
+          - name: SHIPYARD_HOST
+            value: "shipyard.e2e.apigee.net"
+          - name: INTERNAL_ROUTER_HOST
+            value: "internal-router.apigee"
+        ports:
+          - containerPort: 9000
