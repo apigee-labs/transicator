@@ -18,7 +18,7 @@ spec:
       - name: ecr-key
       containers:
       - name: postgres
-        image: 977777657611.dkr.ecr.us-west-2.amazonaws.com/postgres
+        image: 977777657611.dkr.ecr.us-west-2.amazonaws.com/postgresservice
         imagePullPolicy: Always
         env:
           - name: DEPLOY_STATE
