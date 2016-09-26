@@ -34,4 +34,4 @@ spec:
           - name: INTERNAL_ROUTER_HOST
             value: "internal-router.apigee"
         ports:
-          - containerPort: 9000
+          - containerPort: 5432
