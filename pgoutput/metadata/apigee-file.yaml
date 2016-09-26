@@ -23,7 +23,7 @@ jenkins_ci:
 
 rpm_info:
   # REQUIRED: The name of the application
-  name: apigeepostgres 
+  name: postgres
   description: DB for APIGEE products.
   version: 1.0.0
   type: app
