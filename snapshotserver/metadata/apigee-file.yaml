@@ -43,7 +43,7 @@ rpm_info:
   # these are the spaces separate arguements that you would use with a base start command
   # For example, "./asf-go-example" would be run as "./asf-go-example ARG1"
   #
-  start_args: "-p 9000 -u postgres://postgres@192.168.107.59:5432/postgresservice"
+  start_args: "-p 9000 -u postgres://docker@977777657611.dkr.ecr.us-west-2.amazonaws.com:5432/postgres"
 
   # These dependecies have to be able to be compatible with "yum install <comp>"
   #
