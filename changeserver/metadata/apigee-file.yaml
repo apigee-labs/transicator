@@ -49,7 +49,7 @@ rpm_info:
   # these are the spaces separate arguements that you would use with a base start command
   # For example, "./asf-go-example" would be run as "./asf-go-example ARG1"
   #
-  start_args: "-p 9000 -d ./data -u postgres://docker@localhost/postgres -s replication1"
+  start_args: "-p 9000 -d ./data -u postgres://docker@10.1.15.100/docker -s replication"
 
   # These dependecies have to be able to be compatible with "yum install <comp>"
   #
