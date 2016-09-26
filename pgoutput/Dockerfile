@@ -14,7 +14,7 @@ RUN echo "deb http://apt.postgresql.org/pub/repos/apt/ precise-pgdg main" > /etc
 
 # Install ``python-software-properties``, ``software-properties-common`` and PostgreSQL 9.5
 
-RUN apt-get update && apt-get install -y python-software-properties software-properties-common postgresql-9.5 postgresql-client-9.5 postgresql-contrib-9.5 build-essential python-psycopg2 libpq-dev postgresql-server-dev-all
+RUN apt-get update && apt-get install -y python-software-properties software-properties-common postgresql-9.5 postgresql-client-9.5 postgresql-contrib-9.5 build-essential python-psycopg2 libpq-dev postgresql-server-dev-all iputils-ping
 
 
 RUN mkdir /tmp/postgressplugin
