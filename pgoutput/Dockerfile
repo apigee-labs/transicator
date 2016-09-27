@@ -37,7 +37,7 @@ RUN    /etc/init.d/postgresql start &&\
 # Adjust PostgreSQL configuration so that remote connections to the
 # database are possible.
 RUN echo "host all  all    0.0.0.0/0  trust" >> /etc/postgresql/9.5/main/pg_hba.conf
-RUN echo "host    replication     all        127.0.0.1/32            trust" >> /etc/postgresql/9.5/main/pg_hba.conf
+RUN echo "host    replication     all  0.0.0.0/0   trust" >> /etc/postgresql/9.5/main/pg_hba.conf
 
 # Update /etc/postgresql/9.5/main/postgresql.conf
 RUN echo "listen_addresses='*'" >> /etc/postgresql/9.5/main/postgresql.conf
