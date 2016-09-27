@@ -13,4 +13,4 @@ spec:
   - port: 5432
     targetPort: 5432
   selector:
-    component: postgresservice
+    component: postgres
