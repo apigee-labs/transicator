@@ -3,6 +3,7 @@ ALLDEPS = \
 
 docker:
 	./extract_binary.sh
+	./local_docker.sh
 
 local: $(ALLDEPS)
 	go build -o snapshotserver ./

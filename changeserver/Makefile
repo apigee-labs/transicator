@@ -6,6 +6,7 @@ local: $(ALLDEPS)
 
 docker:
 	./extract_binary.sh
+	./local_docker.sh
 
 localtest: local
 	go test -v `glide nv`

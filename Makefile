@@ -16,3 +16,7 @@ clean:
 	rm -f bin/changeserver
 	rm -f bin/snapshotserver
 
+docker:
+	make -C ./changeserver docker
+	make -C ./snapshotserver docker
+	./buildpostgresdocker.sh

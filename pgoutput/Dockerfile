@@ -46,8 +46,6 @@ RUN echo "max_wal_senders = 3" >> /etc/postgresql/9.5/main/postgresql.conf
 RUN echo "max_replication_slots = 3" >> /etc/postgresql/9.5/main/postgresql.conf
 RUN echo "port = 5432" >> /etc/postgresql/9.5/main/postgresql.conf
 
-
-
 # Expose the PostgreSQL port
 EXPOSE 5432
 

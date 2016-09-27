@@ -35,4 +35,4 @@ spec:
             value: "internal-router.apigee"
         ports:
           - containerPort: 9000
-        command: ["/snapshotserver", "-p", "9000", "-u", "postgres://docker@10.1.15.207:5432/docker"]
+        command: ["/snapshotserver", "-p", "9000", "-u", "postgres://docker@10.1.15.34:5432/docker"]
