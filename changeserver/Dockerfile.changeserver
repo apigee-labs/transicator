@@ -29,7 +29,7 @@ RUN \
 
 
 RUN \
-    (cd /go/src/github.com/30x/transicator/changeserver;) \
+    (cd /go/src/github.com/30x/transicator/changeserver;glide install) \
  && (cd /go/src/github.com/30x/transicator/changeserver; go build -o /changeserver) \
  && rm -r /go
 
