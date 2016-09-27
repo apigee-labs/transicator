@@ -15,3 +15,4 @@ COPY metadata/apigee-file.yaml /
 
 EXPOSE 9000
 
+ENTRYPOINT ["/snapshotserver", "-p", "9000", "-u", "postgres://docker@10.1.15.207:5432/docker"]

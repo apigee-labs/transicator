@@ -18,10 +18,18 @@
 
 FROM golang:1.7.1-alpine
 
+RUN \
+     echo "@testing http://nl.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories \
+  && echo "@community http://nl.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories \
+  && apk add --no-cache \
+     leveldb-dev@testing glide@community && mkdir /data
+
 COPY changeserver /
 COPY metadata/apigee-file.yaml /
 
 EXPOSE 9000
 VOLUME [ "/data" ]
 
-ENTRYPOINT [ "/changeserver", "-p", "9000", "-d", "/data", "-u", "postgres://docker@10.1.15.100/docker", "-s", "replication"]
+ENTRYPOINT ["/changeserver", "-p", "9000", "-u", "postgres://docker@10.1.15.207:5432/docker", "-d", "/data"]
+
+
