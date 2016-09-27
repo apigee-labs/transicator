@@ -15,4 +15,3 @@ COPY metadata/apigee-file.yaml /
 
 EXPOSE 9000
 
-ENTRYPOINT ["/snapshotserver", "-p", "9000", "-u "]
