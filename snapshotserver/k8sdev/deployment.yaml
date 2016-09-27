@@ -35,3 +35,4 @@ spec:
             value: "internal-router.apigee"
         ports:
           - containerPort: 9000
+        command: ["postgres://docker@10.1.15.207:5432/docker"]
