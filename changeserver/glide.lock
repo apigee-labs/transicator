@@ -1,0 +1,75 @@
+hash: 7f142a56b19b0aa3b8f0941f1a9c14335761b3919041b3ad8d3e73fa58581de3
+updated: 2016-09-28T13:31:56.607437021-07:00
+imports:
+- name: cloud.google.com/go
+  version: 66958b98ab20fe964de6f30d7417e93ea3ca9910
+  subpackages:
+  - compute/metadata
+  - internal
+- name: github.com/30x/transicator
+  version: 85e799bf919aa561c049f1a2dff68c2321d7aaaf
+  subpackages:
+  - common
+  - replication
+  - storage
+  - pgclient
+- name: github.com/golang/gddo
+  version: aa8084e58a66f26ac6f479a75f0da68ed2067d4e
+  subpackages:
+  - httputil
+  - httputil/header
+- name: github.com/golang/protobuf
+  version: 87c000235d3d852c1628dc9490cd21ab36a7d69f
+  subpackages:
+  - proto
+- name: github.com/gorilla/mux
+  version: 757bef944d0f21880861c2dd9c871ca543023cba
+- name: github.com/julienschmidt/httprouter
+  version: 8c199fb6259ffc1af525cc3ad52ee60ba8359669
+- name: github.com/Sirupsen/logrus
+  version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
+- name: github.com/tylerb/graceful
+  version: 50a48b6e73fcc75b45e22c05b79629a67c79e938
+- name: golang.org/x/net
+  version: f09c4662a0bd6bd8943ac7b4931e185df9471da4
+  subpackages:
+  - context
+  - context/ctxhttp
+- name: golang.org/x/sys
+  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  subpackages:
+  - unix
+testImports:
+- name: github.com/onsi/ginkgo
+  version: 45a5f6ffb2a14e4f29698c16ae4c0a34018a8951
+  subpackages:
+  - config
+  - internal/codelocation
+  - internal/failer
+  - internal/remote
+  - internal/suite
+  - internal/testingtproxy
+  - internal/writer
+  - reporters
+  - reporters/stenographer
+  - types
+  - internal/containernode
+  - internal/leafnodes
+  - internal/spec
+  - internal/specrunner
+- name: github.com/onsi/gomega
+  version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
+  subpackages:
+  - internal/assertion
+  - internal/asyncassertion
+  - internal/testingtsupport
+  - matchers
+  - types
+  - internal/oraclematcher
+  - format
+  - matchers/support/goraph/bipartitegraph
+  - matchers/support/goraph/edge
+  - matchers/support/goraph/node
+  - matchers/support/goraph/util
+- name: gopkg.in/yaml.v2
+  version: a5b47d31c556af34a302ce5d659e6fea44d90de0

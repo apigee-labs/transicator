@@ -1,0 +1,29 @@
+# Build and run the snapshot server.
+#
+# This image will launch the server with the default port (port 9000) open.
+#
+# To run, add the "-u" argument, which takes a postgres URL.
+#
+# For instance:
+#
+# docker run --rm -t snapshotserver -u postgres://user:pass@host/databasename?ssl=false
+
+FROM golang:1.7.1-alpine
+
+COPY . /go/src/github.com/30x/transicator/snapshotserver
+
+# Add necessary non-standard repositories for APK
+# then install "glide" tool to get our dependencies.
+RUN \
+     echo "@community http://nl.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories \
+  && apk add --no-cache \
+     git glide@community
+
+RUN \
+    (cd /go/src/github.com/30x/transicator/snapshotserver; glide install) \
+ && (cd /go/src/github.com/30x/transicator/snapshotserver; go build -o /snapshotserver) \
+ && rm -r /go
+
+EXPOSE 9000
+
+ENTRYPOINT [ "/snapshotserver", "-p", "9000"]
