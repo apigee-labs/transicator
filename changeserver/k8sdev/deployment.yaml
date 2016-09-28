@@ -35,4 +35,4 @@ spec:
             value: "internal-router.apigee"
         ports:
           - containerPort: 9000
-        command: ["/changeserver", "-p", "9000", "-d", "/data", "-s", "replication", "-u", "postgres://docker@10.1.15.207:5432/docker"]
+        command: ["/changeserver", "-p", "9000", "-d", "/data", "-s", "replication", "-u", "postgres://docker@10.1.15.220:5432/docker"]

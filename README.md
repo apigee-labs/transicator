@@ -157,14 +157,18 @@ brew info postgresql
     brew install leveldb
 
 ## Build and install PG logical replication output plugin
+
 ```
-cd 30x/transicator/pgoutput/
-make install
+    cd 30x/transicator/pgoutput/
+    make install
 ```
 
 ## Build changeserver and snapshotserver (non Docker):
 
+```
+    cd 30x/transicator/
     make
+```
 
 ## Build Docker Containers for Changeserver, snapshotserver and postgres
 
@@ -194,10 +198,12 @@ changeserver is removed, its slot must be removed from the database,
 or the database will grow its transaction log forever and not clean it
 up, and eventually fail.
 
+```
     cd  30x/transicator/changeserver
     docker run --rm -it changeserver -u POSTGRES_URL -s SLOT_NAME
     cd 30x/transicator/snapshotserver
     docker run --rm -it snapshotserver -u POSTGRES_URL
+```
 
 ## Run the docker container in E2E
 
