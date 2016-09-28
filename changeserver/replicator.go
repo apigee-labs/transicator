@@ -47,7 +47,7 @@ func (s *server) handleChange(c *common.Change, firstChange common.Sequence) com
 	if changeSeq.Compare(firstChange) > 0 {
 		scope := getScope(c)
 		log.Debugf("Received change %d for scope %s", c.ChangeSequence, scope)
-		dataBuf := c.Marshal()
+		dataBuf := encodeChangeProto(c)
 		s.db.PutEntryAndMetadata(
 			scope, c.CommitSequence, c.CommitIndex, dataBuf,
 			lastSequenceKey, changeSeq.Bytes())

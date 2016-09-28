@@ -105,7 +105,11 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 	changeList := common.ChangeList{}
 
 	for _, e := range entries {
-		change, _ := common.UnmarshalChange(e)
+		change, err := decodeChangeProto(e)
+		if err != nil {
+			sendError(resp, req, http.StatusInternalServerError,
+				fmt.Sprintf("Invalid data in database: %s", err))
+		}
 		// Database doesn't have value of "Sequence" in it
 		change.Sequence = change.GetSequence().String()
 		changeList.Changes = append(changeList.Changes, *change)
@@ -117,9 +121,9 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 
 func makeSnapshotFilter(ss *replication.Snapshot) func([]byte) bool {
 	return func(buf []byte) bool {
-		change, err := common.UnmarshalChange(buf)
+		txid, err := decodeChangeTXID(buf)
 		if err == nil {
-			return !ss.Contains(uint32(change.TransactionID))
+			return !ss.Contains(txid)
 		}
 		return false
 	}

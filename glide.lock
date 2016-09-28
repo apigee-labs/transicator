@@ -1,5 +1,5 @@
-hash: 5ad06c688baaa2866316e46db0d0b420729a0a80b117a159ae175db06d12dee0
-updated: 2016-09-16T13:31:45.651639282-07:00
+hash: 7f142a56b19b0aa3b8f0941f1a9c14335761b3919041b3ad8d3e73fa58581de3
+updated: 2016-09-26T20:43:50.384512845-07:00
 imports:
 - name: cloud.google.com/go
   version: b38c00ee7a6ce8cb087244dfb398ef576833ef8c
@@ -11,6 +11,10 @@ imports:
   subpackages:
   - httputil
   - httputil/header
+- name: github.com/golang/protobuf
+  version: 87c000235d3d852c1628dc9490cd21ab36a7d69f
+  subpackages:
+  - proto
 - name: github.com/gorilla/context
   version: 08b5f424b9271eedf6f9f0ce86cb9396ed337a42
 - name: github.com/gorilla/mux

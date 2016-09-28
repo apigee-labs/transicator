@@ -1,4 +1,4 @@
-package: github.com/apigee-internal/transicator
+package: github.com/30x/transicator
 import:
 - package: github.com/Sirupsen/logrus
   version: ~0.10.0
@@ -10,3 +10,6 @@ import:
   subpackages:
   - httputil
 - package: github.com/gorilla/mux
+- package: github.com/golang/protobuf
+  subpackages:
+  - proto
