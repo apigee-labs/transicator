@@ -4,6 +4,7 @@ ALLDEPS = \
 docker:
 	./extract_binary.sh
 	./local_docker.sh
+	rm -f ./snapshotserver
 
 local: $(ALLDEPS)
 	go build -o snapshotserver ./
@@ -13,4 +14,3 @@ localtest: local
 
 clean:
 	rm -f ./snapshotserver
-

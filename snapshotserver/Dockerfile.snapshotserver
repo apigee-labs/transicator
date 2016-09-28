@@ -10,7 +10,7 @@
 
 FROM golang:1.7.1-alpine
 
-COPY . /go/src/github.com/30x/transicator/snapshotserver
+COPY . /go/src/github.com/30x/transicator
 
 # Add necessary non-standard repositories for APK
 # then install "glide" tool to get our dependencies.
@@ -20,7 +20,7 @@ RUN \
      git glide@community
 
 RUN \
-    (cd /go/src/github.com/30x/transicator/snapshotserver; glide install) \
+    (cd /go/src/github.com/30x/transicator; glide install) \
  && (cd /go/src/github.com/30x/transicator/snapshotserver; go build -o /snapshotserver) \
  && rm -r /go
 

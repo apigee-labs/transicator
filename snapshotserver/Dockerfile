@@ -8,7 +8,7 @@
 #
 # docker run --rm -t snapshotserver -u postgres://user:pass@host/databasename?ssl=false
 
-FROM golang:1.7.1-alpine
+FROM alpine:3.4
 
 COPY snapshotserver /
 COPY metadata/apigee-file.yaml /

@@ -18,7 +18,7 @@
 
 FROM golang:1.7.1-alpine
 
-COPY . /go/src/github.com/30x/transicator/changeserver
+COPY . /go/src/github.com/30x/transicator
 
 # We need both "testing" and "community" repositories here.
 RUN \
@@ -29,7 +29,6 @@ RUN \
 
 
 RUN \
-    (cd /go/src/github.com/30x/transicator/changeserver;glide install) \
+    (cd /go/src/github.com/30x/transicator;glide install) \
  && (cd /go/src/github.com/30x/transicator/changeserver; go build -o /changeserver) \
  && rm -r /go
-

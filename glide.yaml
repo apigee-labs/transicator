@@ -10,11 +10,10 @@ import:
   subpackages:
   - httputil
 - package: github.com/gorilla/mux
+- package: github.com/gorilla/context
 - package: github.com/golang/protobuf
   subpackages:
   - proto
-- package: github.com/30x/transicator
-  subpackages:
-  - common
-  - replication
-  - storage
+testImport:
+- package: github.com/onsi/ginkgo
+- package: github.com/onsi/gomega

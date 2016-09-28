@@ -1,8 +1,8 @@
-hash: 7f142a56b19b0aa3b8f0941f1a9c14335761b3919041b3ad8d3e73fa58581de3
-updated: 2016-09-26T20:43:50.384512845-07:00
+hash: e9ef84dd0299fb0e0c67d9a918ed12b084a3e549cf9d390f3723f82917fdfb5f
+updated: 2016-09-28T14:54:24.704806655-07:00
 imports:
 - name: cloud.google.com/go
-  version: b38c00ee7a6ce8cb087244dfb398ef576833ef8c
+  version: ed4db6589336086bbad6c64c64ad067e362ba394
   subpackages:
   - compute/metadata
   - internal
@@ -18,7 +18,7 @@ imports:
 - name: github.com/gorilla/context
   version: 08b5f424b9271eedf6f9f0ce86cb9396ed337a42
 - name: github.com/gorilla/mux
-  version: 0a192a193177452756c362c20087ddafcf6829c4
+  version: 757bef944d0f21880861c2dd9c871ca543023cba
 - name: github.com/julienschmidt/httprouter
   version: 8c199fb6259ffc1af525cc3ad52ee60ba8359669
 - name: github.com/Sirupsen/logrus
@@ -26,17 +26,17 @@ imports:
 - name: github.com/tylerb/graceful
   version: 50a48b6e73fcc75b45e22c05b79629a67c79e938
 - name: golang.org/x/net
-  version: 71a035914f99bb58fe82eac0f1289f10963d876c
+  version: f09c4662a0bd6bd8943ac7b4931e185df9471da4
   subpackages:
   - context
   - context/ctxhttp
 - name: golang.org/x/sys
-  version: a646d33e2ee3172a661fc09bca23bb4889a41bc8
+  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
   subpackages:
   - unix
 testImports:
 - name: github.com/onsi/ginkgo
-  version: 462326b1628e124b23f42e87a8f2750e3c4e2d24
+  version: 45a5f6ffb2a14e4f29698c16ae4c0a34018a8951
   subpackages:
   - config
   - internal/codelocation
@@ -53,7 +53,7 @@ testImports:
   - internal/spec
   - internal/specrunner
 - name: github.com/onsi/gomega
-  version: c90bd38f8da6e92f8b114953db2f0ad7361fb4b4
+  version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
   subpackages:
   - internal/assertion
   - internal/asyncassertion
@@ -67,4 +67,4 @@ testImports:
   - matchers/support/goraph/node
   - matchers/support/goraph/util
 - name: gopkg.in/yaml.v2
-  version: e4d366fc3c7938e2958e662b4258c7a89e1f0e3e
+  version: a5b47d31c556af34a302ce5d659e6fea44d90de0
