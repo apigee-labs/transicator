@@ -10,7 +10,7 @@ all: ./bin/changeserver ./bin/snapshotserver
 	mkdir bin
 
 test:
-	go test ./replication ./common ./storage ./pgclient ./snapshot ./changeserver
+	go test ./replication ./common ./storage ./pgclient ./snapshotserver ./changeserver
 
 clean:
 	rm -f bin/changeserver

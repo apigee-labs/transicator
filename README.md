@@ -162,9 +162,26 @@ cd 30x/transicator/pgoutput/
 make install
 ```
 
-## Build changeserver and snapshotserver:
+## Build changeserver and snapshotserver (non Docker):
 
     make
+
+## Build Docker Containers for Changeserver, snapshotserver and postgres
+
+```
+    cd 30x/transicator/
+    make docker
+```
+Optionally, you can also build docker inside the respective modules.
+For example:
+
+```
+    cd 30x/transicator/changeserver
+    make docker
+```
+
+This will build the docker containers in their respective directories,
+which then can be run locally.
 
 ## Run them as docker containers:
 
@@ -177,10 +194,52 @@ changeserver is removed, its slot must be removed from the database,
 or the database will grow its transaction log forever and not clean it
 up, and eventually fail.
 
-    docker build -t changeserver -f Dockerfile.changeserver .
+    cd  30x/transicator/changeserver
     docker run --rm -it changeserver -u POSTGRES_URL -s SLOT_NAME
-    docker build -t snapshotserver -f Dockerfile.snapshotserver .
+    cd 30x/transicator/snapshotserver
     docker run --rm -it snapshotserver -u POSTGRES_URL
+
+## Run the docker container in E2E
+
+On your laptop, install the SSL Keys to access the E2E.
+
+```
+    https://docs.google.com/document/d/1_Sz_duPEKhhnJRJ_YQ5J7NeF5mtDHc1eSPN88RM0UCg/edit
+```
+
+Ensure, binary image (postgres, changeserver or snapshotserver) is docker promoted in E2E,
+by building the source code in E2E.
+
+```
+    http://jenkins-hackathon.aeip.apigee.net/job/build-go-ci/
+```
+
+The services for Postgres, Snapshotserver and Changeserver are alreay running and can
+be verified by:
+
+```
+   kubectl get services
+```
+The pods (for  Postgres, Snapshotserver and Changeserver) themselves can be started
+and stopped. The Cluster IP address should be reachable between pods.
+
+```
+cd  30x/transicator/changeserver
+kubectl delete -f k8sdev/deployment.yaml
+kubectl create -f k8sdev/deployment.yaml
+```
+
+```
+cd  30x/transicator/snapshotserver
+kubectl delete -f k8sdev/deployment.yaml
+kubectl create -f k8sdev/deployment.yaml
+```
+
+```
+cd  30x/transicator/pgoutput
+kubectl delete -f k8sdev/deployment.yaml
+kubectl create -f k8sdev/deployment.yaml
+```
 
 ## To delete a replication slot:
 
