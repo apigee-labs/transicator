@@ -25,13 +25,23 @@ func (d *PgDriver) Open(url string) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+	if d.isolationLevel != "" {
+		_, err = pgc.SimpleExec(
+			fmt.Sprintf("set session default_transaction_isolation =  '%s'", d.isolationLevel))
+		if err != nil {
+			return nil, err
+		}
+	}
 	return &PgDriverConn{
 		driver: d,
 		conn:   pgc,
 	}, nil
 }
 
-// SetIsolationLevel controls what is passed to the "begin" statement
+// SetIsolationLevel ensures that all connections opened by this driver have
+// the specified isolation level. It will only affect connections opened
+// after it was called, so callers should call it before executing any
+// transactions
 func (d *PgDriver) SetIsolationLevel(level string) {
 	d.isolationLevel = level
 }
@@ -88,15 +98,7 @@ func (c *PgDriverConn) Close() error {
 
 // Begin just runs the SQL "begin" statement
 func (c *PgDriverConn) Begin() (driver.Tx, error) {
-	var sql string
-
-	if c.driver.isolationLevel == "" {
-		sql = "begin"
-	} else {
-		sql = fmt.Sprintf("begin isolation level %s", c.driver.isolationLevel)
-	}
-
-	_, err := c.conn.SimpleExec(sql)
+	_, err := c.conn.SimpleExec("begin")
 	if err != nil {
 		return nil, err
 	}

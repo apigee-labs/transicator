@@ -69,6 +69,7 @@ static void print_literal(StringInfo s, Oid typid, char *outputstr)
 static void tuple_to_stringinfo(StringInfo s, TupleDesc tupdesc, HeapTuple tuple)
 {
 	int			natt;
+  int     first = 1;
 
 	/* print all columns individually */
 	for (natt = 0; natt < tupdesc->natts; natt++)
@@ -106,7 +107,9 @@ static void tuple_to_stringinfo(StringInfo s, TupleDesc tupdesc, HeapTuple tuple
       continue;
     }
 
-    if (natt > 0) {
+    if (first) {
+      first = 0;
+    } else {
       appendStringInfoChar(s, ',');
     }
     appendStringInfo(s, "\"%s\":{\"type\":%i,\"value\":",

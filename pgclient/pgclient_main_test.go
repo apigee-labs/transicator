@@ -10,6 +10,10 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+const (
+	debugTests = false
+)
+
 var dbURL string
 
 func TestPGClient(t *testing.T) {
@@ -18,7 +22,9 @@ func TestPGClient(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	logrus.SetLevel(logrus.DebugLevel)
+	if debugTests {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
 
 	dbURL = os.Getenv("TEST_PG_URL")
 	if dbURL == "" {

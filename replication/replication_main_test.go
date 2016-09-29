@@ -19,7 +19,7 @@ const (
 var dbURL string
 var db *sql.DB
 
-func TestPGClient(t *testing.T) {
+func TestReplication(t *testing.T) {
 	dbURL = os.Getenv("TEST_PG_URL")
 	if dbURL == "" {
 		fmt.Println("Skipping replication tests because TEST_PG_URL not set")

@@ -239,6 +239,16 @@ var _ = Describe("Driver tests", func() {
 	It("Bad SQL", func() {
 		_, err := db.Exec("this is not sql")
 		Expect(err).ShouldNot(Succeed())
+		// make sure error does not block connection
+		row, err := db.Query("select * from client_test")
+		Expect(err).Should(Succeed())
+		row.Close()
+		_, err = db.Query("select * from $1 where bar = %2", "foo", "baz")
+		Expect(err).ShouldNot(Succeed())
+		// make sure error does not block connection
+		row, err = db.Query("select * from client_test")
+		Expect(err).Should(Succeed())
+		row.Close()
 		_, err = db.Exec("This is not sql either")
 		Expect(err).ShouldNot(Succeed())
 		_, err = db.Query("select neither this")

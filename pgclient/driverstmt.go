@@ -36,13 +36,16 @@ func makeStatement(name, sql string, conn *PgConnection) (*PgStmt, error) {
 		return nil, err
 	}
 
+	stmt := &PgStmt{
+		name: name,
+		conn: conn,
+	}
+
 	switch resp.Type() {
 	case ParseComplete:
-		return &PgStmt{
-			name: name,
-			conn: conn,
-		}, nil
+		return stmt, nil
 	case ErrorResponse:
+		stmt.syncAndWait()
 		return nil, ParseError(resp)
 	default:
 		return nil, fmt.Errorf("Invalid response: %d", resp.Type())
