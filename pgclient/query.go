@@ -53,7 +53,7 @@ func (c *PgConnection) exec(query string) ([]ColumnInfo, [][]string, int64, erro
 	// Loop until we get a ReadyForQuery message, or until we get an error
 	// reading messages at all.
 	for {
-		im, err := c.ReadMessage()
+		im, err := c.readStandardMessage()
 		if err != nil {
 			return nil, nil, 0, err
 		}
@@ -79,18 +79,13 @@ func (c *PgConnection) exec(query string) ([]ColumnInfo, [][]string, int64, erro
 			}
 		case EmptyQueryResponse:
 			// Empty query response. Nothing to do really.
-		case NoticeResponse:
-			msg, err := ParseNotice(im)
-			if err == nil {
-				log.Info(msg)
-			}
-		case ErrorResponse:
-			// Still have to keep processing until we get ReadyForQuery
-			cmdErr = ParseError(im)
 		case ReadyForQuery:
 			return rowDesc, rows, rowCount, cmdErr
+		case ErrorResponse:
+			// Need to record error and keep reading until we get ReadyForQuery
+			cmdErr = ParseError(im)
 		default:
-			cmdErr = fmt.Errorf("Invalid server response %v", im.Type())
+			cmdErr = fmt.Errorf("Invalid server response %s", im.Type())
 		}
 	}
 }

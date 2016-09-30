@@ -18,22 +18,12 @@ var _ = Describe("Driver tests", func() {
 			var err error
 			db, err = sql.Open("transicator", dbURL)
 			Expect(err).Should(Succeed())
-			_, err = db.Exec(`
-				create table client_test (
-					id varchar primary key,
-					int integer,
-					double float8,
-					timestamp timestamp with time zone,
-					yesno bool,
-					blob bytea
-				)`)
-			Expect(err).Should(Succeed())
 		}
 	})
 
 	AfterEach(func() {
 		if db != nil {
-			db.Exec("drop table client_test")
+			db.Exec("truncate table client_test")
 			db.Close()
 		}
 	})
@@ -52,7 +42,7 @@ var _ = Describe("Driver tests", func() {
 			return
 		}
 
-		result, err := db.Exec("insert into client_test values('one')")
+		result, err := db.Exec("insert into client_test (id) values (1)")
 		Expect(err).Should(Succeed())
 		Expect(result.RowsAffected()).Should(BeEquivalentTo(1))
 
@@ -65,10 +55,10 @@ var _ = Describe("Driver tests", func() {
 
 		hasNext := rows.Next()
 		Expect(hasNext).Should(BeTrue())
-		var rowVal string
+		var rowVal int
 		err = rows.Scan(&rowVal)
 		Expect(err).Should(Succeed())
-		Expect(rowVal).Should(Equal("one"))
+		Expect(rowVal).Should(Equal(1))
 		hasNext = rows.Next()
 		Expect(hasNext).Should(BeFalse())
 		err = rows.Close()
@@ -129,12 +119,12 @@ var _ = Describe("Driver tests", func() {
 
 		_, err := db.Exec(`
 			insert into client_test (id, int, double)
-			values($1, $2, $3)`, "one", 123, 3.14)
+			values($1, $2, $3)`, 1, 123, 3.14)
 		Expect(err).Should(Succeed())
 
 		rows, err := db.Query(`
 			select id, int, double from client_test
-			where id = $1`, "one")
+			where id = $1`, 1)
 		Expect(err).Should(Succeed())
 		cols, err := rows.Columns()
 		Expect(err).Should(Succeed())
@@ -145,12 +135,12 @@ var _ = Describe("Driver tests", func() {
 
 		hasNext := rows.Next()
 		Expect(hasNext).Should(BeTrue())
-		var id string
+		var id int
 		var i int
 		var d float64
 		err = rows.Scan(&id, &i, &d)
 		Expect(err).Should(Succeed())
-		Expect(id).Should(Equal("one"))
+		Expect(id).Should(Equal(1))
 		Expect(i).Should(Equal(123))
 		Expect(d).Should(Equal(3.14))
 		hasNext = rows.Next()
@@ -204,7 +194,7 @@ var _ = Describe("Driver tests", func() {
 
 		_, err = tx.Exec(`
 			insert into client_test (id)
-			values($1)`, "rollback")
+			values($1)`, -1)
 		Expect(err).Should(Succeed())
 
 		err = tx.Rollback()
@@ -215,7 +205,7 @@ var _ = Describe("Driver tests", func() {
 
 		_, err = tx.Exec(`
 					insert into client_test (id)
-					values($1)`, "commit")
+					values($1)`, 1)
 		Expect(err).Should(Succeed())
 
 		err = tx.Commit()
@@ -226,17 +216,101 @@ var _ = Describe("Driver tests", func() {
 
 		hasNext := rows.Next()
 		Expect(hasNext).Should(BeTrue())
-		var id string
+		var id int
 		err = rows.Scan(&id)
 		Expect(err).Should(Succeed())
-		Expect(id).Should(Equal("commit"))
+		Expect(id).Should(Equal(1))
 		hasNext = rows.Next()
 		Expect(hasNext).Should(BeFalse())
 		err = rows.Close()
 		Expect(err).Should(Succeed())
 	})
 
+	It("Big query", func() {
+		if db == nil {
+			return
+		}
+
+		is, err := db.Prepare("insert into client_test (id, int) values ($1, $2)")
+		Expect(err).Should(Succeed())
+		defer is.Close()
+		ss, err := db.Prepare("select id, int from client_test")
+		Expect(err).Should(Succeed())
+		defer ss.Close()
+
+		var i int
+		for i = 0; i < 999; i++ {
+			_, err = is.Exec(strconv.Itoa(i), i)
+			Expect(err).Should(Succeed())
+		}
+
+		// Fetch and ensure that we got all the rows
+		rows, err := ss.Query()
+		Expect(err).Should(Succeed())
+		for i = 0; rows.Next(); i++ {
+			var id string
+			var val int
+			err = rows.Scan(&id, &val)
+			Expect(val).Should(Equal(i))
+			Expect(id).Should(Equal(strconv.Itoa(i)))
+		}
+		Expect(i).Should(Equal(999))
+		err = rows.Close()
+		Expect(err).Should(Succeed())
+
+		// Improperly use Exec and make sure that it works too
+		_, err = ss.Exec()
+		Expect(err).Should(Succeed())
+
+		// Fetch but close the rows after only fetching a few
+		rows, err = ss.Query()
+		Expect(err).Should(Succeed())
+		for i = 0; i < 123 && rows.Next(); i++ {
+			var id string
+			var val int
+			err = rows.Scan(&id, &val)
+			Expect(val).Should(Equal(i))
+			Expect(id).Should(Equal(strconv.Itoa(i)))
+		}
+		Expect(i).Should(Equal(123))
+		err = rows.Close()
+		Expect(err).Should(Succeed())
+
+		// Fetch but close the rows before doing anything
+		rows, err = ss.Query()
+		Expect(err).Should(Succeed())
+		err = rows.Close()
+		Expect(err).Should(Succeed())
+
+		// Fetch using FetchOne which should do the same thing
+		row := ss.QueryRow()
+		var id string
+		var val int
+		err = row.Scan(&id, &val)
+		Expect(err).Should(Succeed())
+		Expect(id).Should(Equal("0"))
+		Expect(val).Should(Equal(0))
+
+		// Fetch one more time just for grins.
+		rows, err = ss.Query()
+		Expect(err).Should(Succeed())
+		for i = 0; rows.Next(); i++ {
+			var id string
+			var val int
+			err = rows.Scan(&id, &val)
+			Expect(val).Should(Equal(i))
+			Expect(id).Should(Equal(strconv.Itoa(i)))
+		}
+		Expect(i).Should(Equal(999))
+		err = rows.Close()
+		Expect(err).Should(Succeed())
+	})
+
 	It("Bad SQL", func() {
+		if db == nil {
+			return
+		}
+
 		_, err := db.Exec("this is not sql")
 		Expect(err).ShouldNot(Succeed())
 		// make sure error does not block connection
@@ -256,6 +330,10 @@ var _ = Describe("Driver tests", func() {
 	})
 
 	It("Bad params", func() {
+		if db == nil {
+			return
+		}
+
 		_, err := db.Exec("insert into client_test (id) values($1)")
 		Expect(err).ShouldNot(Succeed())
 		_, err = db.Query("select id from client_test where id = $1")

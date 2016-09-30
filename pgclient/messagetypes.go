@@ -51,6 +51,7 @@ const (
 	SenderKeepalive        PgInputType = 'k'
 	NoData                 PgInputType = 'n'
 	StandbyStatusUpdate    PgInputType = 'r'
+	PortalSuspended        PgInputType = 's'
 	ParameterDescription   PgInputType = 't'
 	WALData                PgInputType = 'w'
 	ParseComplete          PgInputType = '1'

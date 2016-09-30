@@ -4,7 +4,7 @@ package pgclient
 
 import "fmt"
 
-const _PgInputType_name = "ParseCompleteBindCompleteCloseCompleteCommandCompleteDataRowErrorResponseCopyInResponseCopyOutResponseEmptyQueryResponseBackEndKeyDataNoticeResponseAuthenticationResponseParameterStatusRowDescriptionCopyBothResponseReadyForQueryCopyDoneCopyDataHotStandbyFeedbackSenderKeepaliveNoDataStandbyStatusUpdateParameterDescriptionWALData"
+const _PgInputType_name = "ParseCompleteBindCompleteCloseCompleteCommandCompleteDataRowErrorResponseCopyInResponseCopyOutResponseEmptyQueryResponseBackEndKeyDataNoticeResponseAuthenticationResponseParameterStatusRowDescriptionCopyBothResponseReadyForQueryCopyDoneCopyDataHotStandbyFeedbackSenderKeepaliveNoDataStandbyStatusUpdatePortalSuspendedParameterDescriptionWALData"
 
 var _PgInputType_map = map[PgInputType]string{
 	49:  _PgInputType_name[0:13],
@@ -29,8 +29,9 @@ var _PgInputType_map = map[PgInputType]string{
 	107: _PgInputType_name[262:277],
 	110: _PgInputType_name[277:283],
 	114: _PgInputType_name[283:302],
-	116: _PgInputType_name[302:322],
-	119: _PgInputType_name[322:329],
+	115: _PgInputType_name[302:317],
+	116: _PgInputType_name[317:337],
+	119: _PgInputType_name[337:344],
 }
 
 func (i PgInputType) String() string {

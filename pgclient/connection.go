@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"crypto/tls"
+	"database/sql/driver"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -173,17 +174,21 @@ func (c *PgConnection) authenticationLoop(ci *connectInfo) error {
 		}
 		switch authResp {
 		case 0:
+			// "trust" or some other auth that's not auth
 			authDone = true
 		case 3:
+			// "password"
 			pm := NewOutputMessage(PasswordMessage)
 			pm.WriteString(ci.creds)
 			c.WriteMessage(pm)
 		case 5:
+			// "md5"
 			salt, _ := im.ReadBytes(4)
 			pm := NewOutputMessage(PasswordMessage)
 			pm.WriteString(passwordMD5(ci.user, ci.creds, salt))
 			c.WriteMessage(pm)
 		default:
+			// Currently not supporting other schemes like Kerberos...
 			return fmt.Errorf("Invalid authentication response: %d", authResp)
 		}
 	}
@@ -193,7 +198,7 @@ func (c *PgConnection) authenticationLoop(ci *connectInfo) error {
 func (c *PgConnection) finishConnect(ci *connectInfo) error {
 	// Loop to wait for "ready" status
 	for {
-		im, err := c.ReadMessage()
+		im, err := c.readStandardMessage()
 		if err != nil {
 			return err
 		}
@@ -201,19 +206,11 @@ func (c *PgConnection) finishConnect(ci *connectInfo) error {
 		switch im.Type() {
 		case BackEndKeyData:
 			// Back end key data -- ignore
-		case ParameterStatus:
-			// Database parameter -- no need for now
-			//paramName, _ := im.ReadString()
-			//paramVal, _ := im.ReadString()
-			//log.Debugf("%s = %s", paramName, paramVal)
-		case NoticeResponse:
-			msg, _ := ParseNotice(im)
-			log.Info(msg)
-		case ErrorResponse:
-			return ParseError(im)
 		case ReadyForQuery:
 			// Ready for query!
 			return nil
+		case ErrorResponse:
+			return ParseError(im)
 		default:
 			return fmt.Errorf("Invalid database response %v", im.Type())
 		}
@@ -292,6 +289,35 @@ func (c *PgConnection) ReadMessage() (*InputMessage, error) {
 
 	im := NewInputMessage(msgType, bodBuf)
 	return im, nil
+}
+
+/*
+readStandardMessage reads the message as ReadMessage, but it handles and
+discards any messages that may be delivered asynchronously outside the
+normal protocol. These are "NoticeResponse" and "ParameterStatus."
+*/
+func (c *PgConnection) readStandardMessage() (*InputMessage, error) {
+	for {
+		im, err := c.ReadMessage()
+		if err != nil {
+			log.Debugf("Error reading from postgres: %s", err)
+			return nil, driver.ErrBadConn
+		}
+
+		switch im.Type() {
+		case NoticeResponse:
+			// Log and keep on reading
+			msg, err := ParseNotice(im)
+			if err != nil {
+				log.Warnf("Notice from Postgres: \"%s\"", msg)
+			}
+		case ParameterStatus:
+			// We already logged that we got one of these. Keep on running.
+		default:
+			// Anything else we return directly to the caller
+			return im, nil
+		}
+	}
 }
 
 /*

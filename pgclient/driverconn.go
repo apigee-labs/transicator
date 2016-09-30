@@ -60,24 +60,11 @@ func (c *PgDriverConn) Prepare(query string) (driver.Stmt, error) {
 	return makeStatement(stmtName, query, c.conn)
 }
 
-// Query is the fast path for queries with no parameters
-func (c *PgDriverConn) Query(query string, args []driver.Value) (driver.Rows, error) {
-	if len(args) > 0 {
-		return nil, driver.ErrSkip
-	}
-
-	rawCols, rawRows, err := c.conn.SimpleQuery(query)
-	if err == nil {
-		return &PgRows{
-			cols:   rawCols,
-			rows:   rawRows,
-			curRow: 0,
-		}, nil
-	}
-	return nil, err
-}
-
-// Exec is the fast path for sql with no parameters
+// Exec is the fast path for sql with no parameters. It uses the "simple
+// query protocol" which works with fewer messages to the database.
+// We chose not to implement "Query" as well because the simple query protocol
+// does not allow us to return a large result set one set of rows at a time,
+// so we'd run out of memory.
 func (c *PgDriverConn) Exec(query string, args []driver.Value) (driver.Result, error) {
 	if len(args) > 0 {
 		return nil, driver.ErrSkip
@@ -127,24 +114,44 @@ func (t *PgTransaction) Rollback() error {
 // PgRows implements the Rows interface. All the rows are saved up before
 // we return this, so "Next" does no I/O.
 type PgRows struct {
-	cols   []ColumnInfo
-	rows   [][]string
-	curRow int
+	stmt       *PgStmt
+	rows       [][]string
+	curRow     int
+	fetchedAll bool
 }
 
-// Columns returns the column names
+// Columns returns the column names. The statement will already have them
+// described before this structure is created.
 func (r *PgRows) Columns() []string {
-	cns := make([]string, len(r.cols))
-	for i := range r.cols {
-		cns[i] = r.cols[i].Name
+	cns := make([]string, len(r.stmt.columns))
+	for i := range r.stmt.columns {
+		cns[i] = r.stmt.columns[i].Name
 	}
 	return cns
 }
 
-// Next iterates through the rows
+// Next iterates through the rows. If no rows have been fetched yet (either
+// because we came to the end of a batch, or if we have not called
+// Execute yet) then we fetch some rows.
 func (r *PgRows) Next(dest []driver.Value) error {
 	if r.curRow >= len(r.rows) {
-		return io.EOF
+		if r.fetchedAll {
+			return io.EOF
+		}
+
+		done, newRows, _, err := r.stmt.execute(fetchRowCount)
+		if err != nil {
+			r.stmt.syncAndWait()
+			r.fetchedAll = true
+			return err
+		}
+		r.rows = newRows
+		r.curRow = 0
+		r.fetchedAll = done
+
+		if len(newRows) == 0 {
+			return io.EOF
+		}
 	}
 
 	row := r.rows[r.curRow]
@@ -157,7 +164,9 @@ func (r *PgRows) Next(dest []driver.Value) error {
 	return nil
 }
 
-// Close does nothing.
+// Close syncs the connection so that it can be made ready for the next
+// time we need to use it. We can do this even if we didn't fetch
+// all the rows.
 func (r *PgRows) Close() error {
-	return nil
+	return r.stmt.syncAndWait()
 }
