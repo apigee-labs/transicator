@@ -122,7 +122,8 @@ func ParseRowDescription(m *InputMessage) ([]ColumnInfo, error) {
 		col.Name, _ = m.ReadString()
 		m.ReadInt32() // Table OID
 		m.ReadInt16() // Attribute number
-		col.Type, _ = m.ReadInt32()
+		ct, _ := m.ReadInt32()
+		col.Type = PgType(ct)
 		m.ReadInt16() // Type size
 		m.ReadInt32() // Type modifier
 		fmtCode, _ := m.ReadInt16()
@@ -133,13 +134,38 @@ func ParseRowDescription(m *InputMessage) ([]ColumnInfo, error) {
 	return cols, nil
 }
 
-// ParseDataRow turns a single DataRow message to a list of strings
-func ParseDataRow(m *InputMessage) ([]string, error) {
+// ParseParameterDescription looks at a Parameter description and returns
+// a list of types.
+func ParseParameterDescription(m *InputMessage) ([]PgType, error) {
+	if m.Type() != ParameterDescription {
+		return nil, errors.New("Message type is not ParameterDescription")
+	}
+
+	var types []PgType
+	numCols, err := m.ReadInt16()
+	if err != nil {
+		return nil, err
+	}
+
+	nf := int(numCols)
+	for i := 0; i < nf; i++ {
+		ct, err := m.ReadInt32()
+		if err != nil {
+			return nil, err
+		}
+		types = append(types, PgType(ct))
+	}
+
+	return types, nil
+}
+
+// ParseDataRow turns a single DataRow message to a list of buffers
+func ParseDataRow(m *InputMessage) ([][]byte, error) {
 	if m.Type() != DataRow {
 		return nil, errors.New("Message type is not DataRow")
 	}
 
-	var fields []string
+	var fields [][]byte
 
 	numFields, err := m.ReadInt16()
 	if err != nil {
@@ -152,9 +178,9 @@ func ParseDataRow(m *InputMessage) ([]string, error) {
 		len, _ := m.ReadInt32()
 		if len > 0 {
 			buf, _ := m.ReadBytes(int(len))
-			fields = append(fields, string(buf))
+			fields = append(fields, buf)
 		} else {
-			fields = append(fields, "")
+			fields = append(fields, nil)
 		}
 	}
 	return fields, nil

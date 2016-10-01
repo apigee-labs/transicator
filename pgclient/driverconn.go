@@ -5,6 +5,11 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"io"
+	"time"
+)
+
+const (
+	pgTimeFormat = "2006-01-02 15:04:05-07"
 )
 
 var _ = registerDriver()
@@ -115,7 +120,7 @@ func (t *PgTransaction) Rollback() error {
 // we return this, so "Next" does no I/O.
 type PgRows struct {
 	stmt       *PgStmt
-	rows       [][]string
+	rows       [][][]byte
 	curRow     int
 	fetchedAll bool
 }
@@ -157,8 +162,18 @@ func (r *PgRows) Next(dest []driver.Value) error {
 	row := r.rows[r.curRow]
 	r.curRow++
 
-	for i := range row {
-		dest[i] = []byte(row[i])
+	for i, col := range row {
+		if r.stmt.columns[i].Type.isTimestamp() {
+			tm, err := time.Parse(pgTimeFormat, string(col))
+			if err == nil {
+				dest[i] = tm
+			} else {
+				fmt.Printf("Error: %s\n", err)
+				dest[i] = []byte(fmt.Sprintf("Invalid timestamp %s", string(col)))
+			}
+		} else {
+			dest[i] = col
+		}
 	}
 
 	return nil

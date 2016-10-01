@@ -100,7 +100,7 @@ func GetTenantSnapshotData(tenantId []string, conn *pgclient.PgConnection) (b []
 			for ind, y := range x {
 				scv := &common.ColumnVal{
 					Value: y,
-					Type:  ci[ind].Type,
+					Type:  int32(ci[ind].Type),
 				}
 				srvItem[ci[ind].Name] = scv
 			}

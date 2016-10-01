@@ -11,8 +11,11 @@ import (
 A ColumnInfo describes a single row in a query result.
 */
 type ColumnInfo struct {
-	Name   string
-	Type   int32
+	// Name of the column
+	Name string
+	// Postgres type OID
+	Type PgType
+	// Was the column represented in binary form in the result row?
 	Binary bool
 }
 
@@ -22,7 +25,18 @@ It does not do any kind of preparation. The first parameter returned is an
 array of descriptors for each row. The second is an array of rows.
 */
 func (c *PgConnection) SimpleQuery(query string) ([]ColumnInfo, [][]string, error) {
-	cols, rows, _, err := c.exec(query)
+	cols, rawRows, _, err := c.exec(query)
+	var rows [][]string
+	if err == nil {
+		// Convert rows into an array of strings
+		for _, rawRow := range rawRows {
+			var cols []string
+			for _, rawCol := range rawRow {
+				cols = append(cols, string(rawCol))
+			}
+			rows = append(rows, cols)
+		}
+	}
 	return cols, rows, err
 }
 
@@ -36,7 +50,7 @@ func (c *PgConnection) SimpleExec(query string) (int64, error) {
 	return rowCount, err
 }
 
-func (c *PgConnection) exec(query string) ([]ColumnInfo, [][]string, int64, error) {
+func (c *PgConnection) exec(query string) ([]ColumnInfo, [][][]byte, int64, error) {
 	log.Debugf("Query: %s", query)
 	qm := NewOutputMessage(Query)
 	qm.WriteString(query)
@@ -46,7 +60,7 @@ func (c *PgConnection) exec(query string) ([]ColumnInfo, [][]string, int64, erro
 	}
 
 	var rowDesc []ColumnInfo
-	var rows [][]string
+	var rows [][][]byte
 	var rowCount int64
 	var cmdErr error
 

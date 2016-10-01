@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
+	"math/rand"
+	"reflect"
 	"testing/quick"
 	"time"
 
@@ -65,21 +67,32 @@ var _ = Describe("Data type tests", func() {
 		Expect(err).Should(Succeed())
 	})
 
-	PIt("Bytes type", func() {
+	It("Bytes type", func() {
 		ix := 0
 		err := quick.Check(func(val []byte) bool {
 			ix++
 			return testBytesType(ix, val)
 		}, nil)
 		Expect(err).Should(Succeed())
+		// Don't miss nil
+		ix++
+		testBytesType(ix, nil)
 	})
 
-	PIt("Time type", func() {
+	It("Time type", func() {
+		// Clamp down inputs to prevent generating dates that PG can't begin to imagine
+		timeCfg := &quick.Config{
+			Values: func(vals []reflect.Value, r *rand.Rand) {
+				vals[0] = reflect.ValueOf(rand.Int63n(1 << 33))
+				//vals[1] = reflect.ValueOf(rand.Int63n(1000000000))
+				vals[1] = reflect.ValueOf(int64(0))
+			},
+		}
 		ix := 0
-		err := quick.Check(func(val *time.Time) bool {
+		err := quick.Check(func(secs, ns int64) bool {
 			ix++
-			return testTimeType(ix, val)
-		}, nil)
+			return testTimeType(ix, secs, ns)
+		}, timeCfg)
 		Expect(err).Should(Succeed())
 	})
 })
@@ -155,9 +168,10 @@ func testBytesType(ix int, val []byte) bool {
 	return true
 }
 
-func testTimeType(ix int, val *time.Time) bool {
+func testTimeType(ix int, secs, ns int64) bool {
+	now := time.Unix(secs, ns)
 	_, err := driverTypeDB.Exec("insert into client_test (id, timestamp) values ($1, $2)",
-		ix, val)
+		ix, now)
 	Expect(err).Should(Succeed())
 
 	row := driverTypeDB.QueryRow("select timestamp from client_test where id = $1",
@@ -165,7 +179,7 @@ func testTimeType(ix int, val *time.Time) bool {
 	var ret time.Time
 	err = row.Scan(&ret)
 	Expect(err).Should(Succeed())
-	fmt.Fprintf(GinkgoWriter, "Time %s == %s\n", ret, val)
-	Expect(&ret).Should(Equal(val))
+	fmt.Fprintf(GinkgoWriter, "Time %s == %s\n", now, ret)
+	Expect(ret.Unix()).Should(Equal(now.Unix()))
 	return true
 }

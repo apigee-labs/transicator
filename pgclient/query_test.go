@@ -34,7 +34,7 @@ var _ = Describe("Query Tests", func() {
 		Expect(err).Should(Succeed())
 		Expect(len(desc)).Should(Equal(1))
 		Expect(desc[0].Name).Should(Equal("current_database"))
-		fmt.Printf("Row type: %d\n", desc[0].Type)
+		fmt.Fprintf(GinkgoWriter, "Row type: %d\n", desc[0].Type)
 
 		Expect(len(rows)).Should(Equal(1))
 		Expect(len(rows[0])).Should(Equal(1))

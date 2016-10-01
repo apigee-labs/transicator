@@ -19,7 +19,7 @@ type PgStmt struct {
 	name      string
 	conn      *PgConnection
 	described bool
-	numInputs int
+	fields    []PgType
 	columns   []ColumnInfo
 }
 
@@ -84,14 +84,16 @@ func (s *PgStmt) describe() error {
 		return err
 	}
 
+	// First response will always be a ParameterDescription
 	switch resp.Type() {
 	case ParameterDescription:
-		var ni int16
-		ni, err = resp.ReadInt16()
+		var fields []PgType
+		fields, err = ParseParameterDescription(resp)
 		if err != nil {
+			s.syncAndWait()
 			return err
 		}
-		s.numInputs = int(ni)
+		s.fields = fields
 	case ErrorResponse:
 		s.syncAndWait()
 		return ParseError(resp)
@@ -105,6 +107,7 @@ func (s *PgStmt) describe() error {
 		return err
 	}
 
+	// SecondResponse will be a RowDescription or NoData
 	switch resp.Type() {
 	case RowDescription:
 		rowDesc, err := ParseRowDescription(resp)
@@ -154,11 +157,12 @@ func (s *PgStmt) Close() error {
 	}
 }
 
-// NumInput uses a "describe" message to get information about the inputs.
+// NumInput uses a "describe" message to get information about the inputs,
+// but only if we haven't described the statement
 func (s *PgStmt) NumInput() int {
 	err := s.describe()
 	if err == nil {
-		return s.numInputs
+		return len(s.fields)
 	}
 	return -1
 }
@@ -216,10 +220,19 @@ func (s *PgStmt) bind(args []driver.Value) error {
 	bindMsg := NewOutputMessage(Bind)
 	bindMsg.WriteString("") // Default portal
 	bindMsg.WriteString(s.name)
-	bindMsg.WriteInt16(0) // Zero format codes (everything a string)
-	bindMsg.WriteInt16(int16(len(args)))
 
-	// Send each argument converted into a string.
+	// Denote whether each argument is going to be sent in binary or string format
+	bindMsg.WriteInt16(int16(len(s.fields)))
+	for _, field := range s.fields {
+		if field.isBinary() {
+			bindMsg.WriteInt16(1)
+		} else {
+			bindMsg.WriteInt16(0)
+		}
+	}
+
+	// Send each argument converted into a string or binary depending.
+	bindMsg.WriteInt16(int16(len(args)))
 	for _, arg := range args {
 		if arg == nil {
 			bindMsg.WriteInt32(-1)
@@ -230,7 +243,15 @@ func (s *PgStmt) bind(args []driver.Value) error {
 		}
 	}
 
-	bindMsg.WriteInt16(0) // All result columns can be a string
+	// Denote which result columns we want sent as a string versus binary
+	bindMsg.WriteInt16(int16(len(s.columns)))
+	for _, col := range s.columns {
+		if col.Type.isBinary() {
+			bindMsg.WriteInt16(1)
+		} else {
+			bindMsg.WriteInt16(0)
+		}
+	}
 
 	log.Debugf("Bind statement %s", s.name)
 	err := s.conn.WriteMessage(bindMsg)
@@ -260,7 +281,7 @@ func (s *PgStmt) bind(args []driver.Value) error {
 // The second parameter returns the rows retrieved, and the third returns
 // the number of rows affected by the query, but only if the first parameter
 // was true.
-func (s *PgStmt) execute(maxRows int32) (bool, [][]string, int64, error) {
+func (s *PgStmt) execute(maxRows int32) (bool, [][][]byte, int64, error) {
 	execMsg := NewOutputMessage(Execute)
 	execMsg.WriteString("")
 	execMsg.WriteInt32(maxRows)
@@ -274,7 +295,7 @@ func (s *PgStmt) execute(maxRows int32) (bool, [][]string, int64, error) {
 	s.conn.sendFlush()
 
 	var cmdErr error
-	var rows [][]string
+	var rows [][][]byte
 	var rowCount int64
 	done := false
 	complete := false
@@ -367,9 +388,8 @@ func convertParameterValue(v driver.Value) []byte {
 	case string:
 		return []byte(v.(string))
 	case time.Time:
-		return []byte(v.(time.Time).Format(time.RFC1123Z))
+		return []byte(v.(time.Time).Format(pgTimeFormat))
 	case []byte:
-		// TODO this is probably wrong
 		return v.([]byte)
 	default:
 		// The "database/sql" package promises to only pass us data

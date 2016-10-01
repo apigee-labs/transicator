@@ -1,10 +1,8 @@
 package pgclient
 
 import (
-	"bytes"
 	"database/sql"
 	"strconv"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -59,53 +57,6 @@ var _ = Describe("Driver tests", func() {
 		err = rows.Scan(&rowVal)
 		Expect(err).Should(Succeed())
 		Expect(rowVal).Should(Equal(1))
-		hasNext = rows.Next()
-		Expect(hasNext).Should(BeFalse())
-		err = rows.Close()
-		Expect(err).Should(Succeed())
-	})
-
-	// TODO need to fix date and time types.
-	PIt("Insert with args", func() {
-		if db == nil {
-			return
-		}
-
-		ts := time.Now()
-		hello := []byte("Hello!")
-		_, err := db.Exec(`
-			insert into client_test (id, int, double, timestamp, yesno, blob)
-			values($1, $2, $3, $4, $5, $6)`, "one", 123, 3.14, ts, true, hello)
-		Expect(err).Should(Succeed())
-
-		rows, err := db.Query("select id, int, double, timestamp, yesno, blob from client_test")
-		Expect(err).Should(Succeed())
-		cols, err := rows.Columns()
-		Expect(err).Should(Succeed())
-		Expect(len(cols)).Should(Equal(6))
-		Expect(cols[0]).Should(Equal("id"))
-		Expect(cols[1]).Should(Equal("int"))
-		Expect(cols[2]).Should(Equal("double"))
-		Expect(cols[3]).Should(Equal("timestamp"))
-		Expect(cols[4]).Should(Equal("yesno"))
-		Expect(cols[5]).Should(Equal("blob"))
-
-		hasNext := rows.Next()
-		Expect(hasNext).Should(BeTrue())
-		var id string
-		var i int
-		var d float64
-		var nts time.Time
-		var yesno bool
-		var blob []byte
-		err = rows.Scan(&id, &i, &d, &nts, &yesno, &blob)
-		Expect(err).Should(Succeed())
-		Expect(id).Should(Equal("one"))
-		Expect(i).Should(Equal(123))
-		Expect(d).Should(Equal(3.14))
-		Expect(nts).Should(Equal(ts))
-		Expect(yesno).Should(BeTrue())
-		Expect(bytes.Equal(hello, blob)).Should(BeTrue())
 		hasNext = rows.Next()
 		Expect(hasNext).Should(BeFalse())
 		err = rows.Close()
