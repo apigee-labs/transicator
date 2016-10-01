@@ -49,6 +49,24 @@ var _ = Describe("Data type tests", func() {
 		Expect(err).Should(Succeed())
 	})
 
+	It("Small Integer type", func() {
+		ix := 0
+		err := quick.Check(func(val int16) bool {
+			ix++
+			return testSmallintType(ix, val)
+		}, nil)
+		Expect(err).Should(Succeed())
+	})
+
+	It("POD type", func() {
+		ix := 0
+		err := quick.Check(func(val int) bool {
+			ix++
+			return testOIDType(ix)
+		}, nil)
+		Expect(err).Should(Succeed())
+	})
+
 	It("Float type", func() {
 		ix := 0
 		err := quick.Check(func(val float32) bool {
@@ -122,6 +140,35 @@ func testIntType(ix int, val int) bool {
 	err = row.Scan(&ret)
 	Expect(err).Should(Succeed())
 	Expect(ret).Should(Equal(val))
+	return true
+}
+
+func testSmallintType(ix int, val int16) bool {
+	_, err := driverTypeDB.Exec("insert into client_test (id, sint) values ($1, $2)",
+		ix, val)
+	Expect(err).Should(Succeed())
+
+	row := driverTypeDB.QueryRow("select sint from client_test where id = $1",
+		ix)
+	var ret int16
+	err = row.Scan(&ret)
+	Expect(err).Should(Succeed())
+	Expect(ret).Should(Equal(val))
+	return true
+}
+
+func testOIDType(ix int) bool {
+	_, err := driverTypeDB.Exec("insert into client_test (id) values ($1)",
+		ix)
+	Expect(err).Should(Succeed())
+
+	row := driverTypeDB.QueryRow("select oid from client_test where id = $1",
+		ix)
+	var ret int32
+	err = row.Scan(&ret)
+	Expect(err).Should(Succeed())
+	// Just make sure that we don't get errors when parsing OIDs
+	Expect(ret).Should(BeNumerically(">=", 0))
 	return true
 }
 

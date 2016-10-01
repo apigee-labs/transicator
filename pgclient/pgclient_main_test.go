@@ -42,11 +42,12 @@ var _ = BeforeSuite(func() {
 				id integer primary key,
 				string varchar,
 				int bigint,
+				sint smallint,
 				double float8,
 				timestamp timestamp with time zone,
 				yesno bool,
 				blob bytea
-			)`)
+			) with oids`)
 		Expect(err).Should(Succeed())
 	}
 })

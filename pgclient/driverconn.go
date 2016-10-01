@@ -5,7 +5,6 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"io"
-	"time"
 )
 
 const (
@@ -163,17 +162,7 @@ func (r *PgRows) Next(dest []driver.Value) error {
 	r.curRow++
 
 	for i, col := range row {
-		if r.stmt.columns[i].Type.isTimestamp() {
-			tm, err := time.Parse(pgTimeFormat, string(col))
-			if err == nil {
-				dest[i] = tm
-			} else {
-				fmt.Printf("Error: %s\n", err)
-				dest[i] = []byte(fmt.Sprintf("Invalid timestamp %s", string(col)))
-			}
-		} else {
-			dest[i] = col
-		}
+		dest[i] = convertColumnValue(r.stmt.columns[i].Type, col)
 	}
 
 	return nil

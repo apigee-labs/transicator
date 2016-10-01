@@ -4,8 +4,6 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"strconv"
-	"time"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -233,11 +231,15 @@ func (s *PgStmt) bind(args []driver.Value) error {
 
 	// Send each argument converted into a string or binary depending.
 	bindMsg.WriteInt16(int16(len(args)))
-	for _, arg := range args {
+	for i, arg := range args {
 		if arg == nil {
 			bindMsg.WriteInt32(-1)
 		} else {
-			bindVal := convertParameterValue(arg)
+			bindVal, err := convertParameterValue(s.fields[i], arg)
+			if err != nil {
+				s.syncAndWait()
+				return err
+			}
 			bindMsg.WriteInt32(int32(len(bindVal)))
 			bindMsg.WriteBytes(bindVal)
 		}
@@ -372,28 +374,5 @@ func (s *PgStmt) syncAndWait() error {
 		default:
 			log.Debug("Ignoring unexpected message %s", im.Type())
 		}
-	}
-}
-
-// convertParameterValue is used to convert input values to a string so
-// that they may be passed on to SQL.
-func convertParameterValue(v driver.Value) []byte {
-	switch v.(type) {
-	case int64:
-		return []byte(strconv.FormatInt(v.(int64), 10))
-	case float64:
-		return []byte(strconv.FormatFloat(v.(float64), 'f', -1, 64))
-	case bool:
-		return []byte(strconv.FormatBool(v.(bool)))
-	case string:
-		return []byte(v.(string))
-	case time.Time:
-		return []byte(v.(time.Time).Format(pgTimeFormat))
-	case []byte:
-		return v.([]byte)
-	default:
-		// The "database/sql" package promises to only pass us data
-		// in the types listed above.
-		panic("Invalid value type passed to SQL driver")
 	}
 }
