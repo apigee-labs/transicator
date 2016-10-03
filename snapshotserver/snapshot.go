@@ -2,32 +2,29 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
-	"time"
 
 	"github.com/30x/transicator/common"
-	"github.com/30x/transicator/pgclient"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 )
 
-var src = rand.NewSource(time.Now().UnixNano())
-
-func GetTenants(tenantId []string) string {
+func GetTenants(tenantID []string) string {
 
 	var str bytes.Buffer
 
 	str.WriteString("(")
-	for idx, tid := range tenantId {
+	for idx, tid := range tenantID {
 		log.Info("Get table id: ", tid, idx)
 		str.WriteString("'" + tid + "'")
-		if idx != len(tenantId)-1 {
+		if idx != len(tenantID)-1 {
 			str.WriteString(",")
 		}
 	}
@@ -36,41 +33,38 @@ func GetTenants(tenantId []string) string {
 
 }
 
-func GetTenantSnapshotData(tenantId []string, conn *pgclient.PgConnection) (b []byte, err error) {
+func GetTenantSnapshotData(tenantID []string, db *sql.DB) (b []byte, err error) {
 
 	var (
 		snapInfo, snapTime string
 	)
 
 	log.Info("Starting snapshot")
-	_, _, err = conn.SimpleQuery("begin isolation level repeatable read")
+	tx, err := db.Begin()
 	if err != nil {
 		log.Errorf("Failed to set Isolation level : %+v", err)
 		return nil, err
 	}
-	defer conn.SimpleQuery("commit")
-	_, s, err := conn.SimpleQuery("select now()")
+	defer tx.Commit()
+
+	row := db.QueryRow("select now()")
+	err = row.Scan(&snapTime)
 	if err != nil {
 		log.Errorf("Failed to get DB timestamp : %+v", err)
 		return nil, err
 	}
-	snapTime = s[0][0]
 
-	_, s, err = conn.SimpleQuery("select txid_current_snapshot()")
+	row = db.QueryRow("select txid_current_snapshot()")
+	err = row.Scan(&snapInfo)
 	if err != nil {
 		log.Errorf("Failed to get DB snapshot TXID : %+v", err)
 		return nil, err
 	}
-	snapInfo = s[0][0]
 
-	_, s2, err := conn.SimpleQuery("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+	tables, err := getTableNames(db)
 	if err != nil {
-		log.Errorf("Failed to get tables from DB : %+v", err)
+		log.Errorf("Failed to table names: %+v", err)
 		return nil, err
-	}
-	var tables []string
-	for _, t := range s2 {
-		tables = append(tables, t[0])
 	}
 	log.Infof("Tables in snapshot %v", tables)
 
@@ -82,12 +76,17 @@ func GetTenantSnapshotData(tenantId []string, conn *pgclient.PgConnection) (b []
 	}
 
 	for _, t := range tables {
-		q := fmt.Sprintf("select * from %s where _apid_scope in %s", t, GetTenants(tenantId))
-		ci, s3, err := conn.SimpleQuery(q)
+		q := fmt.Sprintf("select * from %s where _apid_scope in %s", t, GetTenants(tenantID))
+		rows, err := db.Query(q)
 		if err != nil {
+			if strings.Contains(err.Error(), "errorMissingColumn") {
+				log.Warnf("Skipping table %s: no _apid_scope column", t)
+				continue
+			}
 			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
 			return nil, err
 		}
+		defer rows.Close()
 
 		srvItems := []common.Row{}
 		stdItem := common.Table{
@@ -95,14 +94,32 @@ func GetTenantSnapshotData(tenantId []string, conn *pgclient.PgConnection) (b []
 			Name: t,
 		}
 
-		for _, x := range s3 {
+		columnNames, columnTypes, err := parseColumnNames(rows)
+		if err != nil {
+			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
+			return nil, err
+		}
+
+		for rows.Next() {
 			srvItem := common.Row{}
-			for ind, y := range x {
+			cols := make([]interface{}, len(columnNames))
+			for i := range cols {
+				cols[i] = new(string)
+			}
+			err = rows.Scan(cols...)
+			if err != nil {
+				log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
+				return nil, err
+			}
+
+			// TODO where do we get the type? Crud.
+			for i, cv := range cols {
+				cvs := cv.(*string)
 				scv := &common.ColumnVal{
-					Value: y,
-					Type:  int32(ci[ind].Type),
+					Value: *cvs,
+					Type:  columnTypes[i],
 				}
-				srvItem[ci[ind].Name] = scv
+				srvItem[columnNames[i]] = scv
 			}
 			stdItem.AddRowstoTable(srvItem)
 		}
@@ -115,11 +132,58 @@ func GetTenantSnapshotData(tenantId []string, conn *pgclient.PgConnection) (b []
 	return b, nil
 }
 
+func getTableNames(db *sql.DB) ([]string, error) {
+	nameRows, err := db.Query(
+		"SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+	if err != nil {
+		log.Errorf("Failed to get tables from DB : %+v", err)
+		return nil, err
+	}
+	defer nameRows.Close()
+	var tables []string
+	for nameRows.Next() {
+		var tableName string
+		err = nameRows.Scan(&tableName)
+		if err != nil {
+			log.Errorf("Failed to get table names from DB : %+v", err)
+			return nil, err
+		}
+		tables = append(tables, tableName)
+	}
+	return tables, nil
+}
+
+func parseColumnNames(rows *sql.Rows) ([]string, []int32, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	names := make([]string, len(cols))
+	types := make([]int32, len(cols))
+
+	for i, n := range cols {
+		sn := strings.SplitN(n, ":", 2)
+		if len(sn) > 0 {
+			names[i] = sn[0]
+		}
+		if len(sn) > 1 {
+			tn, err := strconv.ParseInt(sn[1], 10, 32)
+			if err != nil {
+				return nil, nil, err
+			}
+			types[i] = int32(tn)
+		}
+	}
+
+	return names, types, nil
+}
+
 /*
- * This operation is currently implemented in SYNC mode, where in, it
- * simply returns the scope back the ID redirect URL to query upon,
- * to get the snapshot - which is yet another SYNC operation
- */
+GenSnapshot is currently implemented in SYNC mode, where in, it
+simply returns the scope back the ID redirect URL to query upon,
+to get the snapshot - which is yet another SYNC operation
+*/
 func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 
 	r.ParseForm()
@@ -136,9 +200,9 @@ func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
- * The JSON related to the scope is downloaded and returned
- */
-func DownloadSnapshot(w http.ResponseWriter, r *http.Request, conn *pgclient.PgConnection) {
+DownloadSnapshot downloads and resturns the JSON related to the scope
+*/
+func DownloadSnapshot(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 
 	vars := mux.Vars(r)
 	sid := vars["snapshotid"]
@@ -149,7 +213,7 @@ func DownloadSnapshot(w http.ResponseWriter, r *http.Request, conn *pgclient.PgC
 	tenantIds := strings.Split(sid, ",")
 	log.Infof("'scopes' in Request %s", tenantIds)
 
-	data, err := GetTenantSnapshotData(tenantIds, conn)
+	data, err := GetTenantSnapshotData(tenantIds, db)
 	if err != nil {
 		log.Errorf("GetOrgSnapshot error: %v", err)
 		return

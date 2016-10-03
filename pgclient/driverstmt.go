@@ -16,6 +16,7 @@ const (
 type PgStmt struct {
 	name      string
 	conn      *PgConnection
+	driver    *PgDriver
 	described bool
 	fields    []PgType
 	columns   []ColumnInfo
@@ -24,26 +25,27 @@ type PgStmt struct {
 // makeStatewment sends a Parse message to the database to have a bunch of
 // SQL evaluated. It may result in an error, in which case we will
 // send a Sync on the connection and go back to being ready for the next query.
-func makeStatement(name, sql string, conn *PgConnection) (*PgStmt, error) {
+func makeStatement(name, sql string, c *PgDriverConn) (*PgStmt, error) {
 	parseMsg := NewOutputMessage(Parse)
 	parseMsg.WriteString(name)
 	parseMsg.WriteString(sql)
 	parseMsg.WriteInt16(0)
 
 	log.Debugf("Parse statement %s with sql \"%s\"", name, sql)
-	err := conn.WriteMessage(parseMsg)
+	err := c.conn.WriteMessage(parseMsg)
 	if err != nil {
 		return nil, err
 	}
-	conn.sendFlush()
-	resp, err := conn.readStandardMessage()
+	c.conn.sendFlush()
+	resp, err := c.conn.readStandardMessage()
 	if err != nil {
 		return nil, err
 	}
 
 	stmt := &PgStmt{
-		name: name,
-		conn: conn,
+		name:   name,
+		conn:   c.conn,
+		driver: c.driver,
 	}
 
 	switch resp.Type() {

@@ -1,20 +1,20 @@
 package main
 
 import (
+	"database/sql"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
-	"flag"
 	"strconv"
 
 	"github.com/30x/transicator/pgclient"
-	"github.com/gorilla/mux"
 	"github.com/Sirupsen/logrus"
+	"github.com/gorilla/mux"
 )
 
-
 const (
-	defaultPort             = 9090
+	defaultPort = 9090
 )
 
 func printUsage() {
@@ -26,17 +26,16 @@ func printUsage() {
 		"snapshotserver -p 9090 -u postgres://user@host/postgres")
 }
 
-
 /*
  * Main entry point
  */
 func main() {
 
 	var (
-		port int
+		port  int
 		pgURL string
 		debug bool
-		help bool
+		help  bool
 	)
 
 	flag.IntVar(&port, "p", defaultPort, "Local Binding port")
@@ -47,24 +46,27 @@ func main() {
 
 	if help || !flag.Parsed() {
 		printUsage()
-		os.Exit (2)
+		os.Exit(2)
 	}
 	if pgURL == "" {
 		fmt.Fprintln(os.Stderr, "-d, -u, and -s parameters are all required")
 		printUsage()
-		os.Exit (3)
+		os.Exit(3)
 	}
 
 	if debug {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	conn, err := pgclient.Connect(pgURL)
+	db, err := sql.Open("transicator", pgURL)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to connect to Postgress. Err : %v\n", err)
+		fmt.Fprintf(os.Stderr, "Unable to connect to Postgres. Err : %v\n", err)
 		return
 	}
-	defer conn.Close()
+	pgdriver := db.Driver().(*pgclient.PgDriver)
+	pgdriver.SetIsolationLevel("repeatable read")
+	pgdriver.SetExtendedColumnNames(true)
+	defer db.Close()
 
 	router := mux.NewRouter()
 
@@ -75,11 +77,11 @@ func main() {
 
 	router.HandleFunc("/data/{snapshotid}",
 		func(w http.ResponseWriter, r *http.Request) {
-			DownloadSnapshot(w, r, conn)
+			DownloadSnapshot(w, r, db)
 		}).Methods("GET")
 
-	err = http.ListenAndServe(":" + strconv.Itoa(port), router)
+	err = http.ListenAndServe(":"+strconv.Itoa(port), router)
 	fmt.Fprintf(os.Stderr, "Is service running already?, Err: %v\n", err)
-	os.Exit (4)
+	os.Exit(4)
 
 }

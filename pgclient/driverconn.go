@@ -20,7 +20,8 @@ func registerDriver() bool {
 
 // PgDriver implements the standard driver interface
 type PgDriver struct {
-	isolationLevel string
+	isolationLevel      string
+	extendedColumnNames bool
 }
 
 // Open takes a Postgres URL as used elsewhere in this package
@@ -42,12 +43,23 @@ func (d *PgDriver) Open(url string) (driver.Conn, error) {
 	}, nil
 }
 
-// SetIsolationLevel ensures that all connections opened by this driver have
-// the specified isolation level. It will only affect connections opened
-// after it was called, so callers should call it before executing any
-// transactions
+/*
+SetIsolationLevel ensures that all connections opened by this driver have
+the specified isolation level. It will only affect connections opened
+after it was called, so callers should call it before executing any
+transactions
+*/
 func (d *PgDriver) SetIsolationLevel(level string) {
 	d.isolationLevel = level
+}
+
+/*
+SetExtendedColumnNames enables a mode in which the column names returned
+from the "Rows" interface will return the format "name:type" where "type"
+is the integer postgres type ID.
+*/
+func (d *PgDriver) SetExtendedColumnNames(extended bool) {
+	d.extendedColumnNames = extended
 }
 
 // PgDriverConn implements Conn
@@ -61,7 +73,7 @@ type PgDriverConn struct {
 func (c *PgDriverConn) Prepare(query string) (driver.Stmt, error) {
 	c.stmtIndex++
 	stmtName := fmt.Sprintf("transicator-%x", c.stmtIndex)
-	return makeStatement(stmtName, query, c.conn)
+	return makeStatement(stmtName, query, c)
 }
 
 // Exec is the fast path for sql with no parameters. It uses the "simple
@@ -128,8 +140,12 @@ type PgRows struct {
 // described before this structure is created.
 func (r *PgRows) Columns() []string {
 	cns := make([]string, len(r.stmt.columns))
-	for i := range r.stmt.columns {
-		cns[i] = r.stmt.columns[i].Name
+	for i, col := range r.stmt.columns {
+		if r.stmt.driver.extendedColumnNames {
+			cns[i] = fmt.Sprintf("%s:%d", col.Name, col.Type)
+		} else {
+			cns[i] = col.Name
+		}
 	}
 	return cns
 }

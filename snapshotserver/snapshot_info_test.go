@@ -52,11 +52,15 @@ var _ = BeforeSuite(func() {
 	db, err = sql.Open("transicator", dbURL)
 	Expect(err).Should(Succeed())
 
+	pgdriver := db.Driver().(*pgclient.PgDriver)
+	pgdriver.SetIsolationLevel("repeatable read")
+	pgdriver.SetExtendedColumnNames(true)
+
 	if tableExists("snapshot_test") {
 		err = truncateTable("snapshot_test")
 		Expect(err).Should(Succeed())
 	} else {
-		_, err := db.Exec(testTableSQL)
+		_, err = db.Exec(testTableSQL)
 		Expect(err).Should(Succeed())
 	}
 
@@ -101,9 +105,9 @@ func dropTable(name string) error {
 }
 
 type SnapInfo struct {
-	xmin     int32
-	xmax     int32
-	xip_list []int32
+	xmin    int32
+	xmax    int32
+	xipList []int32
 }
 
 func getCurrentSnapshotInfo() *SnapInfo {
@@ -122,7 +126,7 @@ func getCurrentSnapshotInfo() *SnapInfo {
 	for _, xip := range xips {
 		if xip != "" {
 			v, _ := strconv.Atoi(xip)
-			si.xip_list = append(si.xip_list, int32(v))
+			si.xipList = append(si.xipList, int32(v))
 		}
 	}
 	return si
@@ -233,7 +237,9 @@ var _ = Describe("Taking a snapshot", func() {
 	Context("Insert Tables (App & Developer), Get JSON data for ONE scope", func() {
 		It("Insert with single scope, retrieve single scope data", func() {
 
-			keys := []string{"org", "id", "username", "created_at", "_apid_scope", "dev_id", "display_name", "created_by", "created_at", "firstname", "name"}
+			keys := []string{"org", "id", "username", "created_at", "_apid_scope",
+				"dev_id", "display_name", "created_by", "created_at",
+				"firstname", "name"}
 
 			_, err := db.Exec(`
 				insert into APP (org, id, dev_id, display_name, created_at, _apid_scope)
@@ -243,12 +249,8 @@ var _ = Describe("Taking a snapshot", func() {
 			Expect(err).Should(Succeed())
 
 			scope := []string{"pepsi__dev"}
-			conn, err := pgclient.Connect(dbURL)
+			b, err := GetTenantSnapshotData(scope, db)
 			Expect(err).Should(Succeed())
-			defer conn.Close()
-			b, err := GetTenantSnapshotData(scope, conn)
-			Expect(err).Should(Succeed())
-			Expect(conn).ShouldNot(BeNil())
 			s, err := common.UnmarshalSnapshot(b)
 			Expect(err).Should(Succeed())
 
@@ -262,13 +264,17 @@ var _ = Describe("Taking a snapshot", func() {
 					for l, col := range row {
 						Expect(keys).To(ContainElement(l))
 						if l == "id" {
-							Expect(col.Value).To(Equal("aaa-bbb-ccc"))
+							Expect(col.Value).Should(Equal("aaa-bbb-ccc"))
+							Expect(col.Type).Should(BeEquivalentTo(1043))
+						} else if l == "created_at" {
+							Expect(col.Value).Should(Equal("9859348"))
+							Expect(col.Type).Should(BeEquivalentTo(23))
 						}
 					}
 				}
 			}
 			scope = []string{"pepsi_bad"}
-			b, err = GetTenantSnapshotData(scope, conn)
+			b, err = GetTenantSnapshotData(scope, db)
 			Expect(err).Should(Succeed())
 
 			s, err = common.UnmarshalSnapshot(b)
@@ -302,10 +308,7 @@ var _ = Describe("Taking a snapshot", func() {
 			Expect(err).Should(Succeed())
 
 			scope := []string{"pepsi__dev", "pepsi__test"}
-			conn, err := pgclient.Connect(dbURL)
-			Expect(err).Should(Succeed())
-			defer conn.Close()
-			b, err := GetTenantSnapshotData(scope, conn)
+			b, err := GetTenantSnapshotData(scope, db)
 			Expect(err).Should(Succeed())
 
 			s, err := common.UnmarshalSnapshot(b)
@@ -326,7 +329,7 @@ var _ = Describe("Taking a snapshot", func() {
 				}
 			}
 			scope = []string{"pepsi_bad"}
-			b, err = GetTenantSnapshotData(scope, conn)
+			b, err = GetTenantSnapshotData(scope, db)
 			Expect(err).Should(Succeed())
 
 			s, err = common.UnmarshalSnapshot(b)

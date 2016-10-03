@@ -297,4 +297,46 @@ var _ = Describe("Driver tests", func() {
 		_, err = st.Exec("one", "two", "three")
 		Expect(err).ShouldNot(Succeed())
 	})
+
+	It("Isolation level", func() {
+		if dbURL == "" {
+			return
+		}
+
+		idb, err := sql.Open("transicator", dbURL)
+		Expect(err).Should(Succeed())
+		defer idb.Close()
+
+		idb.Driver().(*PgDriver).SetIsolationLevel("serializable")
+
+		tx, err := idb.Begin()
+		Expect(err).Should(Succeed())
+		_, err = db.Exec("insert into client_test (id, string) values ($1, $2)",
+			1, "one")
+		Expect(err).Should(Succeed())
+		err = tx.Rollback()
+		Expect(err).Should(Succeed())
+	})
+
+	It("Extended column names", func() {
+		if dbURL == "" {
+			return
+		}
+
+		idb, err := sql.Open("transicator", dbURL)
+		Expect(err).Should(Succeed())
+		defer idb.Close()
+
+		idb.Driver().(*PgDriver).SetExtendedColumnNames(true)
+
+		rows, err := idb.Query("select id, string, int from client_test")
+		Expect(err).Should(Succeed())
+		cols, err := rows.Columns()
+		Expect(err).Should(Succeed())
+		defer rows.Close()
+
+		Expect(cols[0]).Should(Equal("id:23"))
+		Expect(cols[1]).Should(Equal("string:1043"))
+		Expect(cols[2]).Should(Equal("int:20"))
+	})
 })
