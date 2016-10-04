@@ -327,7 +327,7 @@ passwordMD5 generates an MD5 password using the same algorithm
 as Postgres.
 */
 func passwordMD5(user, pass string, salt []byte) string {
-	up := user + pass
+	up := pass + user
 	md1 := md5.Sum([]byte(up))
 	md1S := hex.EncodeToString(md1[:]) + string(salt)
 	md2 := md5.Sum([]byte(md1S))
