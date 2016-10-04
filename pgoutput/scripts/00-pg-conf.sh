@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# BEGIN DEV SETUP
+
 # Replace replication settings in postgresql.conf with what we need
 sed -ibak -f /docker-entrypoint-initdb.d/pgconf.sed $PGDATA/postgresql.conf
 
@@ -9,3 +11,5 @@ echo "*******"
 
 # Replace pg_hba.conf with one that is secure.
 cp /docker-entrypoint-initdb.d/pg_hba.conf $PGDATA
+
+# END DEV SETUP

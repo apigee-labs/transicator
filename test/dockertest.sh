@@ -38,3 +38,6 @@ docker run --rm -it \
 docker rm -f ${dbName}
 
 docker network rm ${netName}
+
+docker rmi ${testName}
+docker rmi ${dbName}

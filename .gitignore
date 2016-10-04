@@ -4,3 +4,4 @@ vendor/
 bin/
 .idea/
 changeserver/changeserver
+.vscode
