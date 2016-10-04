@@ -178,11 +178,13 @@ func (c *PgConnection) authenticationLoop(ci *connectInfo) error {
 			authDone = true
 		case 3:
 			// "password"
+			log.Debug("Sending password in response")
 			pm := NewOutputMessage(PasswordMessage)
 			pm.WriteString(ci.creds)
 			c.WriteMessage(pm)
 		case 5:
 			// "md5"
+			log.Debug("Sending MD5 password as response")
 			salt, _ := im.ReadBytes(4)
 			pm := NewOutputMessage(PasswordMessage)
 			pm.WriteString(passwordMD5(ci.user, ci.creds, salt))
