@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"sync/atomic"
 
-	"github.com/golang/gddo/httputil"
+	"github.com/30x/goscaffold"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -35,7 +35,7 @@ func (s *server) handleGetHealth(resp http.ResponseWriter, req *http.Request) {
 }
 
 func (s *server) handleSetHealth(resp http.ResponseWriter, req *http.Request) {
-	enc := httputil.NegotiateContentEncoding(req, []string{formContent})
+	enc := goscaffold.SelectMediaType(req, []string{formContent})
 	if enc == "" {
 		resp.WriteHeader(http.StatusUnsupportedMediaType)
 		return

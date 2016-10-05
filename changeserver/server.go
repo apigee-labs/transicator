@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"sync/atomic"
 
+	"github.com/30x/goscaffold"
 	"github.com/30x/transicator/common"
 	"github.com/30x/transicator/replication"
 	"github.com/30x/transicator/storage"
-	"github.com/golang/gddo/httputil"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -123,7 +123,7 @@ func getIntParam(q url.Values, key string, dflt int) (int, error) {
 }
 
 func sendError(resp http.ResponseWriter, req *http.Request, code int, msg string) {
-	ct := httputil.NegotiateContentType(req, []string{jsonContent, textContent}, jsonContent)
+	ct := goscaffold.SelectMediaType(req, []string{jsonContent, textContent})
 
 	switch ct {
 	case jsonContent:

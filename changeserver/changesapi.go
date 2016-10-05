@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/30x/goscaffold"
 	"github.com/30x/transicator/common"
 	"github.com/30x/transicator/replication"
 	log "github.com/Sirupsen/logrus"
-	"github.com/golang/gddo/httputil"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -26,7 +26,7 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	enc := httputil.NegotiateContentEncoding(req, []string{jsonContent})
+	enc := goscaffold.SelectMediaType(req, []string{jsonContent})
 	if enc == "" {
 		resp.WriteHeader(http.StatusUnsupportedMediaType)
 		return
