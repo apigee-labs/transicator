@@ -8,19 +8,13 @@
 #
 # docker run --rm -t snapshotserver -u postgres://user:pass@host/databasename?ssl=false
 
-FROM golang:1.7.1-alpine
+FROM thirtyx/go-leveldb:1.7.1
 
 COPY . /go/src/github.com/30x/transicator
 
-# Add necessary non-standard repositories for APK
-# then install "glide" tool to get our dependencies.
 RUN \
-     echo "@community http://nl.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories \
-  && apk add --no-cache \
-     git glide@community
-
-RUN \
-    (cd /go/src/github.com/30x/transicator; glide install) \
+    rm -rf /go/src/github.com/30x/transicator/vendor \
+ && (cd /go/src/github.com/30x/transicator; glide install) \
  && (cd /go/src/github.com/30x/transicator/snapshotserver; go build -o /snapshotserver) \
  && rm -r /go
 
