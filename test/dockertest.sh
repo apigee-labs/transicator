@@ -13,15 +13,11 @@ ssName=snapshot-test-$$
 csName=changeserver-test-$$
 slotName=changeserver_test_slot
 
-# Need a network for our tests
-docker network create --driver bridge ${netName}
-
 # Build postgresql image
 docker build --tag ${dbName} ./pgoutput
 
 # Launch it
-docker run -d -P \
-  --network ${netName} \
+docker run -d \
   --name ${dbName} \
   -e POSTGRES_PASSWORD=${TEST_PG_PW} \
   ${dbName}
@@ -31,9 +27,9 @@ docker build --tag ${testName} -f ./test/Dockerfile .
 
 # Run the unit tests in it
 docker run --rm -it \
-  --network ${netName} \
+  --link ${dbName}:postgres \
   -e PGPASSWORD=${TEST_PG_PW} \
-  -e DBHOST=${dbName} \
+  -e DBHOST=postgres \
   ${testName} \
   /go/src/github.com/30x/transicator/test/container_test_script.sh
 
@@ -44,23 +40,25 @@ docker build --tag ${csName} -f ./changeserver/Dockerfile.changeserver .
 # Launch them
 docker run -d \
   --name ${csName} \
-  -P --network ${netName} \
+  --link ${dbName}:postgres \
   ${csName} \
   -s ${slotName} -u postgres://postgres:${TEST_PG_PW}@${dbName}/postgres
 
 docker run -d \
   --name ${ssName} \
-  -P --network ${netName} \
+  --link ${dbName}:postgres \
   ${ssName} \
   -u postgres://postgres:${TEST_PG_PW}@${dbName}/postgres
 
 # Run tests of the combined servers and Postgres
 docker run --rm -it \
-  --network ${netName} \
+  --link ${dbName}:postgres \
+  --link ${csName}:changeserver \
+  --link ${ssName}:snapshotserver \
   -e PGPASSWORD=${TEST_PG_PW} \
-  -e DBHOST=${dbName} \
-  -e CHANGE_HOST=${csName} \
-  -e SNAPSHOT_HOST=${ssName} \
+  -e DBHOST=postgres \
+  -e CHANGE_HOST=changeserver \
+  -e SNAPSHOT_HOST=snapshotserver \
   -e CHANGE_PORT=9000 \
   -e SNAPSHOT_PORT=9001 \
   ${testName} \
@@ -78,7 +76,11 @@ docker rm -f ${ssName}
 #docker logs ${dbName}
 docker rm -f ${dbName}
 
-docker network rm ${netName}
-
+# --no-prune here will leave intermediate images around, which speeds
+# up rebuild on a developer box
 RMOPT=--no-prune
+if [ $1 == "fullcleanup" ]
+then
+  RMOPT=
+fi
 docker rmi $(RMOPT) ${testName} ${ssName} ${csName} ${dbName}
