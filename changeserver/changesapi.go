@@ -77,10 +77,12 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 
 	// Need to advance past a single "since" value
 	sinceSeq.Index++
+	var metadata [][]byte
 
 	log.Debugf("Receiving changes: scopes = %v since = %s limit = %d block = %d",
 		scopes, sinceSeq, limit, block)
-	entries, err := s.db.GetMultiEntries(scopes, sinceSeq.LSN,
+	entries, metadata, err := s.db.GetMultiEntries(
+		scopes, []string{lastSequenceKey}, sinceSeq.LSN,
 		sinceSeq.Index, limit, snapshotFilter)
 	if err != nil {
 		sendError(resp, req, http.StatusInternalServerError, err.Error())
@@ -92,7 +94,8 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 		log.Debugf("Blocking for up to %d seconds", block)
 		newIndex := s.tracker.timedWait(sinceSeq, time.Duration(block)*time.Second, scopes)
 		if newIndex.Compare(sinceSeq) > 0 {
-			entries, err = s.db.GetMultiEntries(scopes, sinceSeq.LSN,
+			entries, metadata, err = s.db.GetMultiEntries(
+				scopes, []string{lastSequenceKey}, sinceSeq.LSN,
 				sinceSeq.Index, limit, snapshotFilter)
 			if err != nil {
 				sendError(resp, req, http.StatusInternalServerError, err.Error())
@@ -102,7 +105,14 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 		log.Debugf("Received %d changes after blocking", len(entries))
 	}
 
-	changeList := common.ChangeList{}
+	lastSeq, err := common.ParseSequenceBytes(metadata[0])
+	if err != nil {
+		sendError(resp, req, http.StatusInternalServerError, err.Error())
+		return
+	}
+	changeList := common.ChangeList{
+		LastSequence: lastSeq.String(),
+	}
 
 	for _, e := range entries {
 		change, err := decodeChangeProto(e)

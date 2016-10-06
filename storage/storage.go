@@ -125,7 +125,7 @@ func (s *DB) GetIntMetadata(key string) (int64, error) {
 	keyBuf, keyLen := stringToKey(StringKey, key)
 	defer freePtr(keyBuf)
 
-	val, valLen, err := s.readEntry(keyBuf, keyLen)
+	val, valLen, err := s.readEntry(keyBuf, keyLen, defaultReadOptions)
 	if err != nil {
 		return 0, err
 	}
@@ -142,10 +142,14 @@ GetMetadata returns the raw metadata matching the specified key,
 or nil if the key is not found.
 */
 func (s *DB) GetMetadata(key string) ([]byte, error) {
+	return s.readMetadataKey(key, defaultReadOptions)
+}
+
+func (s *DB) readMetadataKey(key string, ro *C.leveldb_readoptions_t) ([]byte, error) {
 	keyBuf, keyLen := stringToKey(StringKey, key)
 	defer freePtr(keyBuf)
 
-	val, valLen, err := s.readEntry(keyBuf, keyLen)
+	val, valLen, err := s.readEntry(keyBuf, keyLen, ro)
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +237,7 @@ func (s *DB) GetEntry(scope string, lsn uint64, index uint32) ([]byte, error) {
 	keyBuf, keyLen := indexToKey(IndexKey, scope, lsn, index)
 	defer freePtr(keyBuf)
 
-	valBuf, valLen, err := s.readEntry(keyBuf, keyLen)
+	valBuf, valLen, err := s.readEntry(keyBuf, keyLen, defaultReadOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -266,15 +270,20 @@ func (s *DB) GetEntries(scope string, startLSN uint64,
 
 /*
 GetMultiEntries returns entries in sequence number order a list of scopes.
+It also returns a set of metadata.
 The first entry returned will be the first entry that matches the specified
 startLSN and startIndex. No more than "limit" entries will be returned.
 To retrieve the very next entry after an entry, simply increment the index
 by 1. This method uses a snapshot to guarantee consistency even if data is
 being inserted to the database -- as long as the data is being inserted
 in LSN order!
+The first array returned is the array of entries (again, in "sequence" order).
+The second is the array of metadata values, if any, in the order in which
+the keys were supplied.
 */
-func (s *DB) GetMultiEntries(scopes []string, startLSN uint64,
-	startIndex uint32, limit int, filter func([]byte) bool) ([][]byte, error) {
+func (s *DB) GetMultiEntries(scopes []string, metadataKeys []string,
+	startLSN uint64, startIndex uint32,
+	limit int, filter func([]byte) bool) ([][]byte, [][]byte, error) {
 
 	// Do this all inside a level DB snapshot so that we get a repeatable read
 	snap := C.leveldb_create_snapshot(s.db)
@@ -289,9 +298,21 @@ func (s *DB) GetMultiEntries(scopes []string, startLSN uint64,
 	for _, scope := range scopes {
 		rr, err := s.readOneRange(scope, startLSN, startIndex, limit, ropts, filter)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		results = append(results, rr...)
+	}
+
+	// Read metadata for each key
+	var metadata [][]byte
+	for _, key := range metadataKeys {
+		data, err := s.readMetadataKey(key, ropts)
+		if err != nil {
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		metadata = append(metadata, data)
 	}
 
 	// Sort and then take limit
@@ -301,7 +322,7 @@ func (s *DB) GetMultiEntries(scopes []string, startLSN uint64,
 	for count := 0; count < len(results) && count < limit; count++ {
 		final = append(final, results[count].data)
 	}
-	return final, nil
+	return final, metadata, nil
 }
 
 func (s *DB) readOneRange(scope string, startLSN uint64,
@@ -377,13 +398,14 @@ func (s *DB) putEntry(
 }
 
 func (s *DB) readEntry(
-	keyPtr unsafe.Pointer, keyLen C.size_t) (unsafe.Pointer, C.size_t, error) {
+	keyPtr unsafe.Pointer, keyLen C.size_t,
+	ro *C.leveldb_readoptions_t) (unsafe.Pointer, C.size_t, error) {
 
 	var valLen C.size_t
 	var e *C.char
 
 	val := C.go_db_get(
-		s.db, defaultReadOptions,
+		s.db, ro,
 		keyPtr, keyLen,
 		&valLen, &e)
 

@@ -62,6 +62,7 @@ var _ = Describe("Changes API Tests", func() {
 			}
 			if compareSequence(cl, 0, lastTestSequence) {
 				lastChangeSequence = cl.Changes[0].GetSequence()
+				Expect(cl.LastSequence).Should(Equal(lastChangeSequence.String()))
 				return true
 			}
 			return false

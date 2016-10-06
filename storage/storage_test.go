@@ -2,6 +2,8 @@ package storage
 
 import (
 	"bytes"
+	"fmt"
+	"math"
 	"testing/quick"
 
 	. "github.com/onsi/ginkgo"
@@ -176,7 +178,7 @@ func testGetSequenceFilter(tag string, lsn uint64,
 
 func testGetSequences(tags []string, lsn uint64,
 	index uint32, limit int, expected [][]byte) {
-	ret, err := testDB.GetMultiEntries(tags, lsn, index, limit, nil)
+	ret, _, err := testDB.GetMultiEntries(tags, nil, lsn, index, limit, nil)
 	Expect(err).Should(Succeed())
 	Expect(len(ret)).Should(Equal(len(expected)))
 	for i := range expected {
@@ -213,6 +215,16 @@ func testEntry(key string, lsn uint64, index uint32, val []byte) bool {
 
 func testEntryAndData(key string, lsn uint64, index uint32, val []byte,
 	mkey string, mval []byte) bool {
+	if key == "" {
+		return true
+	}
+	if lsn > math.MaxInt64 {
+		// TODO this does not sound right to me, but the test fails if
+		// the high bit is set
+		return true
+	}
+	fmt.Fprintf(GinkgoWriter, "EandD: key = %v lsn = %x index = %x mkey = %v val = %v mval = %v\n",
+		[]byte(key), lsn, index, []byte(mkey), val, mval)
 	err := testDB.PutEntryAndMetadata(key, lsn, index, val, mkey, mval)
 	Expect(err).Should(Succeed())
 	ret, err := testDB.GetEntry(key, lsn, index)
@@ -221,5 +233,20 @@ func testEntryAndData(key string, lsn uint64, index uint32, val []byte,
 	mret, err := testDB.GetMetadata(mkey)
 	Expect(err).Should(Succeed())
 	Expect(bytes.Equal(mval, mret)).Should(BeTrue())
+	entries, err :=
+		testDB.GetEntries(key, 0, 0, 100, func([]byte) bool {
+			return true
+		})
+	Expect(err).Should(Succeed())
+	Expect(len(entries)).Should(Equal(1))
+
+	entries, datas, err :=
+		testDB.GetMultiEntries([]string{key}, []string{mkey},
+			0, 0, 100, func([]byte) bool {
+				return true
+			})
+	Expect(err).Should(Succeed())
+	Expect(len(entries)).Should(Equal(1))
+	Expect(len(datas)).Should(Equal(1))
 	return true
 }

@@ -9,7 +9,7 @@ all: ./bin/changeserver ./bin/snapshotserver
 ./bin:
 	mkdir bin
 
-test:
+tests:
 	go test ./replication ./common ./storage ./pgclient ./snapshotserver ./changeserver
 
 clean:

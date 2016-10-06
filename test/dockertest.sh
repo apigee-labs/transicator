@@ -80,7 +80,5 @@ docker rm -f ${dbName}
 
 docker network rm ${netName}
 
-docker rmi ${testName}
-docker rmi ${ssName}
-docker rmi ${csName}
-docker rmi ${dbName}
+RMOPT=--no-prune
+docker rmi $(RMOPT) ${testName} ${ssName} ${csName} ${dbName}

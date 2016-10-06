@@ -245,7 +245,7 @@ var _ = Describe("Change tracker", func() {
 	})
 
 	It("Close", func() {
-		tracker := createTracker()
+		tracker = createTracker()
 		tracker.update(common.MakeSequence(2, 0), "")
 		done := make(chan uint64, 1)
 
