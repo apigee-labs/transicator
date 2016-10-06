@@ -26,6 +26,18 @@ paths:
             are sorted by sequence regardless of scope.
           required: true
           type: string
+        - name: snapshot
+          in: query
+          description:
+            If specified, then this must be set to a "snapshot ID" from Postgres.
+            This will be in the format "xmin:xmax:xip1,xip2,...xipN" and is
+            normally returned by executing "select txid_current_snapshot()".
+            By including this parameter, the change list will never include
+            any data that would be *visible* in the specified snapshot.
+            So in other words, if the value of this parameter comes from
+            a Postgres query executed during a transaction, then the
+            change server will not return any database changes that
+            were already in the snapshot.
         - name: since
           in: query
           description:
