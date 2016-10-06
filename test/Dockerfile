@@ -7,5 +7,3 @@ RUN \
   && (cd /go/src/github.com/30x/transicator;glide install)
 
 WORKDIR /go/src/github.com/30x/transicator
-
-CMD ./test/container_test_script.sh

@@ -25,3 +25,8 @@ RUN \
  && (cd /go/src/github.com/30x/transicator;glide install) \
  && (cd /go/src/github.com/30x/transicator/changeserver; go build -o /changeserver) \
  && rm -r /go
+
+EXPOSE 9000
+VOLUME [ "/data" ]
+
+ENTRYPOINT [ "/changeserver", "-p", "9000", "-d", "/data"]

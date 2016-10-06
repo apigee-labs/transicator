@@ -5,16 +5,25 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"io"
+	"sync"
 )
 
 const (
 	pgTimeFormat = "2006-01-02 15:04:05-07"
 )
 
-var _ = registerDriver()
+var registered = &sync.Once{}
 
-func registerDriver() bool {
-	sql.Register("transicator", &PgDriver{})
+var _ = RegisterDriver()
+
+/*
+RegisterDriver ensures that the driver has been registered with the
+runtime. It's OK to call it more than once.
+*/
+func RegisterDriver() bool {
+	registered.Do(func() {
+		sql.Register("transicator", &PgDriver{})
+	})
 	return true
 }
 
