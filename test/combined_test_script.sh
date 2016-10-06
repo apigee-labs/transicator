@@ -5,7 +5,11 @@
 TEST_PG_URL=postgres://postgres:${PGPASSWORD}@${DBHOST}/postgres
 export TEST_PG_URL
 
-(cd ./test; go test)
+if [ ! -d test-reports ]
+then
+  mkdir test-reports
+fi
+go test ./test
 if [ $? -eq 0 ]
 then
   echo "** SUCCESS **"

@@ -8,6 +8,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 )
 
@@ -19,7 +20,8 @@ var dbURL string
 
 func TestPGClient(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "pgclient suite")
+	junitReporter := reporters.NewJUnitReporter("../test-reports/pgclient.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Pgclient suite", []Reporter{junitReporter})
 }
 
 var _ = BeforeSuite(func() {

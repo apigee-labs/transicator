@@ -5,6 +5,10 @@
 TEST_PG_URL=postgres://postgres:${PGPASSWORD}@${DBHOST}/postgres
 export TEST_PG_URL
 
+if [ ! -d test-reports ]
+then
+  mkdir test-reports
+fi
 go test \
   ./common ./storage ./pgclient \
   ./replication ./snapshotserver ./changeserver

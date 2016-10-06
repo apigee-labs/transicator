@@ -14,6 +14,7 @@ import (
 	"github.com/30x/transicator/replication"
 	"github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 )
 
@@ -41,7 +42,8 @@ func TestServer(t *testing.T) {
 		fmt.Println("  postgres://user:password@host:port/database")
 	} else {
 		RegisterFailHandler(Fail)
-		RunSpecs(t, "changeserver suite")
+		junitReporter := reporters.NewJUnitReporter("../test-reports/changeserver.xml")
+		RunSpecsWithDefaultAndCustomReporters(t, "Changeserver suite", []Reporter{junitReporter})
 	}
 }
 

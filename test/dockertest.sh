@@ -6,6 +6,11 @@ then
   read -s TEST_PG_PW
 fi
 
+if [ ! -d ./docker-test-reports ]
+then
+  mkdir ./docker-test-reports
+fi
+
 netName=transicator-tests-$$
 dbName=transicator-test-pg-$$
 testName=transicator-test-$$
@@ -26,12 +31,17 @@ docker run -d \
 docker build --tag ${testName} -f ./test/Dockerfile .
 
 # Run the unit tests in it
-docker run --rm -i \
+docker run -i \
+  --name ${testName} \
   --link ${dbName}:postgres \
   -e PGPASSWORD=${TEST_PG_PW} \
   -e DBHOST=postgres \
   ${testName} \
   /go/src/github.com/30x/transicator/test/container_test_script.sh
+
+# Copy JUnit test files and rm container
+docker cp ${testName}:/go/src/github.com/30x/transicator/test-reports/. ./docker-test-reports
+docker rm ${testName}
 
 # Build changeserver and snapshot server images
 docker build --tag ${ssName} -f ./snapshotserver/Dockerfile.snapshotserver .
@@ -51,7 +61,8 @@ docker run -d \
   -u postgres://postgres:${TEST_PG_PW}@${dbName}/postgres
 
 # Run tests of the combined servers and Postgres
-docker run --rm -i \
+docker run -i \
+  --name ${testName} \
   --link ${dbName}:postgres \
   --link ${csName}:changeserver \
   --link ${ssName}:snapshotserver \
@@ -63,6 +74,9 @@ docker run --rm -i \
   -e SNAPSHOT_PORT=9001 \
   ${testName} \
   /go/src/github.com/30x/transicator/test/combined_test_script.sh
+
+docker cp ${testName}:/go/src/github.com/30x/transicator/test-reports/. ./docker-test-reports
+docker rm ${testName}
 
 echo "*** changeserver logs ***"
 docker logs ${csName}

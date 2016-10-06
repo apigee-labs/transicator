@@ -6,12 +6,14 @@ import (
 	"testing"
 
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 )
 
 func TestEncoding(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Encoding suite")
+	junitReporter := reporters.NewJUnitReporter("../test-reports/common.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Encoding suite", []Reporter{junitReporter})
 }
 
 var _ = Describe("Encoding Tests", func() {

@@ -9,8 +9,14 @@ all: ./bin/changeserver ./bin/snapshotserver
 ./bin:
 	mkdir bin
 
-tests:
+./test-reports:
+	mkdir test-reports
+
+tests: ./test-reports
 	go test ./replication ./common ./storage ./pgclient ./snapshotserver ./changeserver
+
+dockerTests:
+	./test/dockertest.sh
 
 clean:
 	rm -f bin/changeserver

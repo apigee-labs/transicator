@@ -9,6 +9,7 @@ import (
 
 	"github.com/30x/transicator/pgclient"
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 )
 
@@ -16,7 +17,8 @@ var portSpec = regexp.MustCompile("^[\\.0-9]+:([0-9]+)->.*$")
 
 func TestCombined(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Combined suite")
+	junitReporter := reporters.NewJUnitReporter("../test-reports/combined.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Combined suite", []Reporter{junitReporter})
 }
 
 var changeBase string

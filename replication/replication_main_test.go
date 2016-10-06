@@ -9,6 +9,7 @@ import (
 	"github.com/30x/transicator/pgclient"
 	"github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 )
 
@@ -26,7 +27,8 @@ func TestReplication(t *testing.T) {
 		fmt.Println("  Example: postgres://user:password@host:port/database")
 	} else {
 		RegisterFailHandler(Fail)
-		RunSpecs(t, "replication suite")
+		junitReporter := reporters.NewJUnitReporter("../test-reports/replication.xml")
+		RunSpecsWithDefaultAndCustomReporters(t, "Replication suite", []Reporter{junitReporter})
 	}
 }
 
