@@ -26,7 +26,7 @@ docker run -d \
 docker build --tag ${testName} -f ./test/Dockerfile .
 
 # Run the unit tests in it
-docker run --rm -it \
+docker run --rm -i \
   --link ${dbName}:postgres \
   -e PGPASSWORD=${TEST_PG_PW} \
   -e DBHOST=postgres \
@@ -51,7 +51,7 @@ docker run -d \
   -u postgres://postgres:${TEST_PG_PW}@${dbName}/postgres
 
 # Run tests of the combined servers and Postgres
-docker run --rm -it \
+docker run --rm -i \
   --link ${dbName}:postgres \
   --link ${csName}:changeserver \
   --link ${ssName}:snapshotserver \
@@ -78,9 +78,12 @@ docker rm -f ${dbName}
 
 # --no-prune here will leave intermediate images around, which speeds
 # up rebuild on a developer box
-RMOPT=--no-prune
-if [ $1 == "fullcleanup" ]
+RMCMD="docker rmi --no-prune"
+if [ $# -ge 1 ]
 then
-  RMOPT=
+  if [ $1 == "fullcleanup" ]
+  then
+    RMCMD="docker rmi"
+  fi
 fi
-docker rmi $(RMOPT) ${testName} ${ssName} ${csName} ${dbName}
+${RMCMD} ${testName} ${ssName} ${csName} ${dbName}
