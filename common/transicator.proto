@@ -1,8 +1,18 @@
 package common;
 
+message ValuePb {
+  oneof value {
+    string string = 1;
+    int64 int = 2;
+    double double = 3;
+    bytes bytes = 4;
+    bool bool = 5;
+  }
+}
+
 message ColumnPb {
   required string name = 1;
-  required string value = 2;
+  optional ValuePb value = 2;
   optional int32 type = 3;
 }
 
@@ -16,4 +26,25 @@ message ChangePb {
   optional uint32 transactionID = 7;
   repeated ColumnPb newColumns = 8;
   repeated ColumnPb oldColumns = 9;
+}
+
+message SnapshotHeaderPb {
+  required string timestamp = 1;
+  required string snapshot = 2;
+}
+
+message TableHeaderPb {
+  required string name = 1;
+  repeated ColumnPb columns = 2;
+}
+
+message RowPb {
+  repeated ValuePb values = 1;
+}
+
+message StreamMessagePb {
+  oneof message {
+    TableHeaderPb table = 1;
+    RowPb row = 2;
+  }
 }

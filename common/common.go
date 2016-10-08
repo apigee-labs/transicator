@@ -21,7 +21,7 @@ value and a type.
 */
 type ColumnVal struct {
 	// Column value, in the string format that comes straight from Postgres
-	Value string `json:"value"`
+	Value interface{} `json:"value"`
 	// The Postgres type of the column, as defined in the Postgres source
 	Type int32 `json:"type"`
 }

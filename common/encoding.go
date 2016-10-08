@@ -104,8 +104,25 @@ func makeRow(cols []*ColumnPb) Row {
 	row := make(map[string]*ColumnVal)
 	for _, colPb := range cols {
 		cv := &ColumnVal{
-			Value: colPb.GetValue(),
-			Type:  colPb.GetType(),
+			Type: colPb.GetType(),
+		}
+		valPb := colPb.GetValue()
+		if valPb != nil {
+			pv := valPb.GetValue()
+			if pv != nil {
+				switch pv.(type) {
+				case *ValuePb_String_:
+					cv.Value = valPb.GetString_()
+				case *ValuePb_Int:
+					cv.Value = valPb.GetInt()
+				case *ValuePb_Double:
+					cv.Value = valPb.GetDouble()
+				case *ValuePb_Bool:
+					cv.Value = valPb.GetBool()
+				case *ValuePb_Bytes:
+					cv.Value = valPb.GetBytes()
+				}
+			}
 		}
 		row[colPb.GetName()] = cv
 	}
@@ -160,8 +177,13 @@ func unmakeRow(row Row) []*ColumnPb {
 	var cols []*ColumnPb
 	for name, v := range row {
 		cpb := &ColumnPb{
-			Name:  proto.String(name),
-			Value: proto.String(v.Value),
+			Name: proto.String(name),
+		}
+		if v != nil {
+			v := &ValuePb{
+				Value: convertParameter(v.Value),
+			}
+			cpb.Value = v
 		}
 		if v.Type != 0 {
 			cpb.Type = proto.Int32(v.Type)
@@ -172,15 +194,15 @@ func unmakeRow(row Row) []*ColumnPb {
 }
 
 /*
-Helper function that inserts Tables in to a existing Snapshot
+AddTables is a helper function that inserts Tables in to a existing Snapshot
 */
-func (sd *Snapshot) AddTables(tb Table) []Table {
-	sd.Tables = append(sd.Tables, tb)
-	return sd.Tables
+func (s *Snapshot) AddTables(tb Table) []Table {
+	s.Tables = append(s.Tables, tb)
+	return s.Tables
 }
 
 /*
-Helper function that inserts rows to an existing table
+AddRowstoTable is a helper function that inserts rows to an existing table
 */
 func (sid *Table) AddRowstoTable(rv Row) []Row {
 	sid.Rows = append(sid.Rows, rv)
