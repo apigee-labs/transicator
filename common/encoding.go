@@ -115,6 +115,8 @@ func makeRow(cols []*ColumnPb) Row {
 					cv.Value = valPb.GetString_()
 				case *ValuePb_Int:
 					cv.Value = valPb.GetInt()
+				case *ValuePb_Uint:
+					cv.Value = valPb.GetUint()
 				case *ValuePb_Double:
 					cv.Value = valPb.GetDouble()
 				case *ValuePb_Bool:

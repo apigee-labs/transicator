@@ -60,17 +60,12 @@ func (s *server) handleChange(c *common.Change, firstChange common.Sequence) com
 }
 
 func getScope(c *common.Change) string {
+	var scope string
 	if c.NewRow != nil {
-		if c.NewRow[scopeField] == nil {
-			return ""
-		}
-		return c.NewRow[scopeField].Value
+		c.NewRow.Get(scopeField, &scope)
 	}
 	if c.OldRow != nil {
-		if c.OldRow[scopeField] == nil {
-			return ""
-		}
-		return c.OldRow[scopeField].Value
+		c.OldRow.Get(scopeField, &scope)
 	}
-	return ""
+	return scope
 }

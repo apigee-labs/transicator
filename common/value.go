@@ -19,18 +19,41 @@ Get places the value of the column into the specified interface if possible.
 func (v ColumnVal) Get(d interface{}) error {
 	switch v.Value.(type) {
 	case string:
-		return v.getString(d, v.Value.(string))
+		return getString(d, v.Value.(string))
 	case int64:
-		return v.getInt(d, v.Value.(int64))
+		return getInt(d, v.Value.(int64))
+	case uint64:
+		return getUint(d, v.Value.(uint64))
 	case float64:
-		return v.getFloat(d, v.Value.(float64))
+		return getFloat(d, v.Value.(float64))
 	case bool:
-		return v.getBool(d, v.Value.(bool))
+		return getBool(d, v.Value.(bool))
 	case []byte:
-		return v.getBytes(d, v.Value.([]byte))
+		return getBytes(d, v.Value.([]byte))
 	default:
-		panic("Value not of expected type")
+		return errors.New("Value not of expected type")
 	}
+}
+
+/*
+Get retrieves the value of the specified type just like "get", but it sets the
+target to the empty value if the column is not present.
+*/
+func (r Row) Get(name string, d interface{}) error {
+	col := r[name]
+	if col != nil {
+		return col.Get(d)
+	}
+
+	switch d.(type) {
+	case *string:
+		*(d.(*string)) = ""
+	case *[]byte:
+		*(d.(*[]byte)) = nil
+	default:
+		return getInt(d, 0)
+	}
+	return nil
 }
 
 /*
@@ -43,7 +66,7 @@ func (v ColumnVal) String() string {
 	return s
 }
 
-func (v ColumnVal) getString(d interface{}, s string) error {
+func getString(d interface{}, s string) error {
 	switch d.(type) {
 	case *string:
 		*(d.(*string)) = s
@@ -77,6 +100,12 @@ func (v ColumnVal) getString(d interface{}, s string) error {
 			return err
 		}
 		*(d.(*uint32)) = uint32(iv)
+	case *uint:
+		iv, err := strconv.ParseUint(s, 10, 32)
+		if err != nil {
+			return err
+		}
+		*(d.(*uint)) = uint(iv)
 	case *uint16:
 		iv, err := strconv.ParseUint(s, 10, 16)
 		if err != nil {
@@ -109,7 +138,7 @@ func (v ColumnVal) getString(d interface{}, s string) error {
 	return nil
 }
 
-func (v ColumnVal) getInt(d interface{}, i int64) error {
+func getInt(d interface{}, i int64) error {
 	switch d.(type) {
 	case *string:
 		*(d.(*string)) = strconv.FormatInt(i, 10)
@@ -117,12 +146,16 @@ func (v ColumnVal) getInt(d interface{}, i int64) error {
 		*(d.(*int64)) = i
 	case *int32:
 		*(d.(*int32)) = int32(i)
+	case *int:
+		*(d.(*int)) = int(i)
 	case *int16:
 		*(d.(*int16)) = int16(i)
 	case *uint64:
 		*(d.(*uint64)) = uint64(i)
 	case *uint32:
 		*(d.(*uint32)) = uint32(i)
+	case *uint:
+		*(d.(*uint)) = uint(i)
 	case *uint16:
 		*(d.(*uint16)) = uint16(i)
 	case *float64:
@@ -135,15 +168,49 @@ func (v ColumnVal) getInt(d interface{}, i int64) error {
 		} else {
 			*(d.(*bool)) = true
 		}
-	case *[]byte:
-		*(d.(*[]byte)) = []byte(strconv.FormatInt(i, 10))
 	default:
 		return errors.New("Invalid target type")
 	}
 	return nil
 }
 
-func (v ColumnVal) getFloat(d interface{}, i float64) error {
+func getUint(d interface{}, i uint64) error {
+	switch d.(type) {
+	case *string:
+		*(d.(*string)) = strconv.FormatUint(i, 10)
+	case *int64:
+		*(d.(*int64)) = int64(i)
+	case *int32:
+		*(d.(*int32)) = int32(i)
+	case *int:
+		*(d.(*int)) = int(i)
+	case *int16:
+		*(d.(*int16)) = int16(i)
+	case *uint64:
+		*(d.(*uint64)) = i
+	case *uint32:
+		*(d.(*uint32)) = uint32(i)
+	case *uint:
+		*(d.(*uint)) = uint(i)
+	case *uint16:
+		*(d.(*uint16)) = uint16(i)
+	case *float64:
+		*(d.(*float64)) = float64(i)
+	case *float32:
+		*(d.(*float32)) = float32(i)
+	case *bool:
+		if i == 0 {
+			*(d.(*bool)) = false
+		} else {
+			*(d.(*bool)) = true
+		}
+	default:
+		return errors.New("Invalid target type")
+	}
+	return nil
+}
+
+func getFloat(d interface{}, i float64) error {
 	switch d.(type) {
 	case *string:
 		*(d.(*string)) = strconv.FormatFloat(i, 'G', -1, 64)
@@ -151,12 +218,16 @@ func (v ColumnVal) getFloat(d interface{}, i float64) error {
 		*(d.(*int64)) = int64(i)
 	case *int32:
 		*(d.(*int32)) = int32(i)
+	case *int:
+		*(d.(*int)) = int(i)
 	case *int16:
 		*(d.(*int16)) = int16(i)
 	case *uint64:
 		*(d.(*uint64)) = uint64(i)
 	case *uint32:
 		*(d.(*uint32)) = uint32(i)
+	case *uint:
+		*(d.(*uint)) = uint(i)
 	case *uint16:
 		*(d.(*uint16)) = uint16(i)
 	case *float64:
@@ -169,8 +240,6 @@ func (v ColumnVal) getFloat(d interface{}, i float64) error {
 		} else {
 			*(d.(*bool)) = true
 		}
-	case *[]byte:
-		*(d.(*[]byte)) = []byte(strconv.FormatFloat(i, 'G', -1, 64))
 	default:
 		return errors.New("Invalid target type")
 	}
@@ -184,7 +253,7 @@ func isTrue(b bool) int {
 	return 0
 }
 
-func (v ColumnVal) getBool(d interface{}, b bool) error {
+func getBool(d interface{}, b bool) error {
 	switch d.(type) {
 	case *string:
 		*(d.(*string)) = strconv.FormatBool(b)
@@ -192,12 +261,16 @@ func (v ColumnVal) getBool(d interface{}, b bool) error {
 		*(d.(*int64)) = int64(isTrue(b))
 	case *int32:
 		*(d.(*int32)) = int32(isTrue(b))
+	case *int:
+		*(d.(*int)) = int(isTrue(b))
 	case *int16:
 		*(d.(*int16)) = int16(isTrue(b))
 	case *uint64:
 		*(d.(*uint64)) = uint64(isTrue(b))
 	case *uint32:
 		*(d.(*uint32)) = uint32(isTrue(b))
+	case *uint:
+		*(d.(*uint)) = uint(isTrue(b))
 	case *uint16:
 		*(d.(*uint16)) = uint16(isTrue(b))
 	case *float64:
@@ -206,15 +279,13 @@ func (v ColumnVal) getBool(d interface{}, b bool) error {
 		*(d.(*float32)) = float32(isTrue(b))
 	case *bool:
 		*(d.(*bool)) = b
-	case *[]byte:
-		*(d.(*[]byte)) = []byte(strconv.FormatBool(b))
 	default:
 		return errors.New("Invalid target type")
 	}
 	return nil
 }
 
-func (v ColumnVal) getBytes(d interface{}, b []byte) error {
+func getBytes(d interface{}, b []byte) error {
 	switch d.(type) {
 	case *string:
 		*(d.(*string)) = string(b)
@@ -256,21 +327,29 @@ func convertParameter(v interface{}) isValuePb_Value {
 		return &ValuePb_Int{
 			Int: int64(v.(int32)),
 		}
+	case int:
+		return &ValuePb_Int{
+			Int: int64(v.(int)),
+		}
 	case int64:
 		return &ValuePb_Int{
 			Int: v.(int64),
 		}
 	case uint16:
-		return &ValuePb_Int{
-			Int: int64(v.(uint16)),
+		return &ValuePb_Uint{
+			Uint: uint64(v.(uint16)),
 		}
 	case uint32:
-		return &ValuePb_Int{
-			Int: int64(v.(uint32)),
+		return &ValuePb_Uint{
+			Uint: uint64(v.(uint32)),
+		}
+	case uint:
+		return &ValuePb_Uint{
+			Uint: uint64(v.(uint)),
 		}
 	case uint64:
-		return &ValuePb_Int{
-			Int: int64(v.(uint64)),
+		return &ValuePb_Uint{
+			Uint: v.(uint64),
 		}
 	case float32:
 		return &ValuePb_Double{

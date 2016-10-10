@@ -4,9 +4,10 @@ message ValuePb {
   oneof value {
     string string = 1;
     int64 int = 2;
-    double double = 3;
-    bytes bytes = 4;
-    bool bool = 5;
+    uint64 uint = 3;
+    double double = 4;
+    bytes bytes = 5;
+    bool bool = 6;
   }
 }
 
