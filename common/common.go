@@ -35,6 +35,24 @@ value is a ColumnVal that includes both the value and type.
 type Row map[string]*ColumnVal
 
 /*
+A TableInfo is returned when we are reading a snapshot stream. It indicates that
+subsequent Rows returned will affect the specified table.
+*/
+type TableInfo struct {
+	Name    string
+	Columns []ColumnInfo
+}
+
+/*
+ColumnInfo contains information about a column -- its name and Postgres
+data type.
+*/
+type ColumnInfo struct {
+	Name string
+	Type int32
+}
+
+/*
 A Change is a list of changed rows. Each Change describes how the row changed
 (due to an insert, delete, or update), when it changed (LSNs and transaction
 IDs from Postgres), and what changed (the new and/or old rows).

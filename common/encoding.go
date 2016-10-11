@@ -104,31 +104,38 @@ func makeRow(cols []*ColumnPb) Row {
 	row := make(map[string]*ColumnVal)
 	for _, colPb := range cols {
 		cv := &ColumnVal{
-			Type: colPb.GetType(),
-		}
-		valPb := colPb.GetValue()
-		if valPb != nil {
-			pv := valPb.GetValue()
-			if pv != nil {
-				switch pv.(type) {
-				case *ValuePb_String_:
-					cv.Value = valPb.GetString_()
-				case *ValuePb_Int:
-					cv.Value = valPb.GetInt()
-				case *ValuePb_Uint:
-					cv.Value = valPb.GetUint()
-				case *ValuePb_Double:
-					cv.Value = valPb.GetDouble()
-				case *ValuePb_Bool:
-					cv.Value = valPb.GetBool()
-				case *ValuePb_Bytes:
-					cv.Value = valPb.GetBytes()
-				}
-			}
+			Type:  colPb.GetType(),
+			Value: unwrapColumnVal(colPb.GetValue()),
 		}
 		row[colPb.GetName()] = cv
 	}
 	return row
+}
+
+func unwrapColumnVal(v *ValuePb) interface{} {
+	if v == nil {
+		return nil
+	}
+	pv := v.GetValue()
+	if pv == nil {
+		return nil
+	}
+	switch pv.(type) {
+	case *ValuePb_String_:
+		return v.GetString_()
+	case *ValuePb_Int:
+		return v.GetInt()
+	case *ValuePb_Uint:
+		return v.GetUint()
+	case *ValuePb_Double:
+		return v.GetDouble()
+	case *ValuePb_Bool:
+		return v.GetBool()
+	case *ValuePb_Bytes:
+		return v.GetBytes()
+	default:
+		panic("Invalid data type in protobuf")
+	}
 }
 
 /*

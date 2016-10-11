@@ -18,10 +18,10 @@ var _ = Describe("Sequence tests", func() {
 	})
 
 	It("Basic compare", func() {
-		//Expect(testSequenceCompare(1, 1, 1, 1)).Should(BeTrue())
-		//Expect(testSequenceCompare(1, 1, 2, 1)).Should(BeTrue())
-		//Expect(testSequenceCompare(2, 1, 1, 1)).Should(BeTrue())
-		//Expect(testSequenceCompare(1, 1, 1, 2)).Should(BeTrue())
+		Expect(testSequenceCompare(1, 1, 1, 1)).Should(BeTrue())
+		Expect(testSequenceCompare(1, 1, 2, 1)).Should(BeTrue())
+		Expect(testSequenceCompare(2, 1, 1, 1)).Should(BeTrue())
+		Expect(testSequenceCompare(1, 1, 1, 2)).Should(BeTrue())
 		Expect(testSequenceCompare(1, 2, 1, 1)).Should(BeTrue())
 	})
 

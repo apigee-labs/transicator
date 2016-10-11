@@ -21,15 +21,6 @@ type SnapshotWriter struct {
 }
 
 /*
-ColumnInfo contains information about a column -- its name and Postgres
-data type.
-*/
-type ColumnInfo struct {
-	Name     string
-	DataType int32
-}
-
-/*
 CreateSnapshotWriter creates a new SnapshotWriter, with the specified
 Postgres timestap (from "now()") and snapshot specification
 (from "txid_current_snapshot()").
@@ -56,7 +47,6 @@ func CreateSnapshotWriter(timestamp, snapshotInfo string,
 StartTable tells the reader that it's time to start work on a new table.
 It is an error to start a table when a previous table has not been ended.
 */
-/*
 func (w *SnapshotWriter) StartTable(tableName string, cols []ColumnInfo) error {
 	if w.tableWriting {
 		return errors.New("Cannot start a new table because last one isn't finished")
@@ -68,7 +58,7 @@ func (w *SnapshotWriter) StartTable(tableName string, cols []ColumnInfo) error {
 	for _, col := range cols {
 		newCol := &ColumnPb{
 			Name: proto.String(col.Name),
-			Type: proto.Int32(col.DataType),
+			Type: proto.Int32(col.Type),
 		}
 		colPb = append(colPb, newCol)
 	}
@@ -77,15 +67,14 @@ func (w *SnapshotWriter) StartTable(tableName string, cols []ColumnInfo) error {
 		Name:    proto.String(tableName),
 		Columns: colPb,
 	}
-	tableMsg := &StreamMessage_Table{
+	tableMsg := &StreamMessagePb_Table{
 		Table: table,
 	}
-	msg := &StreamMessage{
+	msg := &StreamMessagePb{
 		Message: tableMsg,
 	}
 	return w.writeProto(msg)
 }
-*/
 
 /*
 EndTable ends data for the current table. It is an error to end the table when
@@ -103,10 +92,14 @@ func (w *SnapshotWriter) EndTable() error {
 WriteRow writes the values of a single column. It is an error to call this
 if StartTable was not called. It is also an error if the length of
 "columnValues" does not match the list of names passed to "StartTable."
-Use "" for a null column.
+Values must be primitive types:
+* integer types
+* float types
+* bool
+* string
+* []byte
 */
-/*
-func (w *SnapshotWriter) WriteRow(columnValues []string) error {
+func (w *SnapshotWriter) WriteRow(columnValues []interface{}) error {
 	if !w.tableWriting {
 		return errors.New("Cannot write a row because no table was started")
 	}
@@ -114,25 +107,34 @@ func (w *SnapshotWriter) WriteRow(columnValues []string) error {
 		return errors.New("Write must include consistent number of columns")
 	}
 
-	row := &RowPb{
-		Values: columnValues,
+	var columns []*ValuePb
+	for _, v := range columnValues {
+		col := convertParameter(v)
+		colVal := &ValuePb{
+			Value: col,
+		}
+		columns = append(columns, colVal)
 	}
-	rowMsg := &StreamMessage_Row{
+
+	row := &RowPb{
+		Values: columns,
+	}
+	rowMsg := &StreamMessagePb_Row{
 		Row: row,
 	}
-	msg := &StreamMessage{
+	msg := &StreamMessagePb{
 		Message: rowMsg,
 	}
 	return w.writeProto(msg)
 }
-*/
 
 func (w *SnapshotWriter) writeProto(msg proto.Message) error {
 	buf, err := proto.Marshal(msg)
 	if err != nil {
 		return err
 	}
-	err = binary.Write(w.writer, networkByteOrder, len(buf))
+	bufLen := int32(len(buf))
+	err = binary.Write(w.writer, networkByteOrder, bufLen)
 	if err != nil {
 		return err
 	}
@@ -148,7 +150,7 @@ type SnapshotReader struct {
 	reader    io.Reader
 	timestamp string
 	snapshot  string
-	columns   []ColumnInfo
+	curTable  *TableInfo
 }
 
 /*
@@ -191,19 +193,19 @@ func (r *SnapshotReader) SnapshotInfo() string {
 
 /*
 Next returns the next item from the snapshot. It can be one of two things:
-1) A *TableInfo, which tells us to start writing to a new table, or
-2) a *Row, which denotes what you think it does.
-3) EOF, which indicates that we have reached the end
+1) A TableInfo, which tells us to start writing to a new table, or
+2) a Row, which denotes what you think it does.
+3) io.EOF, which indicates that we have reached the end
 4) an error, which indicates that we got incomplete data.
 */
 func (r *SnapshotReader) Next() (interface{}, error) {
-	/*buf, err := r.rdr.readBuf()
+	buf, err := r.readBuf()
 	if err != nil {
 		// We will pickup EOF here!
 		return nil, err
 	}
 
-	var msg StreamMessage
+	var msg StreamMessagePb
 	err = proto.Unmarshal(buf, &msg)
 	if err != nil {
 		return nil, err
@@ -213,26 +215,50 @@ func (r *SnapshotReader) Next() (interface{}, error) {
 	table := msg.GetTable()
 
 	if table == nil {
-		row := make(map[string]*ColumnVal)
-		// TODO stuff
+		if r.curTable == nil {
+			return nil, errors.New("Invalid stream: Got rows before table")
+		}
+		if len(r.curTable.Columns) != len(row.Values) {
+			return nil, errors.New("Invalid stream: Received incorrect number of columns")
+		}
 
-	} else {
-		// TODO return table info stuff
-		// TODO save column info for later
+		ri := make(map[string]*ColumnVal)
+		for i, col := range r.curTable.Columns {
+			cv := &ColumnVal{
+				Type:  col.Type,
+				Value: unwrapColumnVal(row.Values[i]),
+			}
+			ri[col.Name] = cv
+		}
+		return Row(ri), nil
+
 	}
-	*/
-	return nil, nil
+	// Return information on the new table, plus keep it for column processing
+	var cols []ColumnInfo
+	for _, ti := range table.GetColumns() {
+		col := ColumnInfo{
+			Name: ti.GetName(),
+			Type: ti.GetType(),
+		}
+		cols = append(cols, col)
+	}
+	ti := TableInfo{
+		Name:    table.GetName(),
+		Columns: cols,
+	}
+	r.curTable = &ti
+	return ti, nil
 }
 
 func (r *SnapshotReader) readBuf() ([]byte, error) {
-	var bufLen int
+	var bufLen int32
 	err := binary.Read(r.reader, networkByteOrder, &bufLen)
 	if err != nil {
 		return nil, err
 	}
 
 	buf := make([]byte, bufLen)
-	_, err = r.reader.Read(buf)
+	_, err = io.ReadFull(r.reader, buf)
 	if err == nil {
 		return buf, nil
 	}
