@@ -58,17 +58,30 @@ func main() {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
+	fmt.Fprintf(os.Stdout, "Connecting to Postgres DB %s\n", pgURL)
 	db, err := sql.Open("transicator", pgURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to connect to Postgres. Err : %v\n", err)
 		return
 	}
+	err = db.Ping()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Postgres DB Err : %v\n", err)
+		return
+	}
+
+	fmt.Fprintf(os.Stdout, "Connection to Postgres succeeded %v\n", db)
 	pgdriver := db.Driver().(*pgclient.PgDriver)
 	pgdriver.SetIsolationLevel("repeatable read")
 	pgdriver.SetExtendedColumnNames(true)
 	defer db.Close()
 
 	router := mux.NewRouter()
+
+	router.HandleFunc("/scopes/{apidconfigId}",
+		func(w http.ResponseWriter, r *http.Request) {
+			GetScopes(w, r, db)
+		}).Methods("GET")
 
 	router.HandleFunc("/snapshots",
 		func(w http.ResponseWriter, r *http.Request) {

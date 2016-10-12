@@ -81,7 +81,7 @@ var _ = AfterSuite(func() {
 	if db != nil {
 		fmt.Println(GinkgoWriter, "AfterSuite: drop replication slot")
 		db.Exec("select * from pg_drop_replication_slot('snapshot_test_slot')")
-		tables := []string{"snapshot_test", "APP", "DEVELOPER"}
+		tables := []string{"snapshot_test", "APP", "DEVELOPER", "apid_config", "apid_config_scope"}
 		for _, table := range tables {
 			dropTable(table)
 		}
@@ -173,7 +173,35 @@ alter table developer replica identity full;
  	_apid_scope varchar(255),
 	PRIMARY KEY (id, _apid_scope)
 );
-alter table developer replica identity full;
+alter table app replica identity full;
+
+CREATE TABLE apid_config (
+    id character varying(36) NOT NULL,
+    name character varying(100) NOT NULL,
+    description character varying(255),
+    umbrella_org_app_name character varying(255) NOT NULL,
+    created timestamp without time zone,
+    created_by character varying(100),
+    updated timestamp without time zone,
+    updated_by character varying(100),
+    CONSTRAINT apid_config_pkey PRIMARY KEY (id)
+);
+alter table apid_config replica identity full;
+
+CREATE TABLE apid_config_scope (
+    id character varying(36) NOT NULL,
+    apid_config_id character varying(36) NOT NULL,
+    scope character varying(100) NOT NULL,
+    created timestamp without time zone,
+    created_by character varying(100),
+    updated timestamp without time zone,
+    updated_by character varying(100),
+    CONSTRAINT apid_config_scope_pkey PRIMARY KEY (id),
+    CONSTRAINT apid_config_scope_apid_config_id_fk FOREIGN KEY (apid_config_id)
+          REFERENCES apid_config (id)
+          ON UPDATE NO ACTION ON DELETE NO ACTION
+);
+alter table apid_config_scope replica identity full;
 `
 
 func getCurrentTxid() int32 {
@@ -218,9 +246,11 @@ func getReplChange(r *replication.Replicator) *common.Change {
 var _ = Describe("Taking a snapshot", func() {
 
 	tables := map[string]bool{
-		"app":           true,
-		"developer":     true,
-		"snapshot_test": true,
+		"app":               true,
+		"developer":         true,
+		"snapshot_test":     true,
+		"apid_config_scope": true,
+		"apid_config":       true,
 	}
 
 	BeforeEach(func() {
@@ -342,6 +372,51 @@ var _ = Describe("Taking a snapshot", func() {
 					Expect(len(table.Rows)).To(Equal(0))
 				}
 			}
+		})
+
+	})
+	Context("Insert Tables (apid_config and apid_config_scope), Get JSON data for apidconfigId", func() {
+		It("Insert apidconfig, scopes, and retrieve based on apiconfigid", func() {
+			keys := []string{"id", "name", "umbrella_org_app_name", "scope", "apid_config_scope_pkey"}
+			idvals := []string{"111-222-333", "222-333-444", "aaa-bbb-ccc"}
+
+			tx, err := db.Begin()
+			Expect(err).Should(Succeed())
+			_, err = tx.Exec("insert into APID_CONFIG (id, name, umbrella_org_app_name) values ('aaa-bbb-ccc', 'ConfigId1', 'pepsi');")
+			Expect(err).Should(Succeed())
+			_, err = tx.Exec("insert into APID_CONFIG_SCOPE (id, apid_config_id, scope) values ('111-222-333','aaa-bbb-ccc', 'cokescope1');")
+			Expect(err).Should(Succeed())
+			_, err = tx.Exec("insert into APID_CONFIG_SCOPE (id, apid_config_id, scope) values ('222-333-444','aaa-bbb-ccc', 'cokescope2');")
+			Expect(err).Should(Succeed())
+			_, err = tx.Exec("insert into APID_CONFIG (id, name, umbrella_org_app_name) values ('aaa-bbb-ddd', 'ConfigId2', 'pepsi');")
+			Expect(err).Should(Succeed())
+			_, err = tx.Exec("insert into APID_CONFIG_SCOPE (id, apid_config_id, scope) values ('111-222-555','aaa-bbb-ddd', 'pepsiscope1');")
+			Expect(err).Should(Succeed())
+			_, err = tx.Exec("insert into APID_CONFIG_SCOPE (id, apid_config_id, scope) values ('222-333-666','aaa-bbb-ddd', 'pespsiscope2');")
+			Expect(err).Should(Succeed())
+			err = tx.Commit()
+
+			b, err := GetScopeData("aaa-bbb-ccc", db)
+			Expect(err).Should(Succeed())
+			os.Exit(0)
+			s, err := common.UnmarshalSnapshot(b)
+			Expect(err).Should(Succeed())
+
+			for _, table := range s.Tables {
+				if !tables[table.Name] {
+					continue
+				}
+
+				for _, row := range table.Rows {
+					for l, col := range row {
+						Expect(keys).To(ContainElement(l))
+						if l == "id" {
+							Expect(idvals).To(ContainElement(col.Value))
+						}
+					}
+				}
+			}
+
 		})
 
 	})

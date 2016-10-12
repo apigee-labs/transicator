@@ -33,6 +33,122 @@ func GetTenants(tenantID []string) string {
 
 }
 
+func GetScopes(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+
+	vars := mux.Vars(r)
+	cid := vars["apidconfigId"]
+	if cid == "" {
+		log.Errorf("apidconfigId Missing, Request Ignored")
+		return
+	}
+
+	data, err := GetScopeData(cid, db)
+	if err != nil {
+		log.Errorf("GetOrgSnapshot error: %v", err)
+		return
+	}
+
+	size, err := w.Write(data)
+	if err != nil {
+		log.Errorf("Writing snapshot id %s : Err: %s", cid, err)
+		return
+	}
+
+	log.Infof("Downloaded Scopes for id %s, size %d", cid, size)
+	return
+}
+
+func GetScopeData(cid string, db *sql.DB) (b []byte, err error) {
+
+	var (
+		snapInfo, snapTime string
+	)
+
+	sdataItem := []common.Table{}
+	snapData := common.Snapshot{
+		Tables:       sdataItem,
+		SnapshotInfo: snapInfo,
+		Timestamp:    snapTime,
+	}
+	/* FIXME:
+	 * (1) The two SELECTS have to be part of single transaction.
+	 * (2) Can Snapshot server know the APID_CONFIG & APID_CONFIG_SCOPE schema?
+	 * These are independant of the plugins - so the assumption.
+	 */
+	q := fmt.Sprintf("select * from APID_CONFIG where id = '%s'", cid)
+	rows, err := db.Query(q)
+	if err != nil {
+		log.Errorf("Failed to query APID_CONFIG. Err: ", err)
+		return nil, err
+	}
+
+	err = fillTable(rows, snapData, "APID_CONFIG")
+	if err != nil {
+		log.Errorf("Failed to Insert rows, (Ignored) Err: ", err)
+		return nil, err
+	}
+
+	q = fmt.Sprintf("select * from APID_CONFIG_SCOPE where apid_config_id = '%s'", cid)
+	rows, err = db.Query(q)
+	if err != nil {
+		log.Errorf("Failed to query APID_CONFIG_SCOPE. Err: ", err)
+		return nil, err
+	}
+
+	err = fillTable(rows, snapData, "APID_CONFIG_SCOPE")
+	if err != nil {
+		log.Errorf("Failed to Insert rows, (Ignored) Err: ", err)
+		return nil, err
+	}
+	b, err = json.Marshal(snapData)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func fillTable(rows *sql.Rows, snapData common.Snapshot, table string) (err error) {
+
+	srvItems := []common.Row{}
+	stdItem := common.Table{
+		Rows: srvItems,
+		Name: table,
+	}
+
+	columnNames, columnTypes, err := parseColumnNames(rows)
+	if err != nil {
+		log.Errorf("Failed to get tenant data in Table %s : %+v", table, err)
+		return err
+	}
+
+	for rows.Next() {
+		srvItem := common.Row{}
+		cols := make([]interface{}, len(columnNames))
+		for i := range cols {
+			cols[i] = new(string)
+		}
+		err = rows.Scan(cols...)
+		if err != nil {
+			log.Errorf("Failed to get tenant data  in Table %s : %+v", table, err)
+			return err
+		}
+
+		// TODO where do we get the type? Crud.
+		for i, cv := range cols {
+			cvs := cv.(*string)
+			scv := &common.ColumnVal{
+				Value: *cvs,
+				Type:  columnTypes[i],
+			}
+			srvItem[columnNames[i]] = scv
+		}
+		stdItem.AddRowstoTable(srvItem)
+	}
+	snapData.AddTables(stdItem)
+	return nil
+
+}
+
 func GetTenantSnapshotData(tenantID []string, db *sql.DB) (b []byte, err error) {
 
 	var (
@@ -87,43 +203,10 @@ func GetTenantSnapshotData(tenantID []string, db *sql.DB) (b []byte, err error) 
 			return nil, err
 		}
 		defer rows.Close()
-
-		srvItems := []common.Row{}
-		stdItem := common.Table{
-			Rows: srvItems,
-			Name: t,
-		}
-
-		columnNames, columnTypes, err := parseColumnNames(rows)
+		err = fillTable(rows, snapData, t)
 		if err != nil {
-			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
-			return nil, err
+			log.Errorf("Failed to Insert Table [%s] - Ignored. Err: %+v", t, err)
 		}
-
-		for rows.Next() {
-			srvItem := common.Row{}
-			cols := make([]interface{}, len(columnNames))
-			for i := range cols {
-				cols[i] = new(string)
-			}
-			err = rows.Scan(cols...)
-			if err != nil {
-				log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
-				return nil, err
-			}
-
-			// TODO where do we get the type? Crud.
-			for i, cv := range cols {
-				cvs := cv.(*string)
-				scv := &common.ColumnVal{
-					Value: *cvs,
-					Type:  columnTypes[i],
-				}
-				srvItem[columnNames[i]] = scv
-			}
-			stdItem.AddRowstoTable(srvItem)
-		}
-		snapData.AddTables(stdItem)
 	}
 	b, err = json.Marshal(snapData)
 	if err != nil {
