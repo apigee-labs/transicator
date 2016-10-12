@@ -70,7 +70,7 @@ func main() {
 		return
 	}
 
-	fmt.Fprintf(os.Stdout, "Connection to Postgres succeeded %v\n", db)
+	fmt.Fprintf(os.Stdout, "Connection to Postgres succeeded.\n")
 	pgdriver := db.Driver().(*pgclient.PgDriver)
 	pgdriver.SetIsolationLevel("repeatable read")
 	pgdriver.SetExtendedColumnNames(true)
