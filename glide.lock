@@ -1,5 +1,5 @@
-hash: d19c43fdb941457a7fdc4a15910317b452c2c5243e47d5f9af44752aa654359a
-updated: 2016-10-04T17:48:29.588805837-07:00
+hash: 286e0e192a34a74ae5292f0e33f02c0cef7f01f0fe0e73078c5970067700e7f4
+updated: 2016-10-13T13:34:43.161049015-07:00
 imports:
 - name: github.com/30x/goscaffold
   version: 3e252c23e41b9d2753a1ae6851bced22c5d52d55
@@ -7,10 +7,6 @@ imports:
   version: df1d3ca07d2d07bba352d5b73c4313b4e2a6203e
   subpackages:
   - proto
-- name: github.com/gorilla/context
-  version: 08b5f424b9271eedf6f9f0ce86cb9396ed337a42
-- name: github.com/gorilla/mux
-  version: 757bef944d0f21880861c2dd9c871ca543023cba
 - name: github.com/julienschmidt/httprouter
   version: 8c199fb6259ffc1af525cc3ad52ee60ba8359669
 - name: github.com/Sirupsen/logrus

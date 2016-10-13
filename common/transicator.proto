@@ -29,6 +29,12 @@ message ChangePb {
   repeated ColumnPb oldColumns = 9;
 }
 
+message ChangeListPb {
+  optional string lastSequence = 1;
+  optional string firstSequence = 2;
+  repeated ChangePb changes = 3;
+}
+
 message SnapshotHeaderPb {
   required string timestamp = 1;
   required string snapshot = 2;

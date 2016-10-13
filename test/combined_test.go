@@ -43,7 +43,7 @@ var _ = Describe("Combined tests", func() {
 		fmt.Fprintf(GinkgoWriter, "GET %s\n", url)
 		req, err := http.NewRequest("GET", url, nil)
 		Expect(err).Should(Succeed())
-		req.Header.Add("Accept", "application/transicator-stream+protobuf")
+		req.Header.Add("Accept", "application/transicator+protobuf")
 		resp, err := http.DefaultClient.Do(req)
 		Expect(err).Should(Succeed())
 		Expect(resp.StatusCode).Should(Equal(200))

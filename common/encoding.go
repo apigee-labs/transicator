@@ -48,7 +48,30 @@ func UnmarshalChangeList(data []byte) (*ChangeList, error) {
 }
 
 /*
-Marshal turns a snapshot into formatted, indented JSON. It will panic
+UnmarshalChangeListProto does the same unmarshaling but from a protobuf.
+*/
+func UnmarshalChangeListProto(data []byte) (*ChangeList, error) {
+	var clpb ChangeListPb
+	err := proto.Unmarshal(data, &clpb)
+	if err != nil {
+		return nil, err
+	}
+
+	cl := ChangeList{
+		FirstSequence: clpb.GetFirstSequence(),
+		LastSequence:  clpb.GetLastSequence(),
+	}
+
+	for _, cpb := range clpb.GetChanges() {
+		c := unconvertChangeProto(cpb)
+		cl.Changes = append(cl.Changes, *c)
+	}
+
+	return &cl, nil
+}
+
+/*
+Marshal turns a change list into formatted, indented JSON. It will panic
 on a marshaling error.
 */
 func (l *ChangeList) Marshal() []byte {
@@ -57,6 +80,27 @@ func (l *ChangeList) Marshal() []byte {
 		return data
 	}
 	panic(err.Error())
+}
+
+/*
+MarshalProto does the same as Marshal but it makes a protobf.
+*/
+func (l *ChangeList) MarshalProto() []byte {
+	pb := &ChangeListPb{
+		FirstSequence: proto.String(l.FirstSequence),
+		LastSequence:  proto.String(l.LastSequence),
+	}
+
+	for _, c := range l.Changes {
+		cpb := c.convertProto()
+		pb.Changes = append(pb.Changes, cpb)
+	}
+
+	buf, err := proto.Marshal(pb)
+	if err != nil {
+		panic(err.Error())
+	}
+	return buf
 }
 
 /*
@@ -81,6 +125,11 @@ func UnmarshalChangeProto(data []byte) (*Change, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	return unconvertChangeProto(&cp), nil
+}
+
+func unconvertChangeProto(cp *ChangePb) *Change {
 	c := &Change{
 		Operation:      Operation(cp.GetOperation()),
 		Table:          cp.GetTable(),
@@ -97,7 +146,7 @@ func UnmarshalChangeProto(data []byte) (*Change, error) {
 	if len(cp.GetOldColumns()) > 0 {
 		c.OldRow = makeRow(cp.GetOldColumns())
 	}
-	return c, nil
+	return c
 }
 
 func makeRow(cols []*ColumnPb) Row {
@@ -153,7 +202,15 @@ func (c *Change) Marshal() []byte {
 MarshalProto turns a Change into a protobuf.
 */
 func (c *Change) MarshalProto() []byte {
-	cp := ChangePb{
+	buf, err := proto.Marshal(c.convertProto())
+	if err != nil {
+		panic(err.Error())
+	}
+	return buf
+}
+
+func (c *Change) convertProto() *ChangePb {
+	cp := &ChangePb{
 		Operation: proto.Int32(int32(c.Operation)),
 		Table:     proto.String(c.Table),
 	}
@@ -174,12 +231,7 @@ func (c *Change) MarshalProto() []byte {
 	}
 	cp.NewColumns = unmakeRow(c.NewRow)
 	cp.OldColumns = unmakeRow(c.OldRow)
-
-	buf, err := proto.Marshal(&cp)
-	if err != nil {
-		panic(err.Error())
-	}
-	return buf
+	return cp
 }
 
 func unmakeRow(row Row) []*ColumnPb {

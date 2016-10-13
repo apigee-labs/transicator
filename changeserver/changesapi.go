@@ -26,7 +26,7 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	enc := goscaffold.SelectMediaType(req, []string{jsonContent})
+	enc := goscaffold.SelectMediaType(req, []string{jsonContent, protoContent})
 	if enc == "" {
 		resp.WriteHeader(http.StatusUnsupportedMediaType)
 		return
@@ -125,8 +125,16 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 		changeList.Changes = append(changeList.Changes, *change)
 	}
 
-	resp.Header().Set("Content-Type", jsonContent)
-	resp.Write(changeList.Marshal())
+	switch enc {
+	case jsonContent:
+		resp.Header().Set("Content-Type", jsonContent)
+		resp.Write(changeList.Marshal())
+	case protoContent:
+		resp.Header().Set("Content-Type", protoContent)
+		resp.Write(changeList.MarshalProto())
+	default:
+		panic("Got to an unsupported media type")
+	}
 }
 
 func makeSnapshotFilter(ss *replication.Snapshot) func([]byte) bool {

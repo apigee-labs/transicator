@@ -20,7 +20,7 @@ import (
 
 const (
 	jsonType  = "application/json"
-	protoType = "application/transicator-stream+protobuf"
+	protoType = "application/transicator+protobuf"
 )
 
 /*
