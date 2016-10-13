@@ -10,7 +10,7 @@ import (
 
 	"github.com/30x/transicator/pgclient"
 	"github.com/Sirupsen/logrus"
-	"github.com/gorilla/mux"
+	"github.com/julienschmidt/httprouter"
 )
 
 const (
@@ -68,17 +68,17 @@ func main() {
 	pgdriver.SetExtendedColumnNames(true)
 	defer db.Close()
 
-	router := mux.NewRouter()
+	router := httprouter.New()
 
-	router.HandleFunc("/snapshots",
-		func(w http.ResponseWriter, r *http.Request) {
+	router.GET("/snapshots",
+		func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 			GenSnapshot(w, r)
-		}).Methods("GET")
+		})
 
-	router.HandleFunc("/data/{snapshotid}",
-		func(w http.ResponseWriter, r *http.Request) {
-			DownloadSnapshot(w, r, db)
-		}).Methods("GET")
+	router.GET("/data/:snapshotid",
+		func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+			DownloadSnapshot(w, r, db, p)
+		})
 
 	err = http.ListenAndServe(":"+strconv.Itoa(port), router)
 	fmt.Fprintf(os.Stderr, "Is service running already?, Err: %v\n", err)

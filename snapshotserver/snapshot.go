@@ -13,9 +13,9 @@ import (
 
 	"github.com/30x/goscaffold"
 	"github.com/30x/transicator/common"
+	"github.com/julienschmidt/httprouter"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/gorilla/mux"
 )
 
 const (
@@ -327,10 +327,11 @@ func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 /*
 DownloadSnapshot downloads and resturns the JSON related to the scope
 */
-func DownloadSnapshot(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+func DownloadSnapshot(
+	w http.ResponseWriter, r *http.Request,
+	db *sql.DB, p httprouter.Params) {
 
-	vars := mux.Vars(r)
-	sid := vars["snapshotid"]
+	sid := p[0].Value
 	if sid == "" {
 		log.Errorf("snapshot Id Missing, Request Ignored")
 		return
