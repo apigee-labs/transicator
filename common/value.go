@@ -2,6 +2,7 @@ package common
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 )
 
@@ -307,6 +308,9 @@ func convertParameter(v interface{}) isValuePb_Value {
 		return nil
 	}
 	switch v.(type) {
+	case *interface{}:
+		// This makes it easier to scan rows from an existing SQL driver
+		return convertParameter(*(v.(*interface{})))
 	case string:
 		return &ValuePb_String_{
 			String_: v.(string),
@@ -360,6 +364,6 @@ func convertParameter(v interface{}) isValuePb_Value {
 			Double: v.(float64),
 		}
 	default:
-		panic("Can't convert value type for protobuf")
+		panic(fmt.Sprintf("Can't convert value %v type %T for protobuf", v, v))
 	}
 }

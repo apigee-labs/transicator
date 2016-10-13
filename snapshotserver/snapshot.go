@@ -5,17 +5,27 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
+	"github.com/30x/goscaffold"
 	"github.com/30x/transicator/common"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 )
 
+const (
+	jsonType  = "application/json"
+	protoType = "application/transicator-stream+protobuf"
+)
+
+/*
+GetTenants returns a list of tenant IDs turned into a string.
+*/
 func GetTenants(tenantID []string) string {
 
 	var str bytes.Buffer
@@ -33,7 +43,13 @@ func GetTenants(tenantID []string) string {
 
 }
 
-func GetTenantSnapshotData(tenantID []string, db *sql.DB) (b []byte, err error) {
+/*
+GetTenantSnapshotData pulls the snapshot for a given set of tenants and sends
+them back to a response writer.
+*/
+func GetTenantSnapshotData(
+	tenantID []string, mediaType string,
+	db *sql.DB, w io.Writer) error {
 
 	var (
 		snapInfo, snapTime string
@@ -43,7 +59,7 @@ func GetTenantSnapshotData(tenantID []string, db *sql.DB) (b []byte, err error) 
 	tx, err := db.Begin()
 	if err != nil {
 		log.Errorf("Failed to set Isolation level : %+v", err)
-		return nil, err
+		return err
 	}
 	defer tx.Commit()
 
@@ -51,31 +67,46 @@ func GetTenantSnapshotData(tenantID []string, db *sql.DB) (b []byte, err error) 
 	err = row.Scan(&snapTime)
 	if err != nil {
 		log.Errorf("Failed to get DB timestamp : %+v", err)
-		return nil, err
+		return err
 	}
 
 	row = db.QueryRow("select txid_current_snapshot()")
 	err = row.Scan(&snapInfo)
 	if err != nil {
 		log.Errorf("Failed to get DB snapshot TXID : %+v", err)
-		return nil, err
+		return err
 	}
 
 	tables, err := getTableNames(db)
 	if err != nil {
 		log.Errorf("Failed to table names: %+v", err)
-		return nil, err
+		return err
 	}
 	log.Infof("Tables in snapshot %v", tables)
 
 	sdataItem := []common.Table{}
-	snapData := common.Snapshot{
+	snapData := &common.Snapshot{
 		Tables:       sdataItem,
 		SnapshotInfo: snapInfo,
 		Timestamp:    snapTime,
 	}
 
+	switch mediaType {
+	case "json":
+		return writeJSONSnapshot(snapData, tables, tenantID, db, w)
+	case "proto":
+		return writeProtoSnapshot(snapData, tables, tenantID, db, w)
+	default:
+		panic("Media type processing failed")
+	}
+}
+
+func writeJSONSnapshot(
+	snapData *common.Snapshot, tables []string, tenantID []string,
+	db *sql.DB, w io.Writer) error {
+
 	for _, t := range tables {
+		// Not sure how to use parameters here for the "in" query
 		q := fmt.Sprintf("select * from %s where _apid_scope in %s", t, GetTenants(tenantID))
 		rows, err := db.Query(q)
 		if err != nil {
@@ -84,7 +115,7 @@ func GetTenantSnapshotData(tenantID []string, db *sql.DB) (b []byte, err error) 
 				continue
 			}
 			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
-			return nil, err
+			return err
 		}
 		defer rows.Close()
 
@@ -97,7 +128,7 @@ func GetTenantSnapshotData(tenantID []string, db *sql.DB) (b []byte, err error) 
 		columnNames, columnTypes, err := parseColumnNames(rows)
 		if err != nil {
 			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
-			return nil, err
+			return err
 		}
 
 		for rows.Next() {
@@ -109,10 +140,9 @@ func GetTenantSnapshotData(tenantID []string, db *sql.DB) (b []byte, err error) 
 			err = rows.Scan(cols...)
 			if err != nil {
 				log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
-				return nil, err
+				return err
 			}
 
-			// TODO where do we get the type? Crud.
 			for i, cv := range cols {
 				cvs := cv.(*string)
 				scv := &common.ColumnVal{
@@ -124,12 +154,89 @@ func GetTenantSnapshotData(tenantID []string, db *sql.DB) (b []byte, err error) 
 			stdItem.AddRowstoTable(srvItem)
 		}
 		snapData.AddTables(stdItem)
+
+		// OK to close more than once. Do it here to free up SQL connection.
+		rows.Close()
 	}
-	b, err = json.Marshal(snapData)
+
+	enc := json.NewEncoder(w)
+	err := enc.Encode(snapData)
+	return err
+}
+
+func writeProtoSnapshot(
+	snapData *common.Snapshot, tables []string, tenantID []string,
+	db *sql.DB, w io.Writer) error {
+
+	sw, err := common.CreateSnapshotWriter(
+		snapData.Timestamp, snapData.SnapshotInfo, w)
 	if err != nil {
-		return nil, err
+		log.Errorf("Failed to start snapshot: %s", err)
+		return err
 	}
-	return b, nil
+
+	for _, t := range tables {
+		q := fmt.Sprintf("select * from %s where _apid_scope in %s", t, GetTenants(tenantID))
+		rows, err := db.Query(q)
+		if err != nil {
+			if strings.Contains(err.Error(), "errorMissingColumn") {
+				log.Warnf("Skipping table %s: no _apid_scope column", t)
+				continue
+			}
+			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
+			return err
+		}
+		defer rows.Close()
+
+		columnNames, columnTypes, err := parseColumnNames(rows)
+		if err != nil {
+			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
+			return err
+		}
+		var cis []common.ColumnInfo
+		for i := range columnNames {
+			ci := common.ColumnInfo{
+				Name: columnNames[i],
+				Type: columnTypes[i],
+			}
+			cis = append(cis, ci)
+		}
+
+		err = sw.StartTable(t, cis)
+		if err != nil {
+			log.Errorf("Failed to start table: %s", err)
+			return err
+		}
+
+		for rows.Next() {
+			cols := make([]interface{}, len(columnNames))
+			for i := range cols {
+				cols[i] = new(interface{})
+			}
+			err = rows.Scan(cols...)
+			if err != nil {
+				log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
+				return err
+			}
+
+			err = sw.WriteRow(cols)
+			if err != nil {
+				log.Errorf("Error writing column values: %s", err)
+				return err
+			}
+		}
+
+		err = sw.EndTable()
+		if err != nil {
+			log.Errorf("Error ending table: %s", err)
+			return err
+		}
+
+		// OK to close more than once. Do it here to free up SQL connection.
+		rows.Close()
+	}
+
+	return nil
 }
 
 func getTableNames(db *sql.DB) ([]string, error) {
@@ -153,6 +260,11 @@ func getTableNames(db *sql.DB) ([]string, error) {
 	return tables, nil
 }
 
+/*
+parseColumnNames uses a feature of our Postgres driver that returns column
+names in the format "name:type" instead of just "name". "type" in this case
+is the numeric Postgres type ID.
+*/
 func parseColumnNames(rows *sql.Rows) ([]string, []int32, error) {
 	cols, err := rows.Columns()
 	if err != nil {
@@ -194,7 +306,20 @@ func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 	}
 	scopes, _ = url.QueryUnescape(scopes)
 
-	redURL := "/data/" + scopes
+	mediaType := goscaffold.SelectMediaType(r, []string{jsonType, protoType})
+	typeParam := ""
+
+	switch mediaType {
+	case jsonType:
+		typeParam = "json"
+	case protoType:
+		typeParam = "proto"
+	default:
+		w.WriteHeader(http.StatusUnsupportedMediaType)
+		return
+	}
+
+	redURL := "/data/" + scopes + "?type=" + typeParam
 	http.Redirect(w, r, redURL, http.StatusSeeOther)
 
 }
@@ -213,19 +338,27 @@ func DownloadSnapshot(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	tenantIds := strings.Split(sid, ",")
 	log.Infof("'scopes' in Request %s", tenantIds)
 
-	data, err := GetTenantSnapshotData(tenantIds, db)
+	mediaType := r.URL.Query().Get("type")
+	if mediaType == "" {
+		mediaType = "json"
+	}
+
+	switch mediaType {
+	case "json":
+		w.Header().Add("Content-Type", jsonType)
+	case "proto":
+		w.Header().Add("Content-Type", protoType)
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	err := GetTenantSnapshotData(tenantIds, mediaType, db, w)
 	if err != nil {
 		log.Errorf("GetOrgSnapshot error: %v", err)
 		return
 	}
 
-	size, err := w.Write(data)
-	if err != nil {
-		log.Errorf("Writing snapshot id %s : Err: %s", sid, err)
-		return
-	}
-
-	log.Infof("Downloaded snapshot id %s, size %d", sid, size)
+	log.Infof("Downloaded snapshot id %s", sid)
 	return
-
 }

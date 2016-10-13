@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"testing"
 
@@ -251,9 +253,10 @@ var _ = Describe("Taking a snapshot", func() {
 			Expect(err).Should(Succeed())
 
 			scope := []string{"pepsi__dev"}
-			b, err := GetTenantSnapshotData(scope, db)
+			buf := &bytes.Buffer{}
+			err = GetTenantSnapshotData(scope, "json", db, buf)
 			Expect(err).Should(Succeed())
-			s, err := common.UnmarshalSnapshot(b)
+			s, err := common.UnmarshalSnapshot(buf.Bytes())
 			Expect(err).Should(Succeed())
 
 			for _, table := range s.Tables {
@@ -275,11 +278,54 @@ var _ = Describe("Taking a snapshot", func() {
 					}
 				}
 			}
-			scope = []string{"pepsi_bad"}
-			b, err = GetTenantSnapshotData(scope, db)
+
+			// Now do the same thing, but in streaming mode
+			buf = &bytes.Buffer{}
+			err = GetTenantSnapshotData(scope, "proto", db, buf)
 			Expect(err).Should(Succeed())
 
-			s, err = common.UnmarshalSnapshot(b)
+			sr, err := common.CreateSnapshotReader(buf)
+			Expect(err).Should(Succeed())
+
+			rowCount := 0
+			var n interface{}
+			var curTable common.TableInfo
+			for n = sr.Next(); n != io.EOF; n = sr.Next() {
+				fmt.Fprintf(GinkgoWriter, "next: %T\n", n)
+				switch n.(type) {
+				case common.TableInfo:
+					curTable = n.(common.TableInfo)
+					fmt.Fprintf(GinkgoWriter, "Table: %s\n", curTable.Name)
+				case common.Row:
+					row := n.(common.Row)
+					if curTable.Name == "app" {
+						var id string
+						err = row.Get("id", &id)
+						Expect(err).Should(Succeed())
+						var timestamp int64
+						err = row.Get("created_at", &timestamp)
+						Expect(err).Should(Succeed())
+
+						Expect(rowCount).Should(Equal(0))
+						Expect(id).Should(Equal("aaa-bbb-ccc"))
+						Expect(timestamp).Should(BeEquivalentTo(9859348))
+						rowCount++
+					}
+				case error:
+					Expect(n.(error)).Should(Succeed())
+				default:
+					fmt.Printf("Got unexpected row %T\n", n)
+					Expect(false).Should(BeTrue())
+				}
+			}
+			Expect(rowCount).Should(Equal(1))
+
+			scope = []string{"pepsi_bad"}
+			buf = &bytes.Buffer{}
+			err = GetTenantSnapshotData(scope, "json", db, buf)
+			Expect(err).Should(Succeed())
+
+			s, err = common.UnmarshalSnapshot(buf.Bytes())
 			Expect(err).Should(Succeed())
 
 			for _, table := range s.Tables {
@@ -310,10 +356,11 @@ var _ = Describe("Taking a snapshot", func() {
 			Expect(err).Should(Succeed())
 
 			scope := []string{"pepsi__dev", "pepsi__test"}
-			b, err := GetTenantSnapshotData(scope, db)
+			buf := &bytes.Buffer{}
+			err = GetTenantSnapshotData(scope, "json", db, buf)
 			Expect(err).Should(Succeed())
 
-			s, err := common.UnmarshalSnapshot(b)
+			s, err := common.UnmarshalSnapshot(buf.Bytes())
 			Expect(err).Should(Succeed())
 
 			for _, table := range s.Tables {
@@ -331,10 +378,11 @@ var _ = Describe("Taking a snapshot", func() {
 				}
 			}
 			scope = []string{"pepsi_bad"}
-			b, err = GetTenantSnapshotData(scope, db)
+			buf = &bytes.Buffer{}
+			err = GetTenantSnapshotData(scope, "json", db, buf)
 			Expect(err).Should(Succeed())
 
-			s, err = common.UnmarshalSnapshot(b)
+			s, err = common.UnmarshalSnapshot(buf.Bytes())
 			Expect(err).Should(Succeed())
 
 			for _, table := range s.Tables {
@@ -343,7 +391,5 @@ var _ = Describe("Taking a snapshot", func() {
 				}
 			}
 		})
-
 	})
-
 })

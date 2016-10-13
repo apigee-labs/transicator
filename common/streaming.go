@@ -198,17 +198,17 @@ Next returns the next item from the snapshot. It can be one of two things:
 3) io.EOF, which indicates that we have reached the end
 4) an error, which indicates that we got incomplete data.
 */
-func (r *SnapshotReader) Next() (interface{}, error) {
+func (r *SnapshotReader) Next() interface{} {
 	buf, err := r.readBuf()
 	if err != nil {
 		// We will pickup EOF here!
-		return nil, err
+		return err
 	}
 
 	var msg StreamMessagePb
 	err = proto.Unmarshal(buf, &msg)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	row := msg.GetRow()
@@ -216,10 +216,10 @@ func (r *SnapshotReader) Next() (interface{}, error) {
 
 	if table == nil {
 		if r.curTable == nil {
-			return nil, errors.New("Invalid stream: Got rows before table")
+			return errors.New("Invalid stream: Got rows before table")
 		}
 		if len(r.curTable.Columns) != len(row.Values) {
-			return nil, errors.New("Invalid stream: Received incorrect number of columns")
+			return errors.New("Invalid stream: Received incorrect number of columns")
 		}
 
 		ri := make(map[string]*ColumnVal)
@@ -230,9 +230,9 @@ func (r *SnapshotReader) Next() (interface{}, error) {
 			}
 			ri[col.Name] = cv
 		}
-		return Row(ri), nil
-
+		return Row(ri)
 	}
+
 	// Return information on the new table, plus keep it for column processing
 	var cols []ColumnInfo
 	for _, ti := range table.GetColumns() {
@@ -247,7 +247,7 @@ func (r *SnapshotReader) Next() (interface{}, error) {
 		Columns: cols,
 	}
 	r.curTable = &ti
-	return ti, nil
+	return ti
 }
 
 func (r *SnapshotReader) readBuf() ([]byte, error) {

@@ -2,6 +2,7 @@ package test
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 
@@ -36,38 +37,65 @@ var _ = Describe("Combined tests", func() {
 		_, err = insert.Exec(3, "three", "scope1")
 		Expect(err).Should(Succeed())
 
-		// Take a snapshot.
+		// Take a snapshot. Specify the streaming protobuf format.
 		// We will get a 303 and automatically follow the redirect
 		url := fmt.Sprintf("%s/snapshots?scopes=scope1", snapshotBase)
 		fmt.Fprintf(GinkgoWriter, "GET %s\n", url)
-		resp, err := http.Get(url)
+		req, err := http.NewRequest("GET", url, nil)
+		Expect(err).Should(Succeed())
+		req.Header.Add("Accept", "application/transicator-stream+protobuf")
+		resp, err := http.DefaultClient.Do(req)
 		Expect(err).Should(Succeed())
 		Expect(resp.StatusCode).Should(Equal(200))
+		fmt.Fprintf(GinkgoWriter, "Response: %s\n", resp.Header.Get("Content-Type"))
+		fmt.Fprintf(GinkgoWriter, "Response: %s\n", resp.Header.Get("Content-Length"))
 
-		snap, err := ioutil.ReadAll(resp.Body)
-		resp.Body.Close()
+		sr, err := common.CreateSnapshotReader(resp.Body)
 		Expect(err).Should(Succeed())
-
-		snapshot, err := common.UnmarshalSnapshot(snap)
-		Expect(err).Should(Succeed())
+		defer resp.Body.Close()
 
 		// Verify the snapshot. Don't sweat about other tables to make tests easier.
 		foundTable := false
-		for _, table := range snapshot.Tables {
-			if table.Name == "combined_test" {
-				foundTable = true
-				Expect(len(table.Rows)).Should(Equal(2))
-				Expect(table.Rows[0]["id"]).ShouldNot(BeNil())
-				Expect(table.Rows[0]["id"].Value).Should(Equal("1"))
-				Expect(table.Rows[1]["id"]).ShouldNot(BeNil())
-				Expect(table.Rows[1]["id"].Value).Should(Equal("3"))
+		rowCount := 0
+		tableName := ""
+		var n interface{}
+		for n = sr.Next(); n != io.EOF; n = sr.Next() {
+			switch n.(type) {
+			case common.TableInfo:
+				table := n.(common.TableInfo)
+				tableName = table.Name
+			case common.Row:
+				if tableName == "combined_test" {
+					row := n.(common.Row)
+					foundTable = true
+					var id int
+					var value string
+					err = row.Get("id", &id)
+					Expect(err).Should(Succeed())
+					err = row.Get("value", &value)
+					Expect(err).Should(Succeed())
+
+					switch rowCount {
+					case 0:
+						Expect(id).Should(Equal(1))
+						Expect(value).Should(Equal("one"))
+					case 1:
+						Expect(id).Should(Equal(3))
+						Expect(value).Should(Equal("three"))
+					default:
+						Expect(rowCount).Should(BeNumerically("<", 2))
+					}
+					rowCount++
+				}
+			case error:
+				Expect(n.(error)).Should(Succeed())
 			}
 		}
 		Expect(foundTable).Should(BeTrue())
 
 		// Check for changes. There should be none.
 		changes := getChanges(fmt.Sprintf("snapshot=%s&scope=scope1",
-			snapshot.SnapshotInfo), 0)
+			sr.SnapshotInfo()), 0)
 		Expect(changes.Changes).Should(BeEmpty())
 
 		// Insert some more data
@@ -76,7 +104,7 @@ var _ = Describe("Combined tests", func() {
 
 		// Verify the changes
 		changes = getChanges(fmt.Sprintf("snapshot=%s&scope=scope1&since=%s&block=5",
-			snapshot.SnapshotInfo, changes.LastSequence), 1)
+			sr.SnapshotInfo(), changes.LastSequence), 1)
 		Expect(changes.Changes[0].NewRow["id"]).ShouldNot(BeNil())
 		Expect(changes.Changes[0].NewRow["id"].Value).Should(Equal("4"))
 
@@ -86,7 +114,7 @@ var _ = Describe("Combined tests", func() {
 		Expect(result.RowsAffected()).Should(BeEquivalentTo(1))
 
 		changes = getChanges(fmt.Sprintf("snapshot=%s&scope=scope1&since=%s&block=5",
-			snapshot.SnapshotInfo, changes.LastSequence), 1)
+			sr.SnapshotInfo(), changes.LastSequence), 1)
 		Expect(changes.Changes[0].OldRow["id"]).ShouldNot(BeNil())
 		Expect(changes.Changes[0].OldRow["id"].Value).Should(Equal("1"))
 		Expect(changes.Changes[0].OldRow["value"].Value).Should(Equal("one"))
