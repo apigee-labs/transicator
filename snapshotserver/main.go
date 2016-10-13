@@ -9,7 +9,7 @@ import (
 	"strconv"
 
 	"github.com/30x/transicator/pgclient"
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -55,14 +55,22 @@ func main() {
 	}
 
 	if debug {
-		logrus.SetLevel(logrus.DebugLevel)
+		log.SetLevel(log.DebugLevel)
 	}
 
+	log.Infof("Connecting to Postgres DB %s\n", pgURL)
 	db, err := sql.Open("transicator", pgURL)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to connect to Postgres. Err : %v\n", err)
+		log.Warnf("Unable to connect to Postgres. Err : %v\n", err)
 		return
 	}
+	err = db.Ping()
+	if err != nil {
+		log.Warnf("Warning: Postgres DB Err: %v\n", err)
+		log.Warn("Continuing anyway...")
+	}
+
+	log.Info("Connection to Postgres succeeded.\n")
 	pgdriver := db.Driver().(*pgclient.PgDriver)
 	pgdriver.SetIsolationLevel("repeatable read")
 	pgdriver.SetExtendedColumnNames(true)
@@ -70,8 +78,13 @@ func main() {
 
 	router := httprouter.New()
 
+	router.GET("/scopes/:apidconfigId",
+		func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+			GetScopes(w, r, db, p)
+		})
+
 	router.GET("/snapshots",
-		func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+		func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 			GenSnapshot(w, r)
 		})
 
@@ -81,7 +94,7 @@ func main() {
 		})
 
 	err = http.ListenAndServe(":"+strconv.Itoa(port), router)
-	fmt.Fprintf(os.Stderr, "Is service running already?, Err: %v\n", err)
+	log.Warnf("Is service running already?, Err: %v\n", err)
 	os.Exit(4)
 
 }

@@ -19,8 +19,10 @@ import (
 )
 
 const (
-	jsonType  = "application/json"
-	protoType = "application/transicator+protobuf"
+	jsonType       = "json"
+	protoType      = "proto"
+	jsonMediaType  = "application/json"
+	protoMediaType = "application/transicator+protobuf"
 )
 
 /*
@@ -41,6 +43,136 @@ func GetTenants(tenantID []string) string {
 	str.WriteString(")")
 	return str.String()
 
+}
+
+/*
+GetScopes returns the set of scopes for a particular configuration ID.
+*/
+func GetScopes(
+	w http.ResponseWriter, r *http.Request,
+	db *sql.DB, p httprouter.Params) {
+
+	cid := p[0].Value
+	if cid == "" {
+		log.Errorf("apidconfigId Missing, Request Ignored")
+		return
+	}
+
+	data, err := GetScopeData(cid, db)
+	if err != nil {
+		log.Errorf("GetOrgSnapshot error: %v", err)
+		return
+	}
+
+	size, err := w.Write(data)
+	if err != nil {
+		log.Errorf("Writing snapshot id %s : Err: %s", cid, err)
+		return
+	}
+
+	log.Infof("Downloaded Scopes for id %s, size %d", cid, size)
+	return
+}
+
+/*
+GetScopeData actually pulls the data for a scope.
+*/
+func GetScopeData(cid string, db *sql.DB) (b []byte, err error) {
+
+	var (
+		snapInfo, snapTime string
+	)
+
+	sdataItem := []common.Table{}
+	snapData := common.Snapshot{
+		Tables:       sdataItem,
+		SnapshotInfo: snapInfo,
+		Timestamp:    snapTime,
+	}
+	/* FIXME:
+	 * (1) The two SELECTS have to be part of single transaction.
+	 * (2) Can Snapshot server know the APID_CONFIG & APID_CONFIG_SCOPE schema?
+	 * These are independant of the plugins - so the assumption.
+	 */
+
+	tx, err := db.Begin()
+	if err != nil {
+		log.Errorf("Error starting transaction: %s", err)
+		return nil, err
+	}
+	defer tx.Commit()
+
+	rows, err := tx.Query("select * from APID_CONFIG where id = $1", cid)
+	if err != nil {
+		log.Errorf("Failed to query APID_CONFIG. Err: %s", err)
+		return nil, err
+	}
+
+	err = fillTable(rows, &snapData, "APID_CONFIG")
+	if err != nil {
+		log.Errorf("Failed to Insert rows, (Ignored) Err: %s", err)
+		return nil, err
+	}
+	rows.Close()
+
+	rows, err = tx.Query("select * from APID_CONFIG_SCOPE where apid_config_id = $1", cid)
+	if err != nil {
+		log.Errorf("Failed to query APID_CONFIG_SCOPE. Err: %s", err)
+		return nil, err
+	}
+
+	err = fillTable(rows, &snapData, "APID_CONFIG_SCOPE")
+	if err != nil {
+		log.Errorf("Failed to Insert rows, (Ignored) Err: %s", err)
+		return nil, err
+	}
+	rows.Close()
+
+	b, err = json.Marshal(snapData)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func fillTable(rows *sql.Rows, snapData *common.Snapshot, table string) (err error) {
+
+	srvItems := []common.Row{}
+	stdItem := common.Table{
+		Rows: srvItems,
+		Name: table,
+	}
+
+	columnNames, columnTypes, err := parseColumnNames(rows)
+	if err != nil {
+		log.Errorf("Failed to get tenant data in Table %s : %+v", table, err)
+		return err
+	}
+
+	for rows.Next() {
+		srvItem := common.Row{}
+		cols := make([]interface{}, len(columnNames))
+		for i := range cols {
+			cols[i] = new(string)
+		}
+		err = rows.Scan(cols...)
+		if err != nil {
+			log.Errorf("Failed to get tenant data  in Table %s : %+v", table, err)
+			return err
+		}
+
+		for i, cv := range cols {
+			cvs := cv.(*string)
+			scv := &common.ColumnVal{
+				Value: *cvs,
+				Type:  columnTypes[i],
+			}
+			srvItem[columnNames[i]] = scv
+		}
+		stdItem.AddRowstoTable(srvItem)
+	}
+	snapData.AddTables(stdItem)
+	return nil
 }
 
 /*
@@ -92,9 +224,9 @@ func GetTenantSnapshotData(
 	}
 
 	switch mediaType {
-	case "json":
+	case jsonType:
 		return writeJSONSnapshot(snapData, tables, tenantID, db, w)
-	case "proto":
+	case protoType:
 		return writeProtoSnapshot(snapData, tables, tenantID, db, w)
 	default:
 		panic("Media type processing failed")
@@ -118,45 +250,10 @@ func writeJSONSnapshot(
 			return err
 		}
 		defer rows.Close()
-
-		srvItems := []common.Row{}
-		stdItem := common.Table{
-			Rows: srvItems,
-			Name: t,
-		}
-
-		columnNames, columnTypes, err := parseColumnNames(rows)
+		err = fillTable(rows, snapData, t)
 		if err != nil {
-			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
-			return err
+			log.Errorf("Failed to Insert Table [%s] - Ignored. Err: %+v", t, err)
 		}
-
-		for rows.Next() {
-			srvItem := common.Row{}
-			cols := make([]interface{}, len(columnNames))
-			for i := range cols {
-				cols[i] = new(string)
-			}
-			err = rows.Scan(cols...)
-			if err != nil {
-				log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
-				return err
-			}
-
-			for i, cv := range cols {
-				cvs := cv.(*string)
-				scv := &common.ColumnVal{
-					Value: *cvs,
-					Type:  columnTypes[i],
-				}
-				srvItem[columnNames[i]] = scv
-			}
-			stdItem.AddRowstoTable(srvItem)
-		}
-		snapData.AddTables(stdItem)
-
-		// OK to close more than once. Do it here to free up SQL connection.
-		rows.Close()
 	}
 
 	enc := json.NewEncoder(w)
@@ -306,14 +403,14 @@ func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 	}
 	scopes, _ = url.QueryUnescape(scopes)
 
-	mediaType := goscaffold.SelectMediaType(r, []string{jsonType, protoType})
+	mediaType := goscaffold.SelectMediaType(r, []string{jsonMediaType, protoMediaType})
 	typeParam := ""
 
 	switch mediaType {
-	case jsonType:
-		typeParam = "json"
-	case protoType:
-		typeParam = "proto"
+	case jsonMediaType:
+		typeParam = jsonType
+	case protoMediaType:
+		typeParam = protoType
 	default:
 		w.WriteHeader(http.StatusUnsupportedMediaType)
 		return
@@ -341,14 +438,14 @@ func DownloadSnapshot(
 
 	mediaType := r.URL.Query().Get("type")
 	if mediaType == "" {
-		mediaType = "json"
+		mediaType = jsonType
 	}
 
 	switch mediaType {
-	case "json":
-		w.Header().Add("Content-Type", jsonType)
-	case "proto":
-		w.Header().Add("Content-Type", protoType)
+	case jsonType:
+		w.Header().Add("Content-Type", jsonMediaType)
+	case protoType:
+		w.Header().Add("Content-Type", protoMediaType)
 	default:
 		w.WriteHeader(http.StatusBadRequest)
 		return
