@@ -2,7 +2,6 @@ package test
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 
@@ -58,11 +57,13 @@ var _ = Describe("Combined tests", func() {
 		foundTable := false
 		rowCount := 0
 		tableName := ""
-		var n interface{}
-		for n = sr.Next(); n != io.EOF; n = sr.Next() {
+
+		for sr.Next() {
+			n := sr.Entry()
 			switch n.(type) {
 			case common.TableInfo:
 				table := n.(common.TableInfo)
+				fmt.Fprintf(GinkgoWriter, "Table %s\n", table.Name)
 				tableName = table.Name
 			case common.Row:
 				if tableName == "combined_test" {
@@ -89,6 +90,8 @@ var _ = Describe("Combined tests", func() {
 				}
 			case error:
 				Expect(n.(error)).Should(Succeed())
+			default:
+				Expect("Unexpected default type").Should(BeEmpty())
 			}
 		}
 		Expect(foundTable).Should(BeTrue())

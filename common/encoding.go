@@ -2,6 +2,8 @@ package common
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 
 	"github.com/golang/protobuf/proto"
 )
@@ -24,6 +26,58 @@ func UnmarshalSnapshot(data []byte) (*Snapshot, error) {
 }
 
 /*
+UnmarshalSnapshotProto unmarshals a snapshot that was written using the
+Streaming snapshot interface in protobuf format into a single object.
+This method should not be used for a very large snapshot because it will
+result in the entire snapshot contents being read into memory.
+For flexibility, this reads from a Reader so that there is no need
+to make extra copies.
+*/
+func UnmarshalSnapshotProto(r io.Reader) (*Snapshot, error) {
+	sr, err := CreateSnapshotReader(r)
+	if err != nil {
+		return nil, err
+	}
+
+	s := Snapshot{
+		SnapshotInfo: sr.SnapshotInfo(),
+		Timestamp:    sr.Timestamp(),
+	}
+
+	var curTable *Table
+
+	// Read the snapshot in streaming form, and build it all into a single
+	// Snapshot object.
+	for sr.Next() {
+		e := sr.Entry()
+		switch e.(type) {
+		case TableInfo:
+			// Since curTable is a pointer, we have to do the append at the end
+			if curTable != nil {
+				s.Tables = append(s.Tables, *curTable)
+			}
+			ti := e.(TableInfo)
+			curTable = &Table{
+				Name: ti.Name,
+			}
+		case Row:
+			r := e.(Row)
+			curTable.Rows = append(curTable.Rows, r)
+		case error:
+			return nil, err
+		default:
+			return nil, fmt.Errorf("Unexpected type %T in snapshot", e)
+		}
+	}
+
+	if curTable != nil {
+		s.Tables = append(s.Tables, *curTable)
+	}
+
+	return &s, nil
+}
+
+/*
 Marshal turns a snapshot into formatted, indented JSON. It will panic
 on a marshaling error.
 */
@@ -33,6 +87,60 @@ func (s *Snapshot) Marshal() []byte {
 		return data
 	}
 	panic(err.Error())
+}
+
+/*
+MarshalProto uses the streaming replication option to write out an existing
+Snapshot as a protocol buffer. It should not be used for large
+snapshots because it will result in the entire snapshot being
+written into memory.
+It returns an error if there is an error writing to the actual Writer.
+*/
+func (s *Snapshot) MarshalProto(w io.Writer) error {
+	sw, err := CreateSnapshotWriter(
+		s.Timestamp, s.SnapshotInfo, w)
+	if err != nil {
+		return err
+	}
+
+	for _, table := range s.Tables {
+		if len(table.Rows) == 0 {
+			continue
+		}
+
+		var cols []ColumnInfo
+		for rowName, rowVal := range table.Rows[0] {
+			col := ColumnInfo{
+				Name: rowName,
+				Type: rowVal.Type,
+			}
+			cols = append(cols, col)
+		}
+		err = sw.StartTable(table.Name, cols)
+		if err != nil {
+			return err
+		}
+
+		for _, row := range table.Rows {
+			var vals []interface{}
+			for _, colInfo := range cols {
+				rv := row[colInfo.Name]
+				var val interface{}
+				if rv != nil {
+					val = rv.Value
+				}
+				vals = append(vals, val)
+			}
+			err = sw.WriteRow(vals)
+			if err != nil {
+				return err
+			}
+		}
+
+		sw.EndTable()
+	}
+
+	return nil
 }
 
 /*

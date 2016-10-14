@@ -1,6 +1,7 @@
 package common
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -18,12 +19,23 @@ func TestEncoding(t *testing.T) {
 
 var _ = Describe("Encoding Tests", func() {
 	It("Parse snapshot", func() {
+		// Parse file from JSON, then un-parse, and result should be same JSON
 		s := readFile("./testfiles/snapshot.json")
 		ss, err := UnmarshalSnapshot(s)
 		Expect(err).Should(Succeed())
-
 		ms := ss.Marshal()
 		Expect(ms).Should(MatchJSON(s))
+
+		// Re-marshal using protobuf, then re-marshal, and result should
+		// still be same JSON.
+		buf := &bytes.Buffer{}
+		err = ss.MarshalProto(buf)
+		Expect(err).Should(Succeed())
+
+		ss2, err := UnmarshalSnapshotProto(buf)
+		Expect(err).Should(Succeed())
+		ms2 := ss2.Marshal()
+		Expect(ms2).Should(MatchJSON(s))
 	})
 
 	It("Parse change list", func() {

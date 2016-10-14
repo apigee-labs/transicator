@@ -10,7 +10,8 @@
           "foo2": {"value": "2", "type": 25}
         },
         {
-          "bar": {"value": "123", "type": 25 }
+          "foo": {"value": "bar", "type": 1 },
+          "foo2": {"value": "3", "type": 25}
         }
       ]
     },

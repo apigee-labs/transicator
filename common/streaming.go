@@ -150,6 +150,8 @@ type SnapshotReader struct {
 	reader    io.Reader
 	timestamp string
 	snapshot  string
+	curBuf    []byte
+	savedErr  error
 	curTable  *TableInfo
 }
 
@@ -192,21 +194,43 @@ func (r *SnapshotReader) SnapshotInfo() string {
 }
 
 /*
-Next returns the next item from the snapshot. It can be one of two things:
+Next positions the snapshot reader on the next record. To read the snapshot,
+a reader must first call "Next," then call "Entry" to get the entry
+for processing. The reader should continue this process until Next
+returns "false."
+*/
+func (r *SnapshotReader) Next() bool {
+	buf, err := r.readBuf()
+	if err == io.EOF {
+		return false
+	} else if err != nil {
+		r.savedErr = err
+		return true
+	}
+	r.curBuf = buf
+	return true
+}
+
+/*
+Entry returns the current entry. It can be one of three things:
 1) A TableInfo, which tells us to start writing to a new table, or
 2) a Row, which denotes what you think it does.
-3) io.EOF, which indicates that we have reached the end
-4) an error, which indicates that we got incomplete data.
+3) an error, which indicates that we got incomplete data.
+It is an error to call this function if "Next" was never called.
+It is also an error to call this function once "Next" returned false.
+Finally, it is an error to continue processing after this function
+has returned an error.
 */
-func (r *SnapshotReader) Next() interface{} {
-	buf, err := r.readBuf()
-	if err != nil {
-		// We will pickup EOF here!
-		return err
+func (r *SnapshotReader) Entry() interface{} {
+	if r.savedErr != nil {
+		return r.savedErr
+	}
+	if r.curBuf == nil {
+		return errors.New("Incorrect call sequence")
 	}
 
 	var msg StreamMessagePb
-	err = proto.Unmarshal(buf, &msg)
+	err := proto.Unmarshal(r.curBuf, &msg)
 	if err != nil {
 		return err
 	}

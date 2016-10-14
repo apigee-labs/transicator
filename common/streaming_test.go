@@ -34,8 +34,7 @@ var _ = Describe("Streaming tests", func() {
 		Expect(r.SnapshotInfo()).Should(Equal("1:2:3"))
 		pw.Close()
 
-		n := r.Next()
-		Expect(n).Should(Equal(io.EOF))
+		Expect(r.Next()).Should(BeFalse())
 	})
 
 	It("One table", func() {
@@ -61,7 +60,8 @@ var _ = Describe("Streaming tests", func() {
 		err = pw.Close()
 		Expect(err).Should(Succeed())
 
-		n := r.Next()
+		Expect(r.Next()).Should(BeTrue())
+		n := r.Entry()
 		ti := n.(TableInfo)
 		Expect(ti.Name).Should(Equal("table1"))
 		Expect(len(ti.Columns)).Should(Equal(2))
@@ -70,7 +70,8 @@ var _ = Describe("Streaming tests", func() {
 		Expect(ti.Columns[0].Type).Should(BeEquivalentTo(1043))
 		Expect(ti.Columns[1].Type).Should(BeEquivalentTo(20))
 
-		n = r.Next()
+		Expect(r.Next()).Should(BeTrue())
+		n = r.Entry()
 		row := n.(Row)
 		var id string
 		var val int
@@ -81,7 +82,8 @@ var _ = Describe("Streaming tests", func() {
 		Expect(err).Should(Succeed())
 		Expect(val).Should(Equal(123))
 
-		n = r.Next()
+		Expect(r.Next()).Should(BeTrue())
+		n = r.Entry()
 		row = n.(Row)
 		err = row.Get("id", &id)
 		Expect(err).Should(Succeed())
@@ -90,7 +92,6 @@ var _ = Describe("Streaming tests", func() {
 		Expect(err).Should(Succeed())
 		Expect(val).Should(Equal(456))
 
-		n = r.Next()
-		Expect(n).Should(Equal(io.EOF))
+		Expect(r.Next()).ShouldNot(BeTrue())
 	})
 })
