@@ -161,7 +161,10 @@ func (r *Replicator) connect() (*pgclient.PgConnection, error) {
 
 	slotCreated := false
 	startMsg := pgclient.NewOutputMessage(pgclient.Query)
-	startMsg.WriteString(fmt.Sprintf("START_REPLICATION SLOT %s LOGICAL 0/0", r.slotName))
+	startSQL :=
+		fmt.Sprintf("START_REPLICATION SLOT %s LOGICAL 0/0 (protobuf)", r.slotName)
+	log.Debugf("Sending SQL to start replication: %s\n", startSQL)
+	startMsg.WriteString(startSQL)
 	err = conn.WriteMessage(startMsg)
 	if err != nil {
 		return nil, err
@@ -189,6 +192,7 @@ func (r *Replicator) connect() (*pgclient.PgConnection, error) {
 				slotCreated = true
 
 				// Re-send start replication command.
+				log.Debugf("Re-starting replication with %s", startSQL)
 				err = conn.WriteMessage(startMsg)
 				if err != nil {
 					return nil, err
@@ -394,7 +398,7 @@ func (r *Replicator) handleWALData(m *pgclient.InputMessage) {
 	m.ReadInt64() // Timestamp
 	buf := m.ReadRemaining()
 
-	c, err := common.UnmarshalChange(buf)
+	c, err := common.UnmarshalChangeProto(buf)
 	if err == nil {
 		r.changeChan <- c
 	} else {

@@ -5,7 +5,6 @@ PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 SHLIB_LINK = -lprotobuf-c
-PG_CPPFLAGS = -g
 
 output_proto.c: transicator.pb-c.h
 

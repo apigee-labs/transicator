@@ -89,7 +89,8 @@ static void tuple_to_proto(
 }
 
 static void freeColumns(Common__ColumnPb** cols, size_t numCols) {
-  for (int i = 0; i < numCols; i++) {
+  int i;
+  for (i = 0; i < numCols; i++) {
     Common__ColumnPb* col = cols[i];
     /* TODO Free string pointers too here? */
     if (col->value != NULL) {
@@ -105,6 +106,11 @@ void transicatorOutputChangeProto(
   Relation relation,
   ReorderBufferChange *change,
   DecodingState* state) {
+
+  /*
+   * TODO use utils/palloc.h and utils/memutils.h to create and reset
+   * a memory context on every plugin run rather than alloc/free.
+   */
 
   Form_pg_class class_form;
   TupleDesc	tupdesc;

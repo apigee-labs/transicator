@@ -48,11 +48,6 @@ var _ = Describe("Replicator tests", func() {
 		Expect(change.NewRow["id"].Value).Should(Equal("replication 2"))
 		Consistently(repl.Changes()).ShouldNot(Receive())
 	})
-
-	It("Cleanup", func() {
-		err := DropSlot(dbURL, "unittestslot")
-		Expect(err).Should(Succeed())
-	})
 })
 
 func drainReplication(repl *Replicator) []*common.Change {

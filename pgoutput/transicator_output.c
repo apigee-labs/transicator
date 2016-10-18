@@ -31,12 +31,9 @@ static void outputStart(
   foreach(option, ctx->output_plugin_options)
 	{
 		DefElem    *elem = lfirst(option);
-		Assert(elem->arg == NULL || IsA(elem->arg, String));
-
-    if (!strcmp(elem->defname, "format")) {
-      if ((elem->arg != NULL) && !strcmp(strVal(elem->arg), "protobuf")) {
-        binaryFormat = 1;
-      }
+    if (!strcmp(elem->defname, "protobuf")) {
+      elog(LOG, "Logical decoding in protobuf format");
+      binaryFormat = 1;
     }
   }
 

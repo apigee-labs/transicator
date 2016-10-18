@@ -83,6 +83,12 @@ func getString(d interface{}, s string) error {
 			return err
 		}
 		*(d.(*int32)) = int32(iv)
+	case *int:
+		iv, err := strconv.ParseInt(s, 10, 32)
+		if err != nil {
+			return err
+		}
+		*(d.(*int)) = int(iv)
 	case *int16:
 		iv, err := strconv.ParseInt(s, 10, 16)
 		if err != nil {

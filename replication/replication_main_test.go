@@ -50,12 +50,10 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	err := dropTable("transicator_test")
-	Expect(err).Should(Succeed())
-	err = dropTable("txid_test")
-	Expect(err).Should(Succeed())
-	err = db.Close()
-	Expect(err).Should(Succeed())
+	db.Exec("select * from pg_drop_replication_slot($1)", "unittestslot")
+	dropTable("transicator_test")
+	dropTable("txid_test")
+	db.Close()
 })
 
 func tableExists(name string) bool {
