@@ -82,11 +82,36 @@ Marshal turns a snapshot into formatted, indented JSON. It will panic
 on a marshaling error.
 */
 func (s *Snapshot) Marshal() []byte {
-	data, err := json.MarshalIndent(s, indentPrefix, indent)
+	data, err := json.MarshalIndent(s.stringify(), indentPrefix, indent)
 	if err == nil {
 		return data
 	}
 	panic(err.Error())
+}
+
+/*
+stringify ensures that all the values in the table are strings.
+*/
+func (s *Snapshot) stringify() *Snapshot {
+	var nt []Table
+	for _, t := range s.Tables {
+		ntt := t.stringify()
+		nt = append(nt, ntt)
+	}
+	ns := *s
+	ns.Tables = nt
+	return &ns
+}
+
+func (t Table) stringify() Table {
+	var nr []Row
+	for _, r := range t.Rows {
+		nr = append(nr, r.stringify())
+	}
+
+	nt := t
+	nt.Rows = nr
+	return nt
 }
 
 /*
@@ -183,11 +208,27 @@ Marshal turns a change list into formatted, indented JSON. It will panic
 on a marshaling error.
 */
 func (l *ChangeList) Marshal() []byte {
-	data, err := json.MarshalIndent(l, indentPrefix, indent)
+	data, err := json.MarshalIndent(l.stringify(), indentPrefix, indent)
 	if err == nil {
 		return data
 	}
 	panic(err.Error())
+}
+
+/*
+stringify turns the change list into one in which all values are represented
+as strings.
+*/
+func (l *ChangeList) stringify() *ChangeList {
+	var nc []Change
+	for _, c := range l.Changes {
+		nch := c.stringify()
+		nc = append(nc, *nch)
+	}
+
+	rl := *l
+	rl.Changes = nc
+	return &rl
 }
 
 /*
@@ -299,11 +340,35 @@ func unwrapColumnVal(v *ValuePb) interface{} {
 Marshal turns a Change into JSON.
 */
 func (c *Change) Marshal() []byte {
-	data, err := json.MarshalIndent(c, indentPrefix, indent)
+	data, err := json.MarshalIndent(c.stringify(), indentPrefix, indent)
 	if err == nil {
 		return data
 	}
 	panic(err.Error())
+}
+
+/*
+stringify turns all values into a string so that JSON encoding is consistent.
+*/
+func (c *Change) stringify() *Change {
+	r := *c
+	if r.NewRow != nil {
+		r.NewRow = c.NewRow.stringify()
+	}
+	if r.OldRow != nil {
+		r.OldRow = c.OldRow.stringify()
+	}
+	return &r
+}
+
+func (r Row) stringify() Row {
+	nr := make(map[string]*ColumnVal)
+	for k, v := range r {
+		nv := *v
+		nv.Value = nv.String()
+		nr[k] = &nv
+	}
+	return Row(nr)
 }
 
 /*

@@ -2,6 +2,7 @@ package replication
 
 import (
 	"fmt"
+	"testing/quick"
 
 	"github.com/30x/transicator/common"
 	. "github.com/onsi/ginkgo"
@@ -36,7 +37,7 @@ var _ = Describe("Logical Decoding Tests", func() {
 
 		doExecute(
 			"insert into transicator_test (id) values ('basic insert')")
-		changes := getChanges()
+		changes := getChanges(false)
 		verify(changes)
 
 		changes = getBinaryChanges()
@@ -62,7 +63,7 @@ var _ = Describe("Logical Decoding Tests", func() {
 		doExecute(
 			"delete from transicator_test where id = 'basic delete'")
 
-		verify(getChanges())
+		verify(getChanges(false))
 		verify(getBinaryChanges())
 	})
 
@@ -91,7 +92,7 @@ var _ = Describe("Logical Decoding Tests", func() {
 		doExecute(
 			"update transicator_test set varchars = 'two' where id = 'basic update'")
 
-		verify(getChanges())
+		verify(getChanges(false))
 		verify(getBinaryChanges())
 	})
 
@@ -124,7 +125,7 @@ var _ = Describe("Logical Decoding Tests", func() {
 		err = tx.Commit()
 		Expect(err).Should(Succeed())
 
-		verify(getChanges())
+		verify(getChanges(false))
 		verify(getBinaryChanges())
 	})
 
@@ -140,7 +141,7 @@ var _ = Describe("Logical Decoding Tests", func() {
 		err = tx.Rollback()
 		Expect(err).Should(Succeed())
 
-		changes := getChanges()
+		changes := getChanges(false)
 		Expect(changes).Should(BeEmpty())
 		changes = getBinaryChanges()
 		Expect(changes).Should(BeEmpty())
@@ -193,14 +194,38 @@ var _ = Describe("Logical Decoding Tests", func() {
 			Expect(double).Should(BeEquivalentTo(3.14159))
 		}
 
-		doExecute(
-			"insert into transicator_test values (" +
-				"'datatypes', true, 'hello', 'world', 123, 456, 789, " +
-				"3.14, 3.14159, " +
-				"'1970-02-13', '04:05:06', '1970-02-13 04:05:06', '1970-02-13 04:05:06')")
+		_, err := db.Exec(`
+			insert into transicator_test
+			(id, bool, chars, varchars, int, smallint, bigint, float, double, date,
+			time, timestamp, timestampp)
+		  values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+			"datatypes", true, "hello", "world", 123, 456, 789,
+			3.14, 3.14159,
+			"1970-02-13", "04:05:06", "1970-02-13 04:05:06", "1970-02-13 04:05:06")
+		Expect(err).Should(Succeed())
 
-		verify(getChanges())
+		verify(getChanges(false))
 		verify(getBinaryChanges())
+	})
+
+	It("Binary data", func() {
+		rawdata := []byte("Hello, World!")
+		_, err :=
+			db.Exec("insert into transicator_test (id, rawdata) values($1, $2)",
+				"rawtest", rawdata)
+		Expect(err).Should(Succeed())
+
+		// Ignore since binary will get screwed up
+		getChanges(true)
+		changes := getBinaryChanges()
+		Expect(len(changes)).Should(Equal(1))
+		nr := changes[0].NewRow
+		var enddata []byte
+		err = nr.Get("rawdata", &enddata)
+		Expect(err).Should(Succeed())
+		fmt.Fprintf(GinkgoWriter, "Start result: \"%s\"\n", string(rawdata))
+		fmt.Fprintf(GinkgoWriter, "End result:   \"%s\"\n", string(enddata))
+		Expect(enddata).Should(Equal(rawdata))
 	})
 
 	It("Interleaving", func() {
@@ -229,7 +254,7 @@ var _ = Describe("Logical Decoding Tests", func() {
 		Expect(err).Should(Succeed())
 
 		// Ensure we got changes in commit order, not insertion order
-		verify(getChanges())
+		verify(getChanges(false))
 		verify(getBinaryChanges())
 	})
 
@@ -269,12 +294,94 @@ var _ = Describe("Logical Decoding Tests", func() {
 		Expect(err).Should(Succeed())
 
 		// Ensure we got changes in commit order, not insertion order
-		verify(getChanges())
+		verify(getChanges(false))
 		verify(getBinaryChanges())
+	})
+
+	It("Many strings", func() {
+		i := 0
+		ps, err := db.Prepare("insert into transicator_test (id, varchars) values ($1, $2)")
+		Expect(err).Should(Succeed())
+		defer ps.Close()
+
+		err = quick.Check(func(val string) bool {
+			_, err = ps.Exec(fmt.Sprintf("string-%d", i), val)
+			i++
+			Expect(err).Should(Succeed())
+			getChanges(true)
+			changes := getBinaryChanges()
+			Expect(len(changes)).Should(Equal(1))
+			r := changes[0].NewRow
+			var newVal string
+			err = r.Get("varchars", &newVal)
+			Expect(err).Should(Succeed())
+			Expect(newVal).Should(Equal(val))
+			return true
+		}, nil)
+		Expect(err).Should(Succeed())
+	})
+
+	It("Many arrays", func() {
+		i := 0
+		ps, err := db.Prepare("insert into transicator_test (id, rawdata) values ($1, $2)")
+		Expect(err).Should(Succeed())
+		defer ps.Close()
+
+		err = quick.Check(func(val []byte) bool {
+			_, err = ps.Exec(fmt.Sprintf("byte-%d", i), val)
+			i++
+			Expect(err).Should(Succeed())
+			getChanges(true)
+			changes := getBinaryChanges()
+			Expect(len(changes)).Should(Equal(1))
+			r := changes[0].NewRow
+			var newVal []byte
+			err = r.Get("rawdata", &newVal)
+			Expect(err).Should(Succeed())
+			Expect(newVal).Should(Equal(val))
+			return true
+		}, nil)
+		Expect(err).Should(Succeed())
+	})
+
+	It("Many numbers", func() {
+		i := 0
+		ps, err := db.Prepare(
+			"insert into transicator_test (id, bool, int, smallint, bigint) values ($1, $2, $3, $4, $5)")
+		Expect(err).Should(Succeed())
+		defer ps.Close()
+
+		err = quick.Check(func(bv bool, iv int32, sv int16, bi int64) bool {
+			_, err = ps.Exec(fmt.Sprintf("nums-%d", i), bv, iv, sv, bi)
+			i++
+			Expect(err).Should(Succeed())
+			getChanges(true)
+			changes := getBinaryChanges()
+			Expect(len(changes)).Should(Equal(1))
+			r := changes[0].NewRow
+			var nbv bool
+			var niv int32
+			var nsv int16
+			var nbi int64
+			err = r.Get("bool", &nbv)
+			Expect(err).Should(Succeed())
+			Expect(nbv).Should(Equal(bv))
+			err = r.Get("int", &niv)
+			Expect(err).Should(Succeed())
+			Expect(niv).Should(Equal(iv))
+			err = r.Get("smallint", &nsv)
+			Expect(err).Should(Succeed())
+			Expect(nsv).Should(Equal(sv))
+			err = r.Get("bigint", &nbi)
+			Expect(err).Should(Succeed())
+			Expect(nbi).Should(Equal(bi))
+			return true
+		}, nil)
+		Expect(err).Should(Succeed())
 	})
 })
 
-func getChanges() []common.Change {
+func getChanges(ignoreBody bool) []common.Change {
 	rows, err := db.Query(
 		"select * from pg_logical_slot_get_changes('transicator_decoding_test', NULL, NULL)")
 	Expect(err).Should(Succeed())
@@ -289,10 +396,12 @@ func getChanges() []common.Change {
 		var changeDesc string
 		err = rows.Scan(&ignore1, &ignore2, &changeDesc)
 		Expect(err).Should(Succeed())
-		fmt.Fprintf(GinkgoWriter, "Decoding %s\n", changeDesc)
-		change, err := common.UnmarshalChange([]byte(changeDesc))
-		Expect(err).Should(Succeed())
-		changes = append(changes, *change)
+		if !ignoreBody {
+			fmt.Fprintf(GinkgoWriter, "Decoding %s\n", changeDesc)
+			change, err := common.UnmarshalChange([]byte(changeDesc))
+			Expect(err).Should(Succeed())
+			changes = append(changes, *change)
+		}
 	}
 	return changes
 }

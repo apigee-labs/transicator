@@ -83,6 +83,7 @@ const testTableSQL = `
     float float4,
     double float8,
     date date,
+		rawdata bytea,
     time time with time zone,
     timestamp timestamp with time zone,
     timestampp timestamp

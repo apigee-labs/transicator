@@ -22,6 +22,47 @@ static size_t countColumns(TupleDesc tupdesc) {
   return cols;
 }
 
+static void setValue(Oid typ, Oid outputtyp, Datum val, Common__ValuePb* cv) {
+  switch (typ) {
+    case BOOLOID:
+      cv->value_case = COMMON__VALUE_PB__VALUE_BOOL;
+      cv->bool_ = DatumGetBool(val);
+      break;
+    case INT2OID:
+      cv->value_case = COMMON__VALUE_PB__VALUE_INT;
+      cv->int_ = DatumGetInt16(val);
+      break;
+    case INT4OID:
+    case OIDOID:
+      cv->value_case = COMMON__VALUE_PB__VALUE_INT;
+      cv->int_ = DatumGetInt32(val);
+      break;
+    case INT8OID:
+      cv->value_case = COMMON__VALUE_PB__VALUE_INT;
+      cv->int_ = DatumGetInt64(val);
+      break;
+    case FLOAT4OID:
+      cv->value_case = COMMON__VALUE_PB__VALUE_DOUBLE;
+      cv->double_ = DatumGetFloat4(val);
+      break;
+    case FLOAT8OID:
+      cv->value_case = COMMON__VALUE_PB__VALUE_DOUBLE;
+      cv->double_ = DatumGetFloat8(val);
+      break;
+    case BYTEAOID:
+      /* Length of the byte array is the length plus header */
+      cv->value_case = COMMON__VALUE_PB__VALUE_BYTES;
+      cv->bytes.len = VARSIZE(val) - 4;
+      cv->bytes.data = (uint8_t*)VARDATA(val);
+      break;
+    default:
+      /* Convert everything else into a string */
+      cv->value_case = COMMON__VALUE_PB__VALUE_STRING;
+      cv->string = OidOutputFunctionCall(outputtyp, val);
+      break;
+  }
+}
+
 static void tuple_to_proto(
   StringInfo s, TupleDesc tupdesc,
   HeapTuple tuple, Common__ColumnPb** cols)
@@ -35,6 +76,8 @@ static void tuple_to_proto(
     Form_pg_attribute attr;
     bool isnull;
     Datum origval;
+    Datum finalval;
+    Datum typ;
 
     attr = tupdesc->attrs[natt];
     if ((attr->attisdropped) || (attr->attnum < 0)) {
@@ -45,8 +88,9 @@ static void tuple_to_proto(
     common__column_pb__init(col);
     cols[natt] = col;
 
+    typ =  attr->atttypid;
     col->name = NameStr(attr->attname);
-    col->type = attr->atttypid;
+    col->type = typ;
     col->has_type = 1;
 
 		/* get Datum from tuple */
@@ -55,33 +99,25 @@ static void tuple_to_proto(
     if (!isnull) {
   		Oid			typoutput;	/* output function */
   		bool		typisvarlena;
-      char*   valStr;
 
-      Common__ValuePb* val = (Common__ValuePb*)palloc(sizeof(Common__ValuePb));
-      common__value_pb__init(val);
-      col->value = val;
+      Common__ValuePb* cv = (Common__ValuePb*)palloc(sizeof(Common__ValuePb));
+      common__value_pb__init(cv);
+      col->value = cv;
 
   		/* query output function */
-  		getTypeOutputInfo(attr->atttypid,
+  		getTypeOutputInfo(typ,
   						          &typoutput, &typisvarlena);
-
-      /* TODO
-         Based on type, at least encode binary Datum as binary.
-         And consider other types as well.
-      */
 
       if (typisvarlena && VARATT_IS_EXTERNAL_ONDISK(origval)) {
         /* TODO What does this mean? */
-        valStr = "\"unchanged-toast-datum\"";
+        cv->value_case = COMMON__VALUE_PB__VALUE_STRING;
+        cv->string = "\"unchanged-toast-datum\"";
       }	else if (!typisvarlena) {
-  			valStr = OidOutputFunctionCall(typoutput, origval);
+        setValue(typ, typoutput, origval, cv);
   		} else {
-  			Datum val = PointerGetDatum(PG_DETOAST_DATUM(origval));
-  			valStr = OidOutputFunctionCall(typoutput, val);
+  			finalval = PointerGetDatum(PG_DETOAST_DATUM(origval));
+        setValue(typ, typoutput, finalval, cv);
   		}
-
-      val->value_case = COMMON__VALUE_PB__VALUE_STRING;
-      val->string = valStr;
     }
     cp++;
   }

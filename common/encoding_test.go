@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"testing"
+	"testing/quick"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
@@ -66,6 +68,44 @@ var _ = Describe("Encoding Tests", func() {
 			Expect(nc.NewRow).Should(Equal(change.NewRow))
 			Expect(nc.OldRow).Should(Equal(change.OldRow))
 		}
+	})
+
+	It("Encode change", func() {
+		err := quick.Check(func(iv int64, sv string, bv bool) bool {
+			nr := make(map[string]*ColumnVal)
+			nr["iv"] = &ColumnVal{
+				Value: iv,
+			}
+			nr["sv"] = &ColumnVal{
+				Value: sv,
+			}
+			nr["bv"] = &ColumnVal{
+				Value: bv,
+			}
+			c := &Change{
+				NewRow: Row(nr),
+			}
+
+			// Protobufs should come out totally the same both ways
+			buf := c.MarshalProto()
+			br, err := UnmarshalChangeProto(buf)
+			Expect(err).Should(Succeed())
+			Expect(br.NewRow["iv"].Value).Should(Equal(iv))
+			Expect(br.NewRow["sv"].Value).Should(Equal(sv))
+			Expect(br.NewRow["bv"].Value).Should(Equal(bv))
+
+			// JSON should see everything turned in to a string
+			buf = c.Marshal()
+			br, err = UnmarshalChange(buf)
+			Expect(err).Should(Succeed())
+			isv := strconv.FormatInt(iv, 10)
+			Expect(br.NewRow["iv"].Value).Should(Equal(isv))
+			Expect(br.NewRow["sv"].Value).Should(Equal(sv))
+			bsv := strconv.FormatBool(bv)
+			Expect(br.NewRow["bv"].Value).Should(Equal(bsv))
+			return true
+		}, nil)
+		Expect(err).Should(Succeed())
 	})
 })
 

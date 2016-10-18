@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/30x/transicator/common"
@@ -34,8 +33,9 @@ var _ = Describe("Changes API Tests", func() {
 				return false
 			}
 			for _, c := range cl.Changes {
-				ltss := strconv.FormatInt(lastTestSequence, 10)
-				if c.NewRow["sequence"].Value == ltss {
+				var newSeq int64
+				err = c.NewRow.Get("sequence", &newSeq)
+				if newSeq == lastTestSequence {
 					Expect(c.Sequence).Should(Equal(c.GetSequence().String()))
 					lastChangeSequence = c.GetSequence()
 					return true
@@ -278,6 +278,7 @@ var _ = Describe("Changes API Tests", func() {
 func getChanges(url string) *common.ChangeList {
 	fmt.Fprintf(GinkgoWriter, "URL: %s\n", url)
 	bod := executeGet(url)
+	fmt.Fprintf(GinkgoWriter, "%s\n", string(bod))
 	cl, err := common.UnmarshalChangeList(bod)
 	Expect(err).Should(Succeed())
 	fmt.Fprintf(GinkgoWriter, "Num changes: %d\n", len(cl.Changes))
@@ -285,6 +286,9 @@ func getChanges(url string) *common.ChangeList {
 }
 
 func compareSequence(cl *common.ChangeList, index int, lts int64) bool {
-	ltss := strconv.FormatInt(lts, 10)
-	return cl.Changes[index].NewRow["sequence"].Value == ltss
+	var newSeq int64
+	err := cl.Changes[index].NewRow.Get("sequence", &newSeq)
+	Expect(err).Should(Succeed())
+	fmt.Fprintf(GinkgoWriter, "New seq = %d last = %d orig = %v\n", newSeq, lts, cl.Changes[index].NewRow["sequence"])
+	return newSeq == lts
 }

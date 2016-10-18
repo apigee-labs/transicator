@@ -140,7 +140,7 @@ func getString(d interface{}, s string) error {
 	case *[]byte:
 		*(d.(*[]byte)) = []byte(s)
 	default:
-		return errors.New("Invalid target type")
+		return fmt.Errorf("Invalid conversion: Can't convert string to %T", d)
 	}
 	return nil
 }
@@ -176,7 +176,7 @@ func getInt(d interface{}, i int64) error {
 			*(d.(*bool)) = true
 		}
 	default:
-		return errors.New("Invalid target type")
+		return fmt.Errorf("Invalid conversion: Can't convert int64 to %T", d)
 	}
 	return nil
 }
@@ -212,7 +212,7 @@ func getUint(d interface{}, i uint64) error {
 			*(d.(*bool)) = true
 		}
 	default:
-		return errors.New("Invalid target type")
+		return fmt.Errorf("Invalid conversion: Can't convert uint64 to %T", d)
 	}
 	return nil
 }
@@ -248,7 +248,7 @@ func getFloat(d interface{}, i float64) error {
 			*(d.(*bool)) = true
 		}
 	default:
-		return errors.New("Invalid target type")
+		return fmt.Errorf("Invalid conversion: Can't convert float64 to %T", d)
 	}
 	return nil
 }
@@ -287,7 +287,7 @@ func getBool(d interface{}, b bool) error {
 	case *bool:
 		*(d.(*bool)) = b
 	default:
-		return errors.New("Invalid target type")
+		return fmt.Errorf("Invalid conversion: Can't convert bool to %T", d)
 	}
 	return nil
 }
@@ -299,7 +299,7 @@ func getBytes(d interface{}, b []byte) error {
 	case *[]byte:
 		*(d.(*[]byte)) = b
 	default:
-		return errors.New("Cannot convert byte array to target type")
+		return fmt.Errorf("Invalid conversion: Can't convert bytes to %T", d)
 	}
 	return nil
 }
