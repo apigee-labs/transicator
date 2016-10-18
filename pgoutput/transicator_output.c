@@ -3,6 +3,7 @@
 #include <access/xlogdefs.h>
 #include <utils/builtins.h>
 #include <utils/lsyscache.h>
+#include <utils/memutils.h>
 #include <replication/output_plugin.h>
 #include <replication/logical.h>
 #include <transicator.h>
@@ -32,14 +33,27 @@ static void outputStart(
 	{
 		DefElem    *elem = lfirst(option);
     if (!strcmp(elem->defname, "protobuf")) {
-      elog(LOG, "Logical decoding in protobuf format");
       binaryFormat = 1;
     }
   }
 
-  state = (DecodingState*)malloc(sizeof(DecodingState));
+  if (binaryFormat) {
+    elog(LOG, "Logical decoding output in protobuf format");
+  } else {
+    elog(LOG, "Logical decoding output in JSON format");
+  }
+
+  /* Create state for decoding. */
+  state = (DecodingState*)palloc(sizeof(DecodingState));
+  /* Include a memory context that we will reset for each output run. */
+  state->memCtx =
+    AllocSetContextCreate(ctx->context, "transicator_output",
+      ALLOCSET_DEFAULT_MINSIZE,
+      ALLOCSET_DEFAULT_INITSIZE,
+      ALLOCSET_DEFAULT_MAXSIZE);
   state->index = 0;
   state->isBinary = binaryFormat;
+
   if (binaryFormat) {
     options->output_type = OUTPUT_PLUGIN_BINARY_OUTPUT;
   } else {
@@ -53,7 +67,9 @@ static void outputStart(
 static void outputStop(
     struct LogicalDecodingContext *ctx
 ) {
-  free(ctx->output_plugin_private);
+  /* This will free all memory that we allocated. */
+  DecodingState* state = (DecodingState*)(ctx->output_plugin_private);
+  MemoryContextDelete(state->memCtx);
 }
 
 static bool outputFilter(
@@ -86,13 +102,20 @@ static void outputChange(
     Relation relation,
     ReorderBufferChange *change
 ) {
+  MemoryContext oldMemCtx;
   DecodingState* state = (DecodingState*)(ctx->output_plugin_private);
 
+  /* Switch to our private memory context so that we will not leak. */
+  oldMemCtx = MemoryContextSwitchTo(state->memCtx);
   if (state->isBinary) {
     transicatorOutputChangeProto(ctx, txn, relation, change, state);
   } else {
     transicatorOutputChangeString(ctx, txn, relation, change, state);
   }
+
+  /* Switch back to original context and release everything we "palloc"ed */
+  MemoryContextSwitchTo(oldMemCtx);
+  MemoryContextReset(state->memCtx);
 }
 
 void _PG_output_plugin_init(OutputPluginCallbacks *cb) {

@@ -2,8 +2,9 @@
 #define TRANSICATOR_PLUGIN_H
 
 typedef struct {
-  uint32 index;
-  int isBinary;
+  MemoryContext    memCtx;
+  uint32           index;
+  int              isBinary;
 } DecodingState;
 
 extern void transicatorOutputChangeString(

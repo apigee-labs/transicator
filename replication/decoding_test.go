@@ -19,10 +19,10 @@ var _ = Describe("Logical Decoding Tests", func() {
 	})
 
 	AfterEach(func() {
-		doExecute(
-			"select * from pg_drop_replication_slot('transicator_decoding_test')")
-		doExecute(
-			"select * from pg_drop_replication_slot('transicator_decoding_test_binary')")
+		db.Exec(
+			"select * from pg_drop_replication_slot($1)", "transicator_decoding_test")
+		db.Exec(
+			"select * from pg_drop_replication_slot($1)", "transicator_decoding_test_binary")
 	})
 
 	It("Basic insert", func() {

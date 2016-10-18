@@ -54,6 +54,7 @@ type Replicator struct {
 	changeChan    chan *common.Change
 	updateChan    chan uint64
 	cmdChan       chan replCommand
+	jsonMode      bool
 }
 
 /*
@@ -398,7 +399,24 @@ func (r *Replicator) handleWALData(m *pgclient.InputMessage) {
 	m.ReadInt64() // Timestamp
 	buf := m.ReadRemaining()
 
-	c, err := common.UnmarshalChangeProto(buf)
+	var c *common.Change
+	var err error
+
+	if r.jsonMode {
+		c, err = common.UnmarshalChange(buf)
+	} else {
+		c, err = common.UnmarshalChangeProto(buf)
+		if err != nil {
+			// Defensive code in case we have an old version of the output plugin
+			// that does not understand the "protobuf" option.
+			c, err = common.UnmarshalChange(buf)
+			if err == nil {
+				log.Warn("Error decoding protobuf -- looks like Postgres is sending JSON")
+				r.jsonMode = true
+			}
+		}
+	}
+
 	if err == nil {
 		r.changeChan <- c
 	} else {

@@ -41,11 +41,10 @@ static void tuple_to_proto(
 			continue;
     }
 
-    col = (Common__ColumnPb*)malloc(sizeof(Common__ColumnPb));
+    col = (Common__ColumnPb*)palloc(sizeof(Common__ColumnPb));
     common__column_pb__init(col);
     cols[natt] = col;
 
-    /* TODO free */
     col->name = NameStr(attr->attname);
     col->type = attr->atttypid;
     col->has_type = 1;
@@ -58,7 +57,7 @@ static void tuple_to_proto(
   		bool		typisvarlena;
       char*   valStr;
 
-      Common__ValuePb* val = (Common__ValuePb*)malloc(sizeof(Common__ValuePb));
+      Common__ValuePb* val = (Common__ValuePb*)palloc(sizeof(Common__ValuePb));
       common__value_pb__init(val);
       col->value = val;
 
@@ -85,18 +84,6 @@ static void tuple_to_proto(
       val->string = valStr;
     }
     cp++;
-  }
-}
-
-static void freeColumns(Common__ColumnPb** cols, size_t numCols) {
-  int i;
-  for (i = 0; i < numCols; i++) {
-    Common__ColumnPb* col = cols[i];
-    /* TODO Free string pointers too here? */
-    if (col->value != NULL) {
-      free(col->value);
-    }
-    free(col);
   }
 }
 
@@ -147,7 +134,7 @@ void transicatorOutputChangeProto(
       if (change->data.tp.newtuple != NULL) {
         numCols = countColumns(tupdesc);
         pb.n_newcolumns = numCols;
-        pb.newcolumns = (Common__ColumnPb**)malloc(sizeof(Common__ColumnPb*) * numCols);
+        pb.newcolumns = (Common__ColumnPb**)palloc(sizeof(Common__ColumnPb*) * numCols);
         tuple_to_proto(ctx->out, tupdesc, &change->data.tp.newtuple->tuple, pb.newcolumns);
       }
       break;
@@ -157,12 +144,12 @@ void transicatorOutputChangeProto(
       numCols = countColumns(tupdesc);
       if (change->data.tp.oldtuple != NULL) {
         pb.n_oldcolumns = numCols;
-        pb.oldcolumns = (Common__ColumnPb**)malloc(sizeof(Common__ColumnPb*) * numCols);
+        pb.oldcolumns = (Common__ColumnPb**)palloc(sizeof(Common__ColumnPb*) * numCols);
         tuple_to_proto(ctx->out, tupdesc, &change->data.tp.oldtuple->tuple, pb.oldcolumns);
       }
       if (change->data.tp.newtuple != NULL) {
         pb.n_newcolumns = numCols;
-        pb.newcolumns = (Common__ColumnPb**)malloc(sizeof(Common__ColumnPb*) * numCols);
+        pb.newcolumns = (Common__ColumnPb**)palloc(sizeof(Common__ColumnPb*) * numCols);
         tuple_to_proto(ctx->out, tupdesc, &change->data.tp.newtuple->tuple, pb.newcolumns);
       }
       break;
@@ -172,7 +159,7 @@ void transicatorOutputChangeProto(
       if (change->data.tp.oldtuple != NULL) {
         numCols = countColumns(tupdesc);
         pb.n_oldcolumns = numCols;
-        pb.oldcolumns = (Common__ColumnPb**)malloc(sizeof(Common__ColumnPb*) * numCols);
+        pb.oldcolumns = (Common__ColumnPb**)palloc(sizeof(Common__ColumnPb*) * numCols);
         tuple_to_proto(ctx->out, tupdesc, &change->data.tp.oldtuple->tuple, pb.oldcolumns);
       }
       break;
@@ -182,21 +169,10 @@ void transicatorOutputChangeProto(
   }
 
   packSize = common__change_pb__get_packed_size(&pb);
-  pack = (uint8_t*)malloc(sizeof(uint8_t) * packSize);
+  pack = (uint8_t*)palloc(sizeof(uint8_t) * packSize);
   common__change_pb__pack(&pb, pack);
 
   OutputPluginPrepareWrite(ctx, true);
   appendBinaryStringInfo(ctx->out, (char*)pack, packSize);
   OutputPluginWrite(ctx, true);
-
-  /* Clean up everything that needs cleaning. */
-  free(pack);
-  if (pb.oldcolumns != NULL) {
-    freeColumns(pb.oldcolumns, pb.n_oldcolumns);
-    free(pb.oldcolumns);
-  }
-  if (pb.newcolumns != NULL) {
-    freeColumns(pb.newcolumns, pb.n_newcolumns);
-    free(pb.newcolumns);
-  }
 }

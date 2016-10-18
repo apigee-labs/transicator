@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strconv"
 	"testing"
 
 	"github.com/30x/transicator/pgclient"
@@ -57,11 +56,7 @@ var _ = BeforeSuite(func() {
 	listener, err = net.ListenTCP("tcp", &net.TCPAddr{})
 	Expect(err).Should(Succeed())
 
-	_, portStr, err := net.SplitHostPort(listener.Addr().String())
-	Expect(err).Should(Succeed())
-	port, err := strconv.Atoi(portStr)
-	Expect(err).Should(Succeed())
-	baseURL = fmt.Sprintf("http://localhost:%d", port)
+	baseURL = fmt.Sprintf("http://%s", listener.Addr().String())
 	fmt.Fprintf(GinkgoWriter, "Base API URL: %s\n", baseURL)
 
 	// Connect to the database and create our test table
