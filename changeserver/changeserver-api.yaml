@@ -3,6 +3,18 @@ swagger: '2.0'
 info:
   version: "0.0.1"
   title: changeserver
+  description:
+    Changeserver consumes changes from a Postgres replication scheme created
+    by the "transicator_output" plugin and makes them available to consumers
+    via an API. The API supports long polling so that a large number of
+    consumers may be notified of changes.
+  contact:
+    name: Apigee, Inc.
+    url: http://www.apigee.com/
+    email: sales@apigee.com
+  license: 
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
 
 paths:
   /changes:
@@ -12,7 +24,11 @@ paths:
         restrict the number of changes that are retrieved or return
         only changes since a particular sequence. In addition, it
         is possible to block (aka "long poll") until a new matching
-        change is available.
+        change is available. The result will be produced in JSON format
+        unless the Accept header is used to select the protobuf format.
+      produces:
+        - application/json
+        - application/transicator+protobuf
       parameters:
         - name: scope
           in: query
@@ -38,6 +54,8 @@ paths:
             a Postgres query executed during a transaction, then the
             change server will not return any database changes that
             were already in the snapshot.
+          required: false
+          type: string
         - name: since
           in: query
           description:
@@ -101,6 +119,10 @@ definitions:
           "2" denotes an update.
           "3" denotes a delete.
         type: integer
+        enum:
+        - 1
+        - 2
+        - 3
       table:
         description: The name of the database table that was changed.
         type: string

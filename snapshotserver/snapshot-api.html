@@ -1,0 +1,506 @@
+<!doctype html>
+<html>
+  <head>
+    <title>snapshotserver</title>
+    <style type="text/css">
+      body { 
+	font-family: Trebuchet MS, sans-serif;
+	font-size: 15px;
+	color: #444;
+	margin-right: 24px;
+}
+
+h1	{
+	font-size: 25px;
+}
+h2	{
+	font-size: 20px;
+}
+h3	{
+	font-size: 16px;
+	font-weight: bold;
+}
+hr	{
+	height: 1px;
+	border: 0;
+	color: #ddd;
+	background-color: #ddd;
+	display: none;
+}
+
+.app-desc {
+  clear: both;
+  margin-left: 20px;
+}
+.param-name {
+  width: 100%;
+}
+.license-info {
+  margin-left: 20px;
+}
+
+.license-url {
+  margin-left: 20px;
+}
+
+.model {
+  margin: 0 0 0px 20px;
+}
+
+.method {
+  margin-left: 20px;
+}
+
+.method-notes	{
+	margin: 10px 0 20px 0;
+	font-size: 90%;
+	color: #555;
+}
+
+pre {
+  padding: 10px;
+  margin-bottom: 2px;
+}
+
+.http-method {
+ text-transform: uppercase;
+}
+
+pre.get {
+  background-color: #0f6ab4;
+}
+
+pre.post {
+  background-color: #10a54a;
+}
+
+pre.put {
+  background-color: #c5862b;
+}
+
+pre.delete {
+  background-color: #a41e22;
+}
+
+.huge	{
+	color: #fff;
+}
+
+pre.example {
+  background-color: #f3f3f3;
+  padding: 10px;
+  border: 1px solid #ddd;
+}
+
+code {
+  white-space: pre;
+}
+
+.nickname {
+  font-weight: bold;
+}
+
+.method-path {
+  font-size: 1.5em;
+  background-color: #0f6ab4;
+}
+
+.up {
+  float:right;
+}
+
+.parameter {
+  width: 500px;
+}
+
+.param {
+  width: 500px;
+  padding: 10px 0 0 20px;
+  font-weight: bold;
+}
+
+.param-desc {
+  width: 700px;
+  padding: 0 0 0 20px;
+  color: #777;
+}
+
+.param-type {
+  font-style: italic;
+}
+
+.param-enum-header {
+width: 700px;
+padding: 0 0 0 60px;
+color: #777;
+font-weight: bold;
+}
+
+.param-enum {
+width: 700px;
+padding: 0 0 0 80px;
+color: #777;
+font-style: italic;
+}
+
+.field-label {
+  padding: 0;
+  margin: 0;
+  clear: both;
+}
+
+.field-items	{
+	padding: 0 0 15px 0;
+	margin-bottom: 15px;
+}
+
+.return-type {
+  clear: both;
+  padding-bottom: 10px;
+}
+
+.param-header {
+  font-weight: bold;
+}
+
+.method-tags {
+  text-align: right;
+}
+
+.method-tag {
+  background: none repeat scroll 0% 0% #24A600;
+  border-radius: 3px;
+  padding: 2px 10px;
+  margin: 2px;
+  color: #FFF;
+  display: inline-block;
+  text-decoration: none;
+}
+    </style>
+  </head>
+  <body>
+  <h1>snapshotserver</h1>
+    <div class="app-desc">The Snapshot server produces a consistent view of data in a Postgres database for a set of \"scopes.\" Each scope is a unique string identified by a column called \"_apid_scope\" in each table. Tables with no such column are ignored.</div>
+    <div class="app-desc">More information: <a href="http://www.apigee.com/">http://www.apigee.com/</a></div>
+    <div class="app-desc">Contact Info: <a href="sales@apigee.com">sales@apigee.com</a></div>
+    <div class="app-desc">Version: 0.0.1</div>
+    
+    <div class="license-info">Apache 2.0</div>
+    <div class="license-url">https://www.apache.org/licenses/LICENSE-2.0</div>
+  <h2>Access</h2>
+
+  <h2><a name="__Methods">Methods</a></h2>
+  [ Jump to <a href="#__Models">Models</a> ]
+
+  <h2>Table of Contents </h2>
+  <div class="method-summary"></div>
+  <ol>
+  <li><a href="#dataSnapshotIdGet"><code><span class="http-method">get</span> /data/{snapshotId}</code></a></li>
+  <li><a href="#scopesApidConfigIDGet"><code><span class="http-method">get</span> /scopes/{apidConfigID}</code></a></li>
+  <li><a href="#snapshotjobsJobIdGet"><code><span class="http-method">get</span> /snapshotjobs/{jobId}</code></a></li>
+  <li><a href="#snapshotjobsPost"><code><span class="http-method">post</span> /snapshotjobs</code></a></li>
+  <li><a href="#snapshotsGet"><code><span class="http-method">get</span> /snapshots</code></a></li>
+  </ol>
+
+  <div class="method"><a name="dataSnapshotIdGet"/>
+    <div class="method-path">
+    <a class="up" href="#__Methods">Up</a>
+    <pre class="get"><code class="huge"><span class="http-method">get</span> /data/{snapshotId}</code></pre></div>
+    <div class="method-summary">Download snapshot data file (<span class="nickname">dataSnapshotIdGet</span>)</div>
+    <div class="method-notes">This is the API that is directed to by the \&quot;/snapshots\&quot; API. Users should not call it directly.</div>
+
+    <h3 class="field-label">Path parameters</h3>
+    <div class="field-items">
+      <div class="param">snapshotId (required)</div>
+
+      <div class="param-desc"><span class="param-type">Path Parameter</span> &mdash; Unique identifier of a set of snapshot data </div>
+    </div>  <!-- field-items -->
+
+    <h3 class="field-label">Consumes</h3>
+    This API call consumes the following media types via the <span class="heaader">Content-Type</span> request header:
+    <ul>
+      <li><code>application/json</code></li>
+    </ul>
+
+
+
+
+
+    <h3 class="field-label">Return type</h3>
+    <div class="return-type">
+      <a href="#Snapshot">Snapshot</a>
+      
+    </div>
+
+    <!--Todo: process Response Object and its headers, schema, examples -->
+
+    <h3 class="field-label">Example data</h3>
+    <div class="example-data-content-type">Content-Type: application/json</div>
+    <pre class="example"><code>{
+  "tables" : [ {
+    "name" : "aeiou",
+    "rows" : [ { } ]
+  } ],
+  "snapshotInfo" : "aeiou",
+  "timestamp" : "aeiou"
+}</code></pre>
+
+    <h3 class="field-label">Produces</h3>
+    This API call produces the following media types according to the <span class="header">Accept</span> request header;
+    the media type will be conveyed by the <span class="heaader">Content-Type</span> response header.
+    <ul>
+      <li><code>application/json</code></li>
+      <li><code>application/transicator+protobuf</code></li>
+    </ul>
+
+    <h3 class="field-label">Responses</h3>
+    <h4 class="field-label">200</h4>
+    Snapshot data download
+        <a href="#Snapshot">Snapshot</a>
+  </div> <!-- method -->
+  <hr/>
+  <div class="method"><a name="scopesApidConfigIDGet"/>
+    <div class="method-path">
+    <a class="up" href="#__Methods">Up</a>
+    <pre class="get"><code class="huge"><span class="http-method">get</span> /scopes/{apidConfigID}</code></pre></div>
+    <div class="method-summary">Get list of scopes for a config (<span class="nickname">scopesApidConfigIDGet</span>)</div>
+    <div class="method-notes">This API downloads the list of scopes that a particular instance of the apid configuration requires. This API may be removed in a future release in favor of re-using the existing snapshot mechanism.</div>
+
+    <h3 class="field-label">Path parameters</h3>
+    <div class="field-items">
+      <div class="param">apidConfigID (required)</div>
+
+      <div class="param-desc"><span class="param-type">Path Parameter</span> &mdash; The unique identifier of an API configuration object that the caller is authorized to see. </div>
+    </div>  <!-- field-items -->
+
+    <h3 class="field-label">Consumes</h3>
+    This API call consumes the following media types via the <span class="heaader">Content-Type</span> request header:
+    <ul>
+      <li><code>application/json</code></li>
+    </ul>
+
+
+
+
+
+    <h3 class="field-label">Return type</h3>
+    <div class="return-type">
+      <a href="#Snapshot">Snapshot</a>
+      
+    </div>
+
+    <!--Todo: process Response Object and its headers, schema, examples -->
+
+    <h3 class="field-label">Example data</h3>
+    <div class="example-data-content-type">Content-Type: application/json</div>
+    <pre class="example"><code>{
+  "tables" : [ {
+    "name" : "aeiou",
+    "rows" : [ { } ]
+  } ],
+  "snapshotInfo" : "aeiou",
+  "timestamp" : "aeiou"
+}</code></pre>
+
+    <h3 class="field-label">Produces</h3>
+    This API call produces the following media types according to the <span class="header">Accept</span> request header;
+    the media type will be conveyed by the <span class="heaader">Content-Type</span> response header.
+    <ul>
+      <li><code>application/json</code></li>
+    </ul>
+
+    <h3 class="field-label">Responses</h3>
+    <h4 class="field-label">200</h4>
+    Configuration downlaod
+        <a href="#Snapshot">Snapshot</a>
+  </div> <!-- method -->
+  <hr/>
+  <div class="method"><a name="snapshotjobsJobIdGet"/>
+    <div class="method-path">
+    <a class="up" href="#__Methods">Up</a>
+    <pre class="get"><code class="huge"><span class="http-method">get</span> /snapshotjobs/{jobId}</code></pre></div>
+    <div class="method-summary">Get snapshot jobs info on status and metadata (<span class="nickname">snapshotjobsJobIdGet</span>)</div>
+    <div class="method-notes">This API is a placeholder for a future API that will allow a client to poll for the status of a previously-requested asynchronous snapshot.</div>
+
+    <h3 class="field-label">Path parameters</h3>
+    <div class="field-items">
+      <div class="param">jobId (required)</div>
+
+      <div class="param-desc"><span class="param-type">Path Parameter</span> &mdash;  </div>
+    </div>  <!-- field-items -->
+
+    <h3 class="field-label">Consumes</h3>
+    This API call consumes the following media types via the <span class="heaader">Content-Type</span> request header:
+    <ul>
+      <li><code>application/json</code></li>
+    </ul>
+
+
+
+
+
+    <h3 class="field-label">Return type</h3>
+    <div class="return-type">
+      <a href="#ErrorResponse">ErrorResponse</a>
+      
+    </div>
+
+    <!--Todo: process Response Object and its headers, schema, examples -->
+
+    <h3 class="field-label">Example data</h3>
+    <div class="example-data-content-type">Content-Type: application/json</div>
+    <pre class="example"><code>{
+  "message" : "aeiou"
+}</code></pre>
+
+    <h3 class="field-label">Produces</h3>
+    This API call produces the following media types according to the <span class="header">Accept</span> request header;
+    the media type will be conveyed by the <span class="heaader">Content-Type</span> response header.
+    <ul>
+      <li><code>application/json</code></li>
+    </ul>
+
+    <h3 class="field-label">Responses</h3>
+    <h4 class="field-label">0</h4>
+    Error
+        <a href="#ErrorResponse">ErrorResponse</a>
+  </div> <!-- method -->
+  <hr/>
+  <div class="method"><a name="snapshotjobsPost"/>
+    <div class="method-path">
+    <a class="up" href="#__Methods">Up</a>
+    <pre class="post"><code class="huge"><span class="http-method">post</span> /snapshotjobs</code></pre></div>
+    <div class="method-summary">Request a new snapshot job (<span class="nickname">snapshotjobsPost</span>)</div>
+    <div class="method-notes">This API is a placeholder for a future API that will allow a client to request asynchronous creation of a snapshot that may be consumed later.</div>
+
+
+    <h3 class="field-label">Consumes</h3>
+    This API call consumes the following media types via the <span class="heaader">Content-Type</span> request header:
+    <ul>
+      <li><code>application/json</code></li>
+    </ul>
+
+
+
+
+
+    <h3 class="field-label">Return type</h3>
+    <div class="return-type">
+      <a href="#ErrorResponse">ErrorResponse</a>
+      
+    </div>
+
+    <!--Todo: process Response Object and its headers, schema, examples -->
+
+    <h3 class="field-label">Example data</h3>
+    <div class="example-data-content-type">Content-Type: application/json</div>
+    <pre class="example"><code>{
+  "message" : "aeiou"
+}</code></pre>
+
+    <h3 class="field-label">Produces</h3>
+    This API call produces the following media types according to the <span class="header">Accept</span> request header;
+    the media type will be conveyed by the <span class="heaader">Content-Type</span> response header.
+    <ul>
+      <li><code>application/json</code></li>
+    </ul>
+
+    <h3 class="field-label">Responses</h3>
+    <h4 class="field-label">0</h4>
+    Error
+        <a href="#ErrorResponse">ErrorResponse</a>
+  </div> <!-- method -->
+  <hr/>
+  <div class="method"><a name="snapshotsGet"/>
+    <div class="method-path">
+    <a class="up" href="#__Methods">Up</a>
+    <pre class="get"><code class="huge"><span class="http-method">get</span> /snapshots</code></pre></div>
+    <div class="method-summary">Get data for a particular snapshot (<span class="nickname">snapshotsGet</span>)</div>
+    <div class="method-notes">Generate and create the data for a snapshot. The snapshot will contain data from all tables in the current database and schema that has a column named \&quot;_apid_scope\&quot; that matches one of the \&quot;scope\&quot; values. The generated snapshot includes JSON data by default. The \&quot;Accept\&quot; header may be used to request data in protocol buffer format.</div>
+
+
+    <h3 class="field-label">Consumes</h3>
+    This API call consumes the following media types via the <span class="heaader">Content-Type</span> request header:
+    <ul>
+      <li><code>application/json</code></li>
+    </ul>
+
+
+
+    <h3 class="field-label">Query parameters</h3>
+    <div class="field-items">
+      <div class="param">scope (required)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; The \&quot;scope\&quot; field represents a unique identifier that is required in order to generate a snapshot. The snapshot will contain data from all tables that have an \&quot;_apid_scope\&quot; column that matches the value. At least one scope must be included. If multiple scopes are included, then the result is treated as an \&quot;OR\&quot; of all the scopes. </div><div class="param">scopes (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; This parameter contains a comma-separated list of scopes. It was used in previous releases of the API and will be removed on a future date. </div>
+    </div>  <!-- field-items -->
+
+
+
+    <!--Todo: process Response Object and its headers, schema, examples -->
+
+
+    <h3 class="field-label">Produces</h3>
+    This API call produces the following media types according to the <span class="header">Accept</span> request header;
+    the media type will be conveyed by the <span class="heaader">Content-Type</span> response header.
+    <ul>
+      <li><code>application/json</code></li>
+      <li><code>application/transicator+protobuf</code></li>
+    </ul>
+
+    <h3 class="field-label">Responses</h3>
+    <h4 class="field-label">303</h4>
+    This the normal response to this API. It will immediately redirect the client to the location of the generated snapshot.
+        <a href="#"></a>
+  </div> <!-- method -->
+  <hr/>
+
+  <div class="up"><a href="#__Models">Up</a></div>
+  <h2><a name="__Models">Models</a></h2>
+  [ Jump to <a href="#__Methods">Methods</a> ]
+
+  <h2>Table of Contents</h2>
+  <ol>
+    <li><a href="#ErrorResponse"><code>ErrorResponse</code></a></li>
+    <li><a href="#Row"><code>Row</code></a></li>
+    <li><a href="#Snapshot"><code>Snapshot</code></a></li>
+    <li><a href="#Table"><code>Table</code></a></li>
+    <li><a href="#Value"><code>Value</code></a></li>
+  </ol>
+
+  <div class="model">
+    <h3 class="field-label"><a name="ErrorResponse">ErrorResponse</a> <a class="up" href="#__Models">Up</a></h3>
+    <div class="field-items">
+      <div class="param">message </div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3 class="field-label"><a name="Row">Row</a> <a class="up" href="#__Models">Up</a></h3>
+    <div class="field-items">
+          </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3 class="field-label"><a name="Snapshot">Snapshot</a> <a class="up" href="#__Models">Up</a></h3>
+    <div class="field-items">
+      <div class="param">snapshotInfo (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The Postgres transaction IDs at the time when the snapshot was created. Should be passed as the \&quot;snaphot\&quot; parameter to the change server to result in a consistent set of changes. </div>
+<div class="param">timestamp (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The time that the snapshot was generated, in Postgres format </div>
+<div class="param">tables (optional)</div><div class="param-desc"><span class="param-type"><a href="#Table">array[Table]</a></span> The tables represented in the snapshot </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3 class="field-label"><a name="Table">Table</a> <a class="up" href="#__Models">Up</a></h3>
+    <div class="field-items">
+      <div class="param">name (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The name of the table </div>
+<div class="param">rows (optional)</div><div class="param-desc"><span class="param-type"><a href="#Row">array[Row]</a></span>  </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3 class="field-label"><a name="Value">Value</a> <a class="up" href="#__Models">Up</a></h3>
+    <div class="field-items">
+      <div class="param">value </div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The row value in string form </div>
+<div class="param">type </div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span> The Postgres numeric type of the field </div>
+    </div>  <!-- field-items -->
+  </div>
+  </body>
+</html>

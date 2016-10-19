@@ -1,0 +1,310 @@
+<!doctype html>
+<html>
+  <head>
+    <title>changeserver</title>
+    <style type="text/css">
+      body { 
+	font-family: Trebuchet MS, sans-serif;
+	font-size: 15px;
+	color: #444;
+	margin-right: 24px;
+}
+
+h1	{
+	font-size: 25px;
+}
+h2	{
+	font-size: 20px;
+}
+h3	{
+	font-size: 16px;
+	font-weight: bold;
+}
+hr	{
+	height: 1px;
+	border: 0;
+	color: #ddd;
+	background-color: #ddd;
+	display: none;
+}
+
+.app-desc {
+  clear: both;
+  margin-left: 20px;
+}
+.param-name {
+  width: 100%;
+}
+.license-info {
+  margin-left: 20px;
+}
+
+.license-url {
+  margin-left: 20px;
+}
+
+.model {
+  margin: 0 0 0px 20px;
+}
+
+.method {
+  margin-left: 20px;
+}
+
+.method-notes	{
+	margin: 10px 0 20px 0;
+	font-size: 90%;
+	color: #555;
+}
+
+pre {
+  padding: 10px;
+  margin-bottom: 2px;
+}
+
+.http-method {
+ text-transform: uppercase;
+}
+
+pre.get {
+  background-color: #0f6ab4;
+}
+
+pre.post {
+  background-color: #10a54a;
+}
+
+pre.put {
+  background-color: #c5862b;
+}
+
+pre.delete {
+  background-color: #a41e22;
+}
+
+.huge	{
+	color: #fff;
+}
+
+pre.example {
+  background-color: #f3f3f3;
+  padding: 10px;
+  border: 1px solid #ddd;
+}
+
+code {
+  white-space: pre;
+}
+
+.nickname {
+  font-weight: bold;
+}
+
+.method-path {
+  font-size: 1.5em;
+  background-color: #0f6ab4;
+}
+
+.up {
+  float:right;
+}
+
+.parameter {
+  width: 500px;
+}
+
+.param {
+  width: 500px;
+  padding: 10px 0 0 20px;
+  font-weight: bold;
+}
+
+.param-desc {
+  width: 700px;
+  padding: 0 0 0 20px;
+  color: #777;
+}
+
+.param-type {
+  font-style: italic;
+}
+
+.param-enum-header {
+width: 700px;
+padding: 0 0 0 60px;
+color: #777;
+font-weight: bold;
+}
+
+.param-enum {
+width: 700px;
+padding: 0 0 0 80px;
+color: #777;
+font-style: italic;
+}
+
+.field-label {
+  padding: 0;
+  margin: 0;
+  clear: both;
+}
+
+.field-items	{
+	padding: 0 0 15px 0;
+	margin-bottom: 15px;
+}
+
+.return-type {
+  clear: both;
+  padding-bottom: 10px;
+}
+
+.param-header {
+  font-weight: bold;
+}
+
+.method-tags {
+  text-align: right;
+}
+
+.method-tag {
+  background: none repeat scroll 0% 0% #24A600;
+  border-radius: 3px;
+  padding: 2px 10px;
+  margin: 2px;
+  color: #FFF;
+  display: inline-block;
+  text-decoration: none;
+}
+    </style>
+  </head>
+  <body>
+  <h1>changeserver</h1>
+    <div class="app-desc">Changeserver consumes changes from a Postgres replication scheme created by the \"transicator_output\" plugin and makes them available to consumers via an API. The API supports long polling so that a large number of consumers may be notified of changes.</div>
+    <div class="app-desc">More information: <a href="http://www.apigee.com/">http://www.apigee.com/</a></div>
+    <div class="app-desc">Contact Info: <a href="sales@apigee.com">sales@apigee.com</a></div>
+    <div class="app-desc">Version: 0.0.1</div>
+    
+    <div class="license-info">Apache 2.0</div>
+    <div class="license-url">https://www.apache.org/licenses/LICENSE-2.0</div>
+  <h2>Access</h2>
+
+  <h2><a name="__Methods">Methods</a></h2>
+  [ Jump to <a href="#__Models">Models</a> ]
+
+  <h2>Table of Contents </h2>
+  <div class="method-summary"></div>
+  <ol>
+  <li><a href="#changesGet"><code><span class="http-method">get</span> /changes</code></a></li>
+  </ol>
+
+  <div class="method"><a name="changesGet"/>
+    <div class="method-path">
+    <a class="up" href="#__Methods">Up</a>
+    <pre class="get"><code class="huge"><span class="http-method">get</span> /changes</code></pre></div>
+    <div class="method-summary"> (<span class="nickname">changesGet</span>)</div>
+    <div class="method-notes">Retrieve a list of changes. The query parameters may be used to restrict the number of changes that are retrieved or return only changes since a particular sequence. In addition, it is possible to block (aka \&quot;long poll\&quot;) until a new matching change is available. The result will be produced in JSON format unless the Accept header is used to select the protobuf format.</div>
+
+
+
+
+
+    <h3 class="field-label">Query parameters</h3>
+    <div class="field-items">
+      <div class="param">scope (required)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; The scope limits the changes that are returned. It is extracted from a database column whenever a change is made. Every call to this API must contain at least one scope. Multiple \&quot;scope\&quot; parameters may also be used. if more than one \&quot;scope\&quot; is included, then the operation is treated as an \&quot;OR\&quot; of all the scopes, and the results are sorted by sequence regardless of scope. </div><div class="param">snapshot (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; If specified, then this must be set to a \&quot;snapshot ID\&quot; from Postgres. This will be in the format \&quot;xmin:xmax:xip1,xip2,...xipN\&quot; and is normally returned by executing \&quot;select txid_current_snapshot()\&quot;. By including this parameter, the change list will never include any data that would be *visible* in the specified snapshot. So in other words, if the value of this parameter comes from a Postgres query executed during a transaction, then the change server will not return any database changes that were already in the snapshot. </div><div class="param">since (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; The value of \&quot;sequence\&quot; from a previous invocation of this API. If so specified, this API will only return changes that happened after the change with the specified sequence. Otherwise, this API will return changes since the beginning. </div><div class="param">limit (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Limit the number of changes returned by a single API call. The default limit is 100. </div><div class="param">block (optional)</div>
+
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; If specified, this sets the number of seconds that the API call will block if there are no changes available since the \&quot;since\&quot; value for the set of specified scopes. In the event that there are no changes available when the API call is made, the API will block for the specified number of seconds until a matching change appears. If no changes appear in the specified number of seconds, then an empty change list will be returned. </div>
+    </div>  <!-- field-items -->
+
+
+    <h3 class="field-label">Return type</h3>
+    <div class="return-type">
+      <a href="#ChangeList">ChangeList</a>
+      
+    </div>
+
+    <!--Todo: process Response Object and its headers, schema, examples -->
+
+    <h3 class="field-label">Example data</h3>
+    <div class="example-data-content-type">Content-Type: application/json</div>
+    <pre class="example"><code>{
+  "firstSequence" : "aeiou",
+  "lastSequence" : "aeiou",
+  "changes" : [ {
+    "sequence" : "aeiou",
+    "newRow" : "{}",
+    "txid" : 123456789,
+    "oldRow" : "{}",
+    "changeSequence" : 123456789,
+    "commitSequence" : 123456789,
+    "operation" : "",
+    "table" : "aeiou",
+    "commitIndex" : 123456789
+  } ]
+}</code></pre>
+
+    <h3 class="field-label">Produces</h3>
+    This API call produces the following media types according to the <span class="header">Accept</span> request header;
+    the media type will be conveyed by the <span class="heaader">Content-Type</span> response header.
+    <ul>
+      <li><code>application/json</code></li>
+      <li><code>application/transicator+protobuf</code></li>
+    </ul>
+
+    <h3 class="field-label">Responses</h3>
+    <h4 class="field-label">200</h4>
+    Successful response
+        <a href="#ChangeList">ChangeList</a>
+  </div> <!-- method -->
+  <hr/>
+
+  <div class="up"><a href="#__Models">Up</a></div>
+  <h2><a name="__Models">Models</a></h2>
+  [ Jump to <a href="#__Methods">Methods</a> ]
+
+  <h2>Table of Contents</h2>
+  <ol>
+    <li><a href="#Change"><code>Change</code></a></li>
+    <li><a href="#ChangeList"><code>ChangeList</code></a></li>
+    <li><a href="#Value"><code>Value</code></a></li>
+  </ol>
+
+  <div class="model">
+    <h3 class="field-label"><a name="Change">Change</a> <a class="up" href="#__Models">Up</a></h3>
+    <div class="field-items">
+      <div class="param">operation (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span> The type of change. \&quot;1\&quot; denotes an insert. \&quot;2\&quot; denotes an update. \&quot;3\&quot; denotes a delete. </div>
+<div class="param">table (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The name of the database table that was changed. </div>
+<div class="param">sequence (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The unique, ordered identifier of the change in the list of changes. </div>
+<div class="param">commitSequence (optional)</div><div class="param-desc"><span class="param-type"><a href="#long">Long</a></span> The order of this transaction&#39;s commit in the list of changes. format: int64</div>
+<div class="param">changeSequence (optional)</div><div class="param-desc"><span class="param-type"><a href="#long">Long</a></span> The order of this change in the list of changes. Since transactions commit in different orders, changes are not necessarily shown in this order format: int64</div>
+<div class="param">commitIndex (optional)</div><div class="param-desc"><span class="param-type"><a href="#long">Long</a></span> The order of this change in the list of changes for a particular transaction. When multiple changes are made in a transaction, they have the same commitSequence but different values of commitIndex. format: int64</div>
+<div class="param">txid (optional)</div><div class="param-desc"><span class="param-type"><a href="#long">Long</a></span> The database transaction ID for this change format: int64</div>
+<div class="param">newRow (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">Object</a></span> The new value of the row for an insert or update operation. The fields in the object are named after the fields in the row, and each field&#39;s value is a \&quot;Value\&quot; object. </div>
+<div class="param">oldRow (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">Object</a></span> The old value of the row for a delete or update operation. </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3 class="field-label"><a name="ChangeList">ChangeList</a> <a class="up" href="#__Models">Up</a></h3>
+    <div class="field-items">
+      <div class="param">firstSequence (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The oldest sequence present in the databse </div>
+<div class="param">lastSequence (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The newest sequence present in the databse </div>
+<div class="param">changes (optional)</div><div class="param-desc"><span class="param-type"><a href="#Change">array[Change]</a></span> A list of changes, in sequence order. </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3 class="field-label"><a name="Value">Value</a> <a class="up" href="#__Models">Up</a></h3>
+    <div class="field-items">
+      <div class="param">value </div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The row value in string form </div>
+<div class="param">type </div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span> The Postgres numeric type of the field </div>
+    </div>  <!-- field-items -->
+  </div>
+  </body>
+</html>

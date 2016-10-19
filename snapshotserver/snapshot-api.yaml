@@ -1,0 +1,189 @@
+swagger: "2.0"
+info:
+  version: "0.0.1"
+  title: snapshotserver
+  description:
+    The Snapshot server produces a consistent view of data in a Postgres database
+    for a set of "scopes." Each scope is a unique string identified by a column
+    called "_apid_scope" in each table. Tables with no such column are
+    ignored.
+  contact:
+    name: Apigee, Inc.
+    url: http://www.apigee.com/
+    email: sales@apigee.com
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+  
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /snapshots:
+    get:
+      summary: Get data for a particular snapshot
+      description: 
+        Generate and create the data for a snapshot. The snapshot will contain
+        data from all tables in the current database and schema that has a
+        column named "_apid_scope" that matches one of the "scope" values.
+        The generated snapshot includes JSON data by default. The "Accept" header
+        may be used to request data in protocol buffer format.
+      produces:
+        - application/json
+        - application/transicator+protobuf
+        
+      parameters:
+        - name: scope
+          in: query
+          required: true
+          type: string
+          description:
+            The "scope" field represents a unique identifier that is required in
+            order to generate a snapshot. The snapshot will contain data from all
+            tables that have an "_apid_scope" column that matches the value.
+            At least one scope must be included. If multiple scopes are included,
+            then the result is treated as an "OR" of all the scopes.
+        - name: scopes
+          in: query
+          required: false
+          type: string
+          description:
+            This parameter contains a comma-separated list of scopes.
+            It was used in previous releases of the API and will be removed on 
+            a future date.
+      responses:
+        '303':
+          description:
+            This the normal response to this API. It will immediately redirect
+            the client to the location of the generated snapshot.
+          headers:
+            Location:
+              description: URL to redirect to
+              type: string
+
+  /data/{snapshotId}:
+    parameters:
+      - name: snapshotId
+        in: path
+        required: true
+        description: Unique identifier of a set of snapshot data
+        type: string
+    get:
+      summary: Download snapshot data file
+      description: 
+        This is the API that is directed to by the "/snapshots" API. Users should
+        not call it directly.
+      produces:
+        - application/json
+        - application/transicator+protobuf
+      responses:
+        '200':
+          description: "Snapshot data download"
+          schema:
+            $ref: '#/definitions/Snapshot'
+            
+  /scopes/{apidConfigID}:
+    get:
+      summary: Get list of scopes for a config
+      description:
+        This API downloads the list of scopes that a particular instance of the
+        apid configuration requires. This API may be removed in a future release
+        in favor of re-using the existing snapshot mechanism.
+      parameters:
+        - name: apidConfigID
+          in: path
+          required: true
+          type: string
+          description:
+            The unique identifier of an API configuration object that the caller is
+            authorized to see.
+      responses:
+        '200':
+          description: Configuration downlaod
+          schema:
+            $ref: '#/definitions/Snapshot'
+            
+  /snapshotjobs:
+    post:
+      summary: Request a new snapshot job
+      description: 
+        This API is a placeholder for a future API that will allow a client to request
+        asynchronous creation of a snapshot that may be consumed later.
+      responses:
+        default:
+          description: Error
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+
+  /snapshotjobs/{jobId}:
+    get:
+      summary: Get snapshot jobs info on status and metadata
+      description: 
+        This API is a placeholder for a future API that will allow a client to poll
+        for the status of a previously-requested asynchronous snapshot.
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          type: string
+      responses:
+        default:
+          description: Error
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+
+definitions:
+  Value:
+    description:
+      The value of a row in the "rows" property of a table.
+    required:
+      - value
+      - type
+    properties:
+      value:
+        description: The row value in string form
+        type: string
+      type:
+        description: The Postgres numeric type of the field
+        type: integer
+  Row:
+    description: 
+      A single row in the table. Keys are field names and values are
+      Value objects.
+    additionalProperties:
+      $ref: '#/definitions/Value'
+  Table:
+    description: The snapshot of a single database table
+    properties:
+      name:
+        description: The name of the table
+        type: string
+      rows:
+        type: array
+        items:
+          $ref: '#/definitions/Row'
+  Snapshot:
+    description: A snapshot of the state of the database for a set of scopes.
+    properties:
+      snapshotInfo:
+        description:
+          The Postgres transaction IDs at the time when the snapshot was
+          created. Should be passed as the "snaphot" parameter to the change
+          server to result in a consistent set of changes.
+        type: string
+      timestamp:
+        description: The time that the snapshot was generated, in Postgres format
+        type: string
+      tables:
+        description: The tables represented in the snapshot
+        type: array
+        items:
+          $ref: '#/definitions/Table'
+
+  ErrorResponse:
+    required:
+      - message
+    properties:
+      message:
+        type: string

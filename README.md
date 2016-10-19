@@ -53,7 +53,8 @@ wish to replicate using transicator.
 
 # API Specifications:
 
-* changeserver [API](http://playground.apistudio.io/b1c7fe2f-8138-425a-8e3b-aca9f867e35a/docs/) and [Swagger spec](./changeserver/api.yaml)
+* changeserver [API](./changeserver/changeserver-api.html) and [Swagger spec](./changeserver/api.yaml)
+* snapshot server [API](./snapshotserver/snapshot-api.html) and [Swagger spec](./snapshotserver/snapshot-api.yaml)
 
 # Complete API Example
 
