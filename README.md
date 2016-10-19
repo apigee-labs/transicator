@@ -53,8 +53,8 @@ wish to replicate using transicator.
 
 # API Specifications:
 
-* changeserver [API](./changeserver/changeserver-api.html) and [Swagger spec](./changeserver/api.yaml)
-* snapshot server [API](./snapshotserver/snapshot-api.html) and [Swagger spec](./snapshotserver/snapshot-api.yaml)
+* changeserver [API](./changeserver/changeserver-api.html) and [OpenAPI spec](./changeserver/api.yaml)
+* snapshot server [API](./snapshotserver/snapshot-api.html) and [OpenAPI spec](./snapshotserver/snapshot-api.yaml)
 
 # Complete API Example
 
