@@ -28,6 +28,7 @@ var baseURL string
 var listener net.Listener
 var testServer *server
 var db *sql.DB
+var insertStmt *sql.Stmt
 
 func TestServer(t *testing.T) {
 	if debugTests {
@@ -61,6 +62,9 @@ var _ = BeforeSuite(func() {
 
 	// Connect to the database and create our test table
 	executeSQL(testTableSQL)
+	insertStmt, err = db.Prepare(
+		"insert into changeserver_test (sequence, _apid_scope) values ($1, $2)")
+	Expect(err).Should(Succeed())
 
 	// Start the server, which will be ready to respond to API calls
 	// and which will also start replication with the database
@@ -88,6 +92,9 @@ var _ = AfterSuite(func() {
 	}
 	replication.DropSlot(dbURL, replicationSlot)
 
+	if insertStmt != nil {
+		insertStmt.Close()
+	}
 	// Drop the test data table
 	executeSQL(dropTableSQL)
 	// And delete the storage

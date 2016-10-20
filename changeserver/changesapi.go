@@ -67,7 +67,8 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 	var snapshotFilter func([]byte) bool
 	snapStr := q.Get("snapshot")
 	if snapStr != "" {
-		snapshot, err := replication.MakeSnapshot(snapStr)
+		var snapshot *replication.Snapshot
+		snapshot, err = replication.MakeSnapshot(snapStr)
 		if err != nil {
 			sendError(resp, req, http.StatusBadRequest, fmt.Sprintf("Invalid snapshot %s", snapStr))
 			return
@@ -90,9 +91,20 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 	}
 	log.Debugf("Received %d changes", len(entries))
 
+	lastSeq, err := common.ParseSequenceBytes(metadata[0])
+	if err != nil {
+		sendError(resp, req, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	if len(entries) == 0 && block > 0 {
-		log.Debugf("Blocking for up to %d seconds", block)
-		newIndex := s.tracker.timedWait(sinceSeq, time.Duration(block)*time.Second, scopes)
+		// Query -- which was consistent at the "snapshot" level -- didn't
+		// return anything. Wait until something is put in the database and try again.
+		waitSeq := lastSeq
+		waitSeq.Index++
+
+		log.Debugf("Blocking at %s for up to %d seconds", waitSeq, block)
+		newIndex := s.tracker.timedWait(waitSeq, time.Duration(block)*time.Second, scopes)
 		if newIndex.Compare(sinceSeq) > 0 {
 			entries, metadata, err = s.db.GetMultiEntries(
 				scopes, []string{lastSequenceKey}, sinceSeq.LSN,
@@ -103,13 +115,14 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 			}
 		}
 		log.Debugf("Received %d changes after blocking", len(entries))
+
+		lastSeq, err = common.ParseSequenceBytes(metadata[0])
+		if err != nil {
+			sendError(resp, req, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 
-	lastSeq, err := common.ParseSequenceBytes(metadata[0])
-	if err != nil {
-		sendError(resp, req, http.StatusInternalServerError, err.Error())
-		return
-	}
 	changeList := common.ChangeList{
 		LastSequence: lastSeq.String(),
 	}

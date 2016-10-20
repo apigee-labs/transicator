@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"runtime"
 	"sync/atomic"
 	"time"
 
@@ -14,8 +15,8 @@ import (
 const (
 	startIndex         = 2
 	maxWait            = 10 * time.Microsecond
-	trackerTestTimeout = 10 * time.Second
-	trackerCount       = 10000
+	trackerTestTimeout = 60 * time.Second
+	trackerCount       = 1000
 )
 
 var tracker *changeTracker
@@ -286,10 +287,15 @@ var _ = Describe("Change tracker", func() {
 })
 
 func trackerStress(producers, consumers int, max int64) {
+	// Make a separate tracker here. The global pointer may get shared
+	// by multiple tests otherwise as one shuts down while the next starts.
+	stressTracker := createTracker()
+	defer stressTracker.close()
+
 	var start int64 = startIndex
 
-	prodDone := make(chan bool)
-	consDone := make(chan bool)
+	prodDone := make(chan bool, producers)
+	consDone := make(chan bool, consumers)
 
 	for i := 0; i <= producers; i++ {
 		go func() {
@@ -298,7 +304,7 @@ func trackerStress(producers, consumers int, max int64) {
 				time.Sleep(time.Duration(waitTime))
 				val := atomic.AddInt64(&start, 1)
 				seq := common.MakeSequence(uint64(val), 0)
-				tracker.update(seq, "")
+				stressTracker.update(seq, "")
 			}
 			prodDone <- true
 		}()
@@ -310,7 +316,7 @@ func trackerStress(producers, consumers int, max int64) {
 			for last < max {
 				waitTime := rand.Int63n(int64(maxWait))
 				seq := common.MakeSequence(uint64(last+1), 0)
-				lastSeq := tracker.timedWait(seq, time.Duration(waitTime), []string{""})
+				lastSeq := stressTracker.timedWait(seq, time.Duration(waitTime), []string{""})
 				last = int64(lastSeq.LSN)
 			}
 			consDone <- true
@@ -329,8 +335,11 @@ func trackerStress(producers, consumers int, max int64) {
 			consCount++
 		case <-timeout.C:
 			fmt.Fprintf(GinkgoWriter,
-				"Test timed out after %d producers and %d consumers\n",
-				prodCount, consCount)
+				"Test timed out after %d producers and %d consumers. last = %d\n",
+				prodCount, consCount, atomic.LoadInt64(&start))
+			stacks := make([]byte, 1000000)
+			runtime.Stack(stacks, true)
+			fmt.Fprintf(GinkgoWriter, string(stacks))
 			Expect(false).Should(BeTrue())
 			return
 		}
