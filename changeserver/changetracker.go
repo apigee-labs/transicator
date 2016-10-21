@@ -1,26 +1,11 @@
 package main
 
 import (
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/30x/transicator/common"
 )
-
-const (
-	closed = iota
-	newWaiter
-	cancelWaiter
-	update
-)
-
-type trackerUpdate struct {
-	updateType int
-	key        int32
-	change     common.Sequence
-	scope      string
-	waiter     changeWaiter
-}
 
 type changeWaiter struct {
 	change common.Sequence
@@ -31,14 +16,14 @@ type changeWaiter struct {
 /*
 A changeTracker allows clients to submit a change, and to wait for a change
 to occur. The overall effect is like a condition variable, in that waiters
-are notified when something changes. This work is done using a goroutine,
-which is simpler and faster than the equivalent using a condition variable.
+are notified when something changes.
 */
 type changeTracker struct {
-	updateChan  chan trackerUpdate
 	lastKey     int32
 	waiters     map[int32]changeWaiter
 	lastChanges map[string]common.Sequence
+	latch       sync.Locker
+	closed      bool
 }
 
 /*
@@ -46,20 +31,26 @@ CreateTracker creates a new change tracker with "lastChange" set to zero.
 */
 func createTracker() *changeTracker {
 	tracker := &changeTracker{
-		updateChan: make(chan trackerUpdate, 100),
+		latch:       &sync.Mutex{},
+		waiters:     make(map[int32]changeWaiter),
+		lastChanges: make(map[string]common.Sequence),
 	}
-	go tracker.run()
 	return tracker
 }
 
 /*
-Close stops the change tracker from delivering notifications.
+Close stops the change tracker from delivering notifications and wakes
+up anyone who is left.
 */
 func (t *changeTracker) close() {
-	u := trackerUpdate{
-		updateType: closed,
+	t.latch.Lock()
+	defer t.latch.Unlock()
+
+	t.closed = true
+	for k, w := range t.waiters {
+		w.rc <- common.Sequence{}
+		delete(t.waiters, k)
 	}
-	t.updateChan <- u
 }
 
 /*
@@ -67,12 +58,18 @@ Update indicates that the current sequence has changed. Wake up any waiting
 waiters and tell them about it.
 */
 func (t *changeTracker) update(change common.Sequence, scope string) {
-	u := trackerUpdate{
-		updateType: update,
-		change:     change,
-		scope:      scope,
+	t.latch.Lock()
+	defer t.latch.Unlock()
+
+	t.lastChanges[scope] = change
+	for k, w := range t.waiters {
+		if change.Compare(w.change) >= 0 && w.scopes[scope] {
+			//log.Debugf("Waking up waiter waiting for change %d with change %d and tag %s",
+			//	w.change, up.change, up.tag)
+			w.rc <- change
+			delete(t.waiters, k)
+		}
 	}
-	t.updateChan <- u
 }
 
 /*
@@ -90,94 +87,62 @@ TimedWait blocks the current gorouting until either a new value higher than
 */
 func (t *changeTracker) timedWait(
 	curChange common.Sequence, maxWait time.Duration, scopes []string) common.Sequence {
+
 	key, resultChan := t.doWait(curChange, scopes)
+	if key < 0 {
+		return <-resultChan
+	}
+
 	timer := time.NewTimer(maxWait)
 	select {
 	case result := <-resultChan:
 		return result
 	case <-timer.C:
-		u := trackerUpdate{
-			updateType: cancelWaiter,
-			key:        key,
-		}
-		t.updateChan <- u
-		return common.Sequence{}
+		return t.cancelWaiter(key)
 	}
 }
 
 func (t *changeTracker) doWait(curChange common.Sequence, scopes []string) (int32, chan common.Sequence) {
-	key := atomic.AddInt32(&t.lastKey, 1)
-	resultChan := make(chan common.Sequence, 1)
+	t.latch.Lock()
+	defer t.latch.Unlock()
+
 	scopeMap := make(map[string]bool)
 	for _, s := range scopes {
 		scopeMap[s] = true
 	}
 
-	u := trackerUpdate{
-		updateType: newWaiter,
-		key:        key,
-		waiter: changeWaiter{
-			change: curChange,
-			scopes: scopeMap,
-			rc:     resultChan,
-		},
+	resultChan := make(chan common.Sequence, 1)
+	maxAlready := t.getMaxChange(scopeMap)
+	if maxAlready.Compare(curChange) >= 0 {
+		resultChan <- maxAlready
+		return -1, resultChan
 	}
-	t.updateChan <- u
-	return key, resultChan
+
+	waiter := changeWaiter{
+		change: curChange,
+		scopes: scopeMap,
+		rc:     resultChan,
+	}
+
+	waitKey := t.lastKey
+	t.lastKey++
+	t.waiters[waitKey] = waiter
+
+	return waitKey, resultChan
 }
 
 /*
- * This is the goroutine. It receives updates for new waiters, and updates
- * for new sequences, and distributes them appropriately.
- */
-func (t *changeTracker) run() {
-	t.waiters = make(map[int32]changeWaiter)
-	t.lastChanges = make(map[string]common.Sequence)
+cancelWaiter deletes a waiter who has timed out. But it also returns the
+highest sequence for the scope because otherwise there is a race
+condition.
+*/
+func (t *changeTracker) cancelWaiter(key int32) common.Sequence {
+	t.latch.Lock()
+	defer t.latch.Unlock()
 
-	running := true
-	for running {
-		up := <-t.updateChan
-		switch up.updateType {
-		case closed:
-			running = false
-		case update:
-			t.handleUpdate(up)
-		case cancelWaiter:
-			t.handleCancel(up.key)
-		case newWaiter:
-			t.handleWaiter(up)
-		}
-	}
-
-	// Close out all waiting waiters
-	for _, w := range t.waiters {
-		w.rc <- t.getMaxChange(w.scopes)
-	}
-}
-
-func (t *changeTracker) handleUpdate(up trackerUpdate) {
-	t.lastChanges[up.scope] = up.change
-	for k, w := range t.waiters {
-		if up.change.Compare(w.change) >= 0 && w.scopes[up.scope] {
-			//log.Debugf("Waking up waiter waiting for change %d with change %d and tag %s",
-			//	w.change, up.change, up.tag)
-			w.rc <- up.change
-			delete(t.waiters, k)
-		}
-	}
-}
-
-func (t *changeTracker) handleWaiter(u trackerUpdate) {
-	maxAlready := t.getMaxChange(u.waiter.scopes)
-	if maxAlready.Compare(u.waiter.change) >= 0 {
-		u.waiter.rc <- maxAlready
-	} else {
-		t.waiters[u.key] = u.waiter
-	}
-}
-
-func (t *changeTracker) handleCancel(key int32) {
+	waiter := t.waiters[key]
 	delete(t.waiters, key)
+	return t.getMaxChange(waiter.scopes)
 }
 
 func (t *changeTracker) getMaxChange(scopes map[string]bool) common.Sequence {
