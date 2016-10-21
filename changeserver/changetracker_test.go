@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"math/rand"
-	"runtime"
 	"sync/atomic"
 	"time"
 
@@ -16,7 +15,7 @@ const (
 	startIndex         = 2
 	maxWait            = 10 * time.Microsecond
 	trackerTestTimeout = 10 * time.Second
-	trackerCount       = 10000
+	trackerCount       = 1000
 )
 
 var tracker *changeTracker
@@ -273,10 +272,6 @@ var _ = Describe("Change tracker", func() {
 		trackerStress(1, 100, trackerCount)
 	})
 
-	It("Stress 1, 1000", func() {
-		trackerStress(1, 1000, trackerCount)
-	})
-
 	It("Stress 100, 100", func() {
 		trackerStress(100, 100, trackerCount)
 	})
@@ -296,6 +291,21 @@ func trackerStress(producers, consumers int, max int64) {
 
 	prodDone := make(chan bool, producers)
 	consDone := make(chan bool, consumers)
+	allDone := make(chan bool, 1)
+
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		count := 0
+		for {
+			select {
+			case <-ticker.C:
+				fmt.Fprintf(GinkgoWriter, "%d: %d\n", count, atomic.LoadInt64(&start))
+				count++
+			case <-allDone:
+				return
+			}
+		}
+	}()
 
 	for i := 0; i <= producers; i++ {
 		go func() {
@@ -337,11 +347,13 @@ func trackerStress(producers, consumers int, max int64) {
 			fmt.Fprintf(GinkgoWriter,
 				"Test timed out after %d producers and %d consumers. last = %d\n",
 				prodCount, consCount, atomic.LoadInt64(&start))
-			stacks := make([]byte, 1000000)
-			stackLen := runtime.Stack(stacks, true)
-			fmt.Fprintf(GinkgoWriter, string(stacks[:stackLen]))
+			//stacks := make([]byte, 1000000)
+			//stackLen := runtime.Stack(stacks, true)
+			//fmt.Fprintf(GinkgoWriter, string(stacks[:stackLen]))
 			Expect(false).Should(BeTrue())
+			allDone <- true
 			return
 		}
 	}
+	allDone <- true
 }
