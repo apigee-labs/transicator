@@ -11,6 +11,7 @@ import (
 	"github.com/30x/transicator/common"
 	"github.com/30x/transicator/replication"
 	"github.com/30x/transicator/storage"
+	log "github.com/Sirupsen/logrus"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -124,6 +125,7 @@ func getIntParam(q url.Values, key string, dflt int) (int, error) {
 }
 
 func sendError(resp http.ResponseWriter, req *http.Request, code int, msg string) {
+	log.Debugf("sendError: code = %d msg = %s req = %v", code, msg, req)
 	ct := goscaffold.SelectMediaType(req, []string{jsonContent, textContent})
 
 	switch ct {
