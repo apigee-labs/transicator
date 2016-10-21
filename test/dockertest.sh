@@ -44,8 +44,8 @@ docker cp ${testName}:/go/src/github.com/30x/transicator/test-reports/. ./docker
 docker rm ${testName}
 
 # Build changeserver and snapshot server images
-docker build --tag ${ssName} -f ./snapshotserver/Dockerfile.snapshotserver .
-docker build --tag ${csName} -f ./changeserver/Dockerfile.changeserver .
+docker build --tag ${ssName} -f ./Dockerfile.snapshotserver .
+docker build --tag ${csName} -f ./Dockerfile.changeserver .
 
 # Launch them
 docker run -d \
