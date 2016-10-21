@@ -1,7 +1,9 @@
 package replication
 
 import (
+	"database/sql"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -50,6 +52,7 @@ A Replicator is a client for the logical replication protocol.
 type Replicator struct {
 	slotName      string
 	connectString string
+	filter        func(c *common.Change) bool
 	state         int32
 	changeChan    chan *common.Change
 	updateChan    chan uint64
@@ -58,14 +61,17 @@ type Replicator struct {
 }
 
 /*
-Start replication and return a new Replicator object that may be used to
-read it. "connect" is a postgres URL to be passed to the "pgclient" module.
+CreateReplicator creates a new Replicator that will use the specified
+URL to reach Postgres, and the specified slot name. The user must
+call Start in order to start it up. "connect" is a postgres URL to be
+passed to the "pgclient" module.
 "sn" is the name of the replication slot to read from. This slot will be
 created if it does not already exist.
 */
-func Start(connect, sn string) (*Replicator, error) {
+func CreateReplicator(connect, sn string) (*Replicator, error) {
 	slotName := strings.ToLower(sn)
-	connectString := connect + "?replication=database"
+	connectString := addParam(connect, "replication", "database")
+	log.Debugf("Connecting to the database at \"%s\"", connectString)
 
 	repl := &Replicator{
 		slotName:      slotName,
@@ -83,6 +89,50 @@ func Start(connect, sn string) (*Replicator, error) {
 }
 
 /*
+addParam takes a URL and adds a parameter, regardless of what's already in
+there.
+*/
+func addParam(query, key, val string) string {
+	// Add a value to the connect URL in such a way that we are flexible
+	var err error
+	var queryVals url.Values
+	cs := strings.SplitN(query, "?", 2)
+	if len(cs) == 1 {
+		queryVals = url.Values(make(map[string][]string))
+	} else if len(cs) == 2 {
+		queryVals, err = url.ParseQuery(cs[1])
+		if err != nil {
+			return query
+		}
+	} else {
+		panic(fmt.Sprintf("Invalid string splitting of \"%s\"", query))
+	}
+
+	queryVals.Set(key, val)
+	return fmt.Sprintf("%s?%s", cs[0], queryVals.Encode())
+}
+
+/*
+SetChangeFilter supplies a function that will be called before every change
+is passed on to the channel. This makes it easier to write clients,
+especially for tests. The specified filter function will run inside a
+critical goroutine, so it must make its own decision without blocking.
+A typical use case would be to look for a particular value of a field.
+*/
+func (r *Replicator) SetChangeFilter(f func(*common.Change) bool) {
+	r.filter = f
+}
+
+/*
+Start replication. Start will succeed even if the database cannot be
+reached.
+*/
+func (r *Replicator) Start() {
+	// The main loop will handle connecting and all events.
+	go r.replLoop()
+}
+
+/*
 DropSlot deletes the logical replication slot created by "Start".
 "connect" is a postgres URL to be passed to the "pgclient" module.
 "sn" is the name of the replication slot to drop.
@@ -90,27 +140,30 @@ DropSlot deletes the logical replication slot created by "Start".
 func DropSlot(connect, sn string) error {
 	slotName := strings.ToLower(sn)
 	// TODO what if there are already queries?
-	conn, err := pgclient.Connect(connect)
+
+	ddb, err := sql.Open("transicator", connect)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer ddb.Close()
 
-	sql := fmt.Sprintf("select * from pg_drop_replication_slot('%s')", slotName)
-	_, _, err = conn.SimpleQuery(sql)
+	_, err = ddb.Exec("select * from pg_drop_replication_slot($1)", slotName)
 	return err
 }
 
 /*
 Changes returns a channel that can be used to wait for changes. If an error
-is returned, then no more changes will be forthcoming.
+is returned, then no more changes will be forthcoming. There is only one
+channel per Replicator -- any kind of "broadcast" needs to be handled by
+the client.
 */
 func (r *Replicator) Changes() <-chan *common.Change {
 	return r.changeChan
 }
 
 /*
-Stop stops the replication process and closes the channel.
+Stop stops the replication process and closes the channel. It does not remove
+the replication slot -- for that, use "DropSlot".
 */
 func (r *Replicator) Stop() {
 	r.cmdChan <- stopCmd
@@ -418,7 +471,9 @@ func (r *Replicator) handleWALData(m *pgclient.InputMessage) {
 	}
 
 	if err == nil {
-		r.changeChan <- c
+		if r.filter == nil || r.filter(c) {
+			r.changeChan <- c
+		}
 	} else {
 		log.Warningf("Received invalid change %s: %s", string(buf), err)
 	}

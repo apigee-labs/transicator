@@ -11,8 +11,9 @@ import (
 
 var _ = Describe("Replicator tests", func() {
 	It("Basic replication", func() {
-		repl, err := Start(dbURL, "unittestslot")
+		repl, err := CreateReplicator(dbURL, "unittestslot")
 		Expect(err).Should(Succeed())
+		repl.Start()
 		defer repl.Stop()
 		// There may be duplicates, so always drain first
 		drainReplication(repl)

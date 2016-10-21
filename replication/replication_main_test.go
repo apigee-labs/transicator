@@ -43,18 +43,29 @@ var _ = BeforeSuite(func() {
 	pgdriver := db.Driver().(*pgclient.PgDriver)
 	pgdriver.SetIsolationLevel("repeatable read")
 
-	if !tableExists("transicator_test") {
-		_, err = db.Exec(testTableSQL)
-		Expect(err).Should(Succeed())
-	}
+	cleanUpEverything(false)
+
+	_, err = db.Exec(testTableSQL)
+	Expect(err).Should(Succeed())
 })
 
 var _ = AfterSuite(func() {
-	db.Exec("select * from pg_drop_replication_slot($1)", "unittestslot")
-	dropTable("transicator_test")
-	dropTable("txid_test")
+	cleanUpEverything(true)
 	db.Close()
 })
+
+func cleanUpEverything(logit bool) {
+	err := DropSlot(dbURL, "unittestslot")
+	if err != nil && logit {
+		fmt.Printf("Error deleting replication slot \"unittestslot\": %s", err)
+	}
+	err = DropSlot(dbURL, "txidtestslot")
+	if err != nil && logit {
+		fmt.Printf("Error deleting replication slot \"txidtestslot\": %s", err)
+	}
+	dropTable("transicator_test")
+	dropTable("txid_test")
+}
 
 func tableExists(name string) bool {
 	_, err := db.Exec(fmt.Sprintf("select * from %s limit 0", name))

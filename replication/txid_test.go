@@ -60,9 +60,11 @@ var _ = Describe("TXID Tests", func() {
 		single place in the logical replication stream.
 	*/
 	It("Gather snapshots", func() {
-		repl, err := Start(dbURL, "unittestslot")
+		repl, err := CreateReplicator(dbURL, "txidtestslot")
 		Expect(err).Should(Succeed())
+		repl.Start()
 		defer repl.Stop()
+		defer DropSlot(dbURL, "txidtestslot")
 
 		var snaps []string
 
