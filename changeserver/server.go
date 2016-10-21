@@ -65,10 +65,11 @@ func startChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix strin
 		}
 	}
 
-	repl, err := replication.Start(pgURL, pgSlot)
+	repl, err := replication.CreateReplicator(pgURL, pgSlot)
 	if err != nil {
 		return nil, err
 	}
+	repl.Start()
 	defer func() {
 		if !success {
 			repl.Stop()

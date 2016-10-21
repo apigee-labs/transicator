@@ -13,16 +13,17 @@ var _ = Describe("Replicator tests", func() {
 	It("Basic replication", func() {
 		repl, err := CreateReplicator(dbURL, "unittestslot")
 		Expect(err).Should(Succeed())
+		repl.SetChangeFilter(filterChange)
 		repl.Start()
 		defer repl.Stop()
 		// There may be duplicates, so always drain first
 		drainReplication(repl)
 
-		is, err := db.Prepare("insert into transicator_test (id) values ($1)")
+		is, err := db.Prepare("insert into transicator_test (id, testid) values ($1, $2)")
 		Expect(err).Should(Succeed())
 		defer is.Close()
 
-		_, err = is.Exec("basic replication")
+		_, err = is.Exec("basic replication", testID)
 		Expect(err).Should(Succeed())
 
 		var change *common.Change
@@ -34,9 +35,9 @@ var _ = Describe("Replicator tests", func() {
 		Expect(err).Should(Succeed())
 		tis := tx.Stmt(is)
 
-		_, err = tis.Exec("replication 1")
+		_, err = tis.Exec("replication 1", testID)
 		Expect(err).Should(Succeed())
-		_, err = tis.Exec("replication 2")
+		_, err = tis.Exec("replication 2", testID)
 		Expect(err).Should(Succeed())
 
 		err = tx.Commit()

@@ -1,11 +1,14 @@
 package replication
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"testing"
 
+	"github.com/30x/transicator/common"
 	"github.com/30x/transicator/pgclient"
 	"github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
@@ -19,6 +22,7 @@ const (
 
 var dbURL string
 var db *sql.DB
+var testID string
 
 func TestReplication(t *testing.T) {
 	dbURL = os.Getenv("TEST_PG_URL")
@@ -37,7 +41,12 @@ var _ = BeforeSuite(func() {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	var err error
+	idBytes := make([]byte, 8)
+	_, err := rand.Read(idBytes)
+	Expect(err).Should(Succeed())
+	testID = base64.StdEncoding.EncodeToString(idBytes)
+	fmt.Fprintf(GinkgoWriter, "Unique test ID: %s\n", testID)
+
 	db, err = sql.Open("transicator", dbURL)
 	Expect(err).Should(Succeed())
 	pgdriver := db.Driver().(*pgclient.PgDriver)
@@ -82,9 +91,21 @@ func doExecute(query string) {
 	Expect(err).Should(Succeed())
 }
 
+func filterChange(c *common.Change) bool {
+	var tid string
+	if c.NewRow != nil {
+		c.NewRow.Get("testid", &tid)
+	} else if c.OldRow != nil {
+		c.OldRow.Get("testid", &tid)
+	}
+
+	return tid == testID
+}
+
 const testTableSQL = `
   create table transicator_test (
     id varchar(32) primary key,
+		testid varchar(32),
     bool boolean,
     chars char(64),
     varchars varchar(64),
@@ -99,6 +120,9 @@ const testTableSQL = `
     timestamp timestamp with time zone,
     timestampp timestamp
   );
+	alter table transicator_test replica identity full;
 	create table txid_test (
-		id varchar(64) primary key
-	)`
+		id varchar(64) primary key,
+		testid varchar(32)
+	);
+	alter table txid_test replica identity full;`

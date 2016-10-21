@@ -18,6 +18,14 @@ var _ = Describe("Changes API Tests", func() {
 	var lastTestSequence = time.Now().Unix()
 	lastChangeSequence := common.Sequence{}
 
+	It("Empty database", func() {
+		bod := executeGet(fmt.Sprintf(
+			"%s/changes?scope=foo", baseURL))
+		cl, err := common.UnmarshalChangeList(bod)
+		Expect(err).Should(Succeed())
+		Expect(cl.Changes).Should(BeEmpty())
+	})
+
 	It("First Change", func() {
 		lastTestSequence++
 		fmt.Fprintf(GinkgoWriter, "Inserting sequence %d\n", lastTestSequence)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -54,6 +55,7 @@ type Replicator struct {
 	connectString string
 	filter        func(c *common.Change) bool
 	state         int32
+	stopWaiter    *sync.WaitGroup
 	changeChan    chan *common.Change
 	updateChan    chan uint64
 	cmdChan       chan replCommand
@@ -76,15 +78,11 @@ func CreateReplicator(connect, sn string) (*Replicator, error) {
 	repl := &Replicator{
 		slotName:      slotName,
 		connectString: connectString,
-		state:         int32(Connecting),
+		state:         int32(Stopped),
 		changeChan:    make(chan *common.Change, 100),
 		updateChan:    make(chan uint64, 100),
 		cmdChan:       make(chan replCommand, 1),
 	}
-
-	// The main loop will handle connecting and all events.
-	go repl.replLoop()
-
 	return repl, nil
 }
 
@@ -129,7 +127,12 @@ reached.
 */
 func (r *Replicator) Start() {
 	// The main loop will handle connecting and all events.
-	go r.replLoop()
+	if r.State() == Stopped {
+		r.setState(Connecting)
+		r.stopWaiter = &sync.WaitGroup{}
+		r.stopWaiter.Add(1)
+		go r.replLoop()
+	}
 }
 
 /*
@@ -166,7 +169,10 @@ Stop stops the replication process and closes the channel. It does not remove
 the replication slot -- for that, use "DropSlot".
 */
 func (r *Replicator) Stop() {
-	r.cmdChan <- stopCmd
+	if r.State() != Stopped {
+		r.cmdChan <- stopCmd
+		r.stopWaiter.Wait()
+	}
 }
 
 /*
@@ -362,6 +368,7 @@ func (r *Replicator) replLoop() {
 					connection.Close()
 				}
 				r.setState(Stopped)
+				r.stopWaiter.Done()
 				return
 			}
 		}

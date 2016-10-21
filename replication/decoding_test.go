@@ -35,8 +35,9 @@ var _ = Describe("Logical Decoding Tests", func() {
 			Expect(changes[0].NewRow["id"].Value).Should(Equal("basic insert"))
 		}
 
-		doExecute(
-			"insert into transicator_test (id) values ('basic insert')")
+		_, err := db.Exec(
+			"insert into transicator_test (id, testid) values ('basic insert', $1)", testID)
+		Expect(err).Should(Succeed())
 		changes := getChanges(false)
 		verify(changes)
 
@@ -58,8 +59,9 @@ var _ = Describe("Logical Decoding Tests", func() {
 			Expect(changes[1].CommitSequence).Should(BeNumerically(">", changes[0].CommitSequence))
 		}
 
-		doExecute(
-			"insert into transicator_test (id) values ('basic delete')")
+		_, err := db.Exec(
+			"insert into transicator_test (id, testid) values ('basic delete', $1)", testID)
+		Expect(err).Should(Succeed())
 		doExecute(
 			"delete from transicator_test where id = 'basic delete'")
 
@@ -87,8 +89,9 @@ var _ = Describe("Logical Decoding Tests", func() {
 			Expect(changes[1].CommitSequence).Should(BeNumerically(">", changes[0].CommitSequence))
 		}
 
-		doExecute(
-			"insert into transicator_test (id, varchars) values ('basic update', 'one')")
+		_, err := db.Exec(
+			"insert into transicator_test (id, testid, varchars) values ('basic update', $1, 'one')", testID)
+		Expect(err).Should(Succeed())
 		doExecute(
 			"update transicator_test set varchars = 'two' where id = 'basic update'")
 
@@ -117,10 +120,12 @@ var _ = Describe("Logical Decoding Tests", func() {
 		tx, err := db.Begin()
 		Expect(err).Should(Succeed())
 		_, err = tx.Exec(
-			"insert into transicator_test (id, varchars) values ('basic tran 1', 'one')")
+			"insert into transicator_test (id, testid, varchars) values ('basic tran 1', $1, 'one')",
+			testID)
 		Expect(err).Should(Succeed())
 		_, err = tx.Exec(
-			"insert into transicator_test (id, varchars) values ('basic tran 2', 'two')")
+			"insert into transicator_test (id, testid, varchars) values ('basic tran 2', $1, 'two')",
+			testID)
 		Expect(err).Should(Succeed())
 		err = tx.Commit()
 		Expect(err).Should(Succeed())
@@ -133,10 +138,12 @@ var _ = Describe("Logical Decoding Tests", func() {
 		tx, err := db.Begin()
 		Expect(err).Should(Succeed())
 		_, err = tx.Exec(
-			"insert into transicator_test (id, varchars) values ('rollback tran 1', 'one')")
+			"insert into transicator_test (id, testid, varchars) values ('rollback tran 1', $1, 'one')",
+			testID)
 		Expect(err).Should(Succeed())
 		_, err = tx.Exec(
-			"insert into transicator_test (id, varchars) values ('rollback tran 2', 'two')")
+			"insert into transicator_test (id, testid, varchars) values ('rollback tran 2', $1, 'two')",
+			testID)
 		Expect(err).Should(Succeed())
 		err = tx.Rollback()
 		Expect(err).Should(Succeed())
@@ -196,10 +203,10 @@ var _ = Describe("Logical Decoding Tests", func() {
 
 		_, err := db.Exec(`
 			insert into transicator_test
-			(id, bool, chars, varchars, int, smallint, bigint, float, double, date,
+			(id, testid, bool, chars, varchars, int, smallint, bigint, float, double, date,
 			time, timestamp, timestampp)
-		  values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-			"datatypes", true, "hello", "world", 123, 456, 789,
+		  values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+			"datatypes", testID, true, "hello", "world", 123, 456, 789,
 			3.14, 3.14159,
 			"1970-02-13", "04:05:06", "1970-02-13 04:05:06", "1970-02-13 04:05:06")
 		Expect(err).Should(Succeed())
@@ -211,8 +218,8 @@ var _ = Describe("Logical Decoding Tests", func() {
 	It("Binary data", func() {
 		rawdata := []byte("Hello, World!")
 		_, err :=
-			db.Exec("insert into transicator_test (id, rawdata) values($1, $2)",
-				"rawtest", rawdata)
+			db.Exec("insert into transicator_test (id, testid, rawdata) values($1, $2, $3)",
+				"rawtest", testID, rawdata)
 		Expect(err).Should(Succeed())
 
 		// Ignore since binary will get screwed up
@@ -244,11 +251,13 @@ var _ = Describe("Logical Decoding Tests", func() {
 
 		tx, err := db.Begin()
 		Expect(err).Should(Succeed())
-		_, err = tx.Exec("insert into transicator_test (id) values ('interleave 1')")
+		_, err = tx.Exec("insert into transicator_test (id, testid) values ('interleave 1', $1)",
+			testID)
 		Expect(err).Should(Succeed())
 		// This is a separate connection, aka separate transaction
 		_, err = db.Exec(
-			"insert into transicator_test (id) values ('interleave 2')")
+			"insert into transicator_test (id, testid) values ('interleave 2', $1)",
+			testID)
 		Expect(err).Should(Succeed())
 		err = tx.Commit()
 		Expect(err).Should(Succeed())
@@ -277,16 +286,16 @@ var _ = Describe("Logical Decoding Tests", func() {
 
 		tx1, err := db.Begin()
 		Expect(err).Should(Succeed())
-		_, err = tx1.Exec("insert into transicator_test (id) values ('interleave 1-1')")
+		_, err = tx1.Exec("insert into transicator_test (id, testid) values ('interleave 1-1', $1)", testID)
 		Expect(err).Should(Succeed())
 
 		tx2, err := db.Begin()
 		Expect(err).Should(Succeed())
-		_, err = tx2.Exec("insert into transicator_test (id) values ('interleave 2-1')")
+		_, err = tx2.Exec("insert into transicator_test (id, testid) values ('interleave 2-1', $1)", testID)
 		Expect(err).Should(Succeed())
-		_, err = tx1.Exec("insert into transicator_test (id) values ('interleave 1-2')")
+		_, err = tx1.Exec("insert into transicator_test (id, testid) values ('interleave 1-2', $1)", testID)
 		Expect(err).Should(Succeed())
-		_, err = tx2.Exec("insert into transicator_test (id) values ('interleave 2-2')")
+		_, err = tx2.Exec("insert into transicator_test (id, testid) values ('interleave 2-2', $1)", testID)
 		Expect(err).Should(Succeed())
 		err = tx2.Commit()
 		Expect(err).Should(Succeed())
@@ -300,12 +309,12 @@ var _ = Describe("Logical Decoding Tests", func() {
 
 	It("Many strings", func() {
 		i := 0
-		ps, err := db.Prepare("insert into transicator_test (id, varchars) values ($1, $2)")
+		ps, err := db.Prepare("insert into transicator_test (id, testid, varchars) values ($1, $2, $3)")
 		Expect(err).Should(Succeed())
 		defer ps.Close()
 
 		err = quick.Check(func(val string) bool {
-			_, err = ps.Exec(fmt.Sprintf("string-%d", i), val)
+			_, err = ps.Exec(fmt.Sprintf("string-%d", i), testID, val)
 			i++
 			Expect(err).Should(Succeed())
 			getChanges(true)
@@ -323,12 +332,12 @@ var _ = Describe("Logical Decoding Tests", func() {
 
 	It("Many arrays", func() {
 		i := 0
-		ps, err := db.Prepare("insert into transicator_test (id, rawdata) values ($1, $2)")
+		ps, err := db.Prepare("insert into transicator_test (id, testid, rawdata) values ($1, $2, $3)")
 		Expect(err).Should(Succeed())
 		defer ps.Close()
 
 		err = quick.Check(func(val []byte) bool {
-			_, err = ps.Exec(fmt.Sprintf("byte-%d", i), val)
+			_, err = ps.Exec(fmt.Sprintf("byte-%d", i), testID, val)
 			i++
 			Expect(err).Should(Succeed())
 			getChanges(true)
@@ -347,12 +356,12 @@ var _ = Describe("Logical Decoding Tests", func() {
 	It("Many numbers", func() {
 		i := 0
 		ps, err := db.Prepare(
-			"insert into transicator_test (id, bool, int, smallint, bigint) values ($1, $2, $3, $4, $5)")
+			"insert into transicator_test (id, testid, bool, int, smallint, bigint) values ($1, $2, $3, $4, $5, $6)")
 		Expect(err).Should(Succeed())
 		defer ps.Close()
 
 		err = quick.Check(func(bv bool, iv int32, sv int16, bi int64) bool {
-			_, err = ps.Exec(fmt.Sprintf("nums-%d", i), bv, iv, sv, bi)
+			_, err = ps.Exec(fmt.Sprintf("nums-%d", i), testID, bv, iv, sv, bi)
 			i++
 			Expect(err).Should(Succeed())
 			getChanges(true)
@@ -399,8 +408,11 @@ func getChanges(ignoreBody bool) []common.Change {
 		if !ignoreBody {
 			fmt.Fprintf(GinkgoWriter, "Decoding %s\n", changeDesc)
 			change, err := common.UnmarshalChange([]byte(changeDesc))
-			Expect(err).Should(Succeed())
-			changes = append(changes, *change)
+			if err != nil {
+				fmt.Printf("Error decoding JSON: %s\n", changeDesc)
+			} else if filterChange(change) {
+				changes = append(changes, *change)
+			}
 		}
 	}
 	return changes
@@ -424,7 +436,9 @@ func getBinaryChanges() []common.Change {
 		fmt.Fprintf(GinkgoWriter, "Decoding %d bytes\n", len(changeDesc))
 		change, err := common.UnmarshalChangeProto(changeDesc)
 		Expect(err).Should(Succeed())
-		changes = append(changes, *change)
+		if filterChange(change) {
+			changes = append(changes, *change)
+		}
 	}
 	return changes
 }

@@ -62,6 +62,7 @@ var _ = Describe("TXID Tests", func() {
 	It("Gather snapshots", func() {
 		repl, err := CreateReplicator(dbURL, "txidtestslot")
 		Expect(err).Should(Succeed())
+		repl.SetChangeFilter(filterChange)
 		repl.Start()
 		defer repl.Stop()
 		defer DropSlot(dbURL, "txidtestslot")
@@ -69,27 +70,27 @@ var _ = Describe("TXID Tests", func() {
 		var snaps []string
 
 		snaps = append(snaps, execCommands([]string{
-			"a", "insert into txid_test values('1')",
+			"a", "1",
 			"a", "commit",
 			"b", "snapshot"}))
 
 		snaps = append(snaps, execCommands([]string{
-			"a", "insert into txid_test values('2')",
+			"a", "2",
 			"a", "commit",
 			"b", "snapshot"}))
 
 		snaps = append(snaps, execCommands([]string{
-			"a", "insert into txid_test values('3a')",
-			"b", "insert into txid_test values('3b')",
+			"a", "3a",
+			"b", "3b",
 			"x", "snapshot",
 			"b", "commit",
 			"a", "commit"}))
 
 		snaps = append(snaps, execCommands([]string{
-			"a", "insert into txid_test values('4a')",
-			"b", "insert into txid_test values('4b')",
-			"c", "insert into txid_test values('4c')",
-			"d", "insert into txid_test values('4d')",
+			"a", "4a",
+			"b", "4b",
+			"c", "4c",
+			"d", "4d",
 			"b", "rollback",
 			"x", "snapshot",
 			"a", "commit",
@@ -97,11 +98,11 @@ var _ = Describe("TXID Tests", func() {
 			"d", "commit"}))
 
 		snaps = append(snaps, execCommands([]string{
-			"a", "insert into txid_test values('5a')",
-			"b", "insert into txid_test values('5b')",
-			"c", "insert into txid_test values('5c')",
-			"d", "insert into txid_test values('5d')",
-			"e", "insert into txid_test values('5e')",
+			"a", "5a",
+			"b", "5b",
+			"c", "5c",
+			"d", "5d",
+			"e", "5e",
 			"c", "commit",
 			"x", "snapshot",
 			"a", "commit",
@@ -110,12 +111,12 @@ var _ = Describe("TXID Tests", func() {
 			"e", "commit"}))
 
 		snaps = append(snaps, execCommands([]string{
-			"a", "insert into txid_test values('6a')",
-			"b", "insert into txid_test values('6b')",
-			"c", "insert into txid_test values('6c')",
-			"d", "insert into txid_test values('6d')",
-			"e", "insert into txid_test values('6e')",
-			"f", "insert into txid_test values('6f')",
+			"a", "6a",
+			"b", "6b",
+			"c", "6c",
+			"d", "6d",
+			"e", "6e",
+			"f", "6f",
 			"c", "commit",
 			"a", "commit",
 			"x", "snapshot",
@@ -125,12 +126,12 @@ var _ = Describe("TXID Tests", func() {
 			"e", "commit"}))
 
 		snaps = append(snaps, execCommands([]string{
-			"a", "insert into txid_test values('7a')",
-			"b", "insert into txid_test values('7b')",
-			"c", "insert into txid_test values('7c')",
-			"d", "insert into txid_test values('7d')",
-			"e", "insert into txid_test values('7e')",
-			"f", "insert into txid_test values('7f')",
+			"a", "7a",
+			"b", "7b",
+			"c", "7c",
+			"d", "7d",
+			"e", "7e",
+			"f", "7f",
 			"c", "rollback",
 			"a", "rollback",
 			"d", "rollback",
@@ -195,6 +196,16 @@ func execCommands(commands []string) string {
 	trans := make(map[string]*sql.Tx)
 	var snap string
 	var err error
+	insert, err := db.Prepare("insert into txid_test (id, testid) values($1, $2)")
+	Expect(err).Should(Succeed())
+	defer insert.Close()
+
+	defer func() {
+		// In case there is a problem with the input, roll back everything
+		for _, t := range trans {
+			t.Rollback()
+		}
+	}()
 
 	for i := 0; i < len(commands); i += 2 {
 		txn := commands[i]
@@ -218,7 +229,9 @@ func execCommands(commands []string) string {
 			err = row.Scan(&snap)
 			Expect(err).Should(Succeed())
 		} else {
-			_, err = tran.Exec(sql)
+			tinsert := tran.Stmt(insert)
+			_, err = tinsert.Exec(sql, testID)
+			tinsert.Close()
 			Expect(err).Should(Succeed())
 		}
 	}

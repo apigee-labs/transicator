@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
-	"io"
 	"os"
 	"testing"
 
@@ -68,8 +67,9 @@ var _ = BeforeSuite(func() {
 		Expect(err).Should(Succeed())
 	}
 
-	repl, err = replication.Start(dbURL, "snapshot_test_slot")
+	repl, err = replication.CreateReplicator(dbURL, "snapshot_test_slot")
 	Expect(err).Should(Succeed())
+	repl.Start()
 	// There may be duplicates, so always drain first
 	drainReplication(repl)
 })
@@ -318,9 +318,9 @@ var _ = Describe("Taking a snapshot", func() {
 			Expect(err).Should(Succeed())
 
 			rowCount := 0
-			var n interface{}
 			var curTable common.TableInfo
-			for n = sr.Next(); n != io.EOF; n = sr.Next() {
+			for sr.Next() {
+				n := sr.Entry()
 				fmt.Fprintf(GinkgoWriter, "next: %T\n", n)
 				switch n.(type) {
 				case common.TableInfo:
@@ -344,7 +344,7 @@ var _ = Describe("Taking a snapshot", func() {
 				case error:
 					Expect(n.(error)).Should(Succeed())
 				default:
-					fmt.Printf("Got unexpected row %T\n", n)
+					fmt.Fprintf(GinkgoWriter, "Got unexpected row %T\n", n)
 					Expect(false).Should(BeTrue())
 				}
 			}

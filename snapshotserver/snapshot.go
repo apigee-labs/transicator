@@ -34,7 +34,7 @@ func GetTenants(tenantID []string) string {
 
 	str.WriteString("(")
 	for idx, tid := range tenantID {
-		log.Info("Get table id: ", tid, idx)
+		log.Debugf("Get table id: ", tid, idx)
 		str.WriteString("'" + tid + "'")
 		if idx != len(tenantID)-1 {
 			str.WriteString(",")
@@ -70,7 +70,7 @@ func GetScopes(
 		return
 	}
 
-	log.Infof("Downloaded Scopes for id %s, size %d", cid, size)
+	log.Debugf("Downloaded Scopes for id %s, size %d", cid, size)
 	return
 }
 
@@ -187,7 +187,7 @@ func GetTenantSnapshotData(
 		snapInfo, snapTime string
 	)
 
-	log.Info("Starting snapshot")
+	log.Debug("Starting snapshot")
 	tx, err := db.Begin()
 	if err != nil {
 		log.Errorf("Failed to set Isolation level : %+v", err)
@@ -214,7 +214,7 @@ func GetTenantSnapshotData(
 		log.Errorf("Failed to table names: %+v", err)
 		return err
 	}
-	log.Infof("Tables in snapshot %v", tables)
+	log.Debugf("Tables in snapshot %v", tables)
 
 	sdataItem := []common.Table{}
 	snapData := &common.Snapshot{
@@ -434,7 +434,7 @@ func DownloadSnapshot(
 		return
 	}
 	tenantIds := strings.Split(sid, ",")
-	log.Infof("'scopes' in Request %s", tenantIds)
+	log.Debugf("'scopes' in Request %s", tenantIds)
 
 	mediaType := r.URL.Query().Get("type")
 	if mediaType == "" {
@@ -457,6 +457,6 @@ func DownloadSnapshot(
 		return
 	}
 
-	log.Infof("Downloaded snapshot id %s", sid)
+	log.Debugf("Downloaded snapshot id %s", sid)
 	return
 }
