@@ -15,8 +15,8 @@ import (
 const (
 	startIndex         = 2
 	maxWait            = 10 * time.Microsecond
-	trackerTestTimeout = 60 * time.Second
-	trackerCount       = 1000
+	trackerTestTimeout = 10 * time.Second
+	trackerCount       = 10000
 )
 
 var tracker *changeTracker

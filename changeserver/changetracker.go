@@ -156,7 +156,11 @@ func (t *changeTracker) run() {
 }
 
 func (t *changeTracker) handleUpdate(up trackerUpdate) {
-	t.lastChanges[up.scope] = up.change
+	// Changes might come out of order
+	if up.change.Compare(t.lastChanges[up.scope]) > 0 {
+		t.lastChanges[up.scope] = up.change
+	}
+
 	for k, w := range t.waiters {
 		if up.change.Compare(w.change) >= 0 && w.scopes[up.scope] {
 			//log.Debugf("Waking up waiter waiting for change %d with change %d and tag %s",
