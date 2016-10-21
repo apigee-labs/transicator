@@ -63,8 +63,13 @@ func ParseSequence(s string) (Sequence, error) {
 
 /*
 ParseSequenceBytes parses bytes written using Bytes().
+As a convenience, an empty sequence parses to the default
+value for the Sequence type.
 */
 func ParseSequenceBytes(b []byte) (Sequence, error) {
+	if len(b) == 0 {
+		return Sequence{}, nil
+	}
 	if len(b) != 12 {
 		return Sequence{}, errors.New("Invalid byte sequence")
 	}
