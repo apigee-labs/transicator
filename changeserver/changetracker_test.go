@@ -338,8 +338,8 @@ func trackerStress(producers, consumers int, max int64) {
 				"Test timed out after %d producers and %d consumers. last = %d\n",
 				prodCount, consCount, atomic.LoadInt64(&start))
 			stacks := make([]byte, 1000000)
-			runtime.Stack(stacks, true)
-			fmt.Fprintf(GinkgoWriter, string(stacks))
+			stackLen := runtime.Stack(stacks, true)
+			fmt.Fprintf(GinkgoWriter, string(stacks[:stackLen]))
 			Expect(false).Should(BeTrue())
 			return
 		}
