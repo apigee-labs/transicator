@@ -63,35 +63,53 @@ var _ = Describe("Driver tests", func() {
 		Expect(err).Should(Succeed())
 	})
 
+	It("Empty", func() {
+		if db == nil {
+			return
+		}
+
+		_, err := db.Exec("")
+		Expect(err).Should(Succeed())
+
+		rows, err := db.Query("")
+		Expect(err).Should(Succeed())
+		Expect(rows.Next()).Should(BeFalse())
+		err = rows.Close()
+		Expect(err).Should(Succeed())
+	})
+
 	It("Select with args", func() {
 		if db == nil {
 			return
 		}
 
 		_, err := db.Exec(`
-			insert into client_test (id, int, double)
-			values($1, $2, $3)`, 1, 123, 3.14)
+			insert into client_test (id, string, int, double)
+			values($1, $2, $3, $4)`, 1, nil, 123, 3.14)
 		Expect(err).Should(Succeed())
 
 		rows, err := db.Query(`
-			select id, int, double from client_test
+			select id, string, int, double from client_test
 			where id = $1`, 1)
 		Expect(err).Should(Succeed())
 		cols, err := rows.Columns()
 		Expect(err).Should(Succeed())
-		Expect(len(cols)).Should(Equal(3))
+		Expect(len(cols)).Should(Equal(4))
 		Expect(cols[0]).Should(Equal("id"))
-		Expect(cols[1]).Should(Equal("int"))
-		Expect(cols[2]).Should(Equal("double"))
+		Expect(cols[1]).Should(Equal("string"))
+		Expect(cols[2]).Should(Equal("int"))
+		Expect(cols[3]).Should(Equal("double"))
 
 		hasNext := rows.Next()
 		Expect(hasNext).Should(BeTrue())
 		var id int
+		var vc string
 		var i int
 		var d float64
-		err = rows.Scan(&id, &i, &d)
+		err = rows.Scan(&id, &vc, &i, &d)
 		Expect(err).Should(Succeed())
 		Expect(id).Should(Equal(1))
+		Expect(vc).Should(BeEmpty())
 		Expect(i).Should(Equal(123))
 		Expect(d).Should(Equal(3.14))
 		hasNext = rows.Next()
