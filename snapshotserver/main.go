@@ -88,7 +88,7 @@ func main() {
 			GenSnapshot(w, r)
 		})
 
-	router.GET("/data/:snapshotid",
+	router.GET("/data",
 		func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 			DownloadSnapshot(w, r, db, p)
 		})

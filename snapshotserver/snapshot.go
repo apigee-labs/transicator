@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -395,13 +394,14 @@ to get the snapshot - which is yet another SYNC operation
 */
 func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 
+	var scopequery string
+
 	r.ParseForm()
-	scopes := r.URL.Query().Get("scopes")
-	if scopes == "" {
-		log.Errorf("'scopes' missing in Request")
+	scopes := r.URL.Query()["scope"]
+	if len(scopes) == 0 {
+		log.Errorf("'scope' missing or empty in Request")
 		return
 	}
-	scopes, _ = url.QueryUnescape(scopes)
 
 	mediaType := goscaffold.SelectMediaType(r, []string{jsonMediaType, protoMediaType})
 	typeParam := ""
@@ -415,8 +415,11 @@ func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnsupportedMediaType)
 		return
 	}
+	for _, scope := range scopes {
+		scopequery += "scope=" + scope + "&"
+	}
+	redURL := "/data?" + scopequery + "type=" + typeParam
 
-	redURL := "/data/" + scopes + "?type=" + typeParam
 	http.Redirect(w, r, redURL, http.StatusSeeOther)
 
 }
@@ -427,14 +430,11 @@ DownloadSnapshot downloads and resturns the JSON related to the scope
 func DownloadSnapshot(
 	w http.ResponseWriter, r *http.Request,
 	db *sql.DB, p httprouter.Params) {
-
-	sid := p[0].Value
-	if sid == "" {
+	scopes := r.URL.Query()["scope"]
+	if len(scopes) == 0 {
 		log.Errorf("snapshot Id Missing, Request Ignored")
 		return
 	}
-	tenantIds := strings.Split(sid, ",")
-	log.Debugf("'scopes' in Request %s", tenantIds)
 
 	mediaType := r.URL.Query().Get("type")
 	if mediaType == "" {
@@ -451,12 +451,12 @@ func DownloadSnapshot(
 		return
 	}
 
-	err := GetTenantSnapshotData(tenantIds, mediaType, db, w)
+	err := GetTenantSnapshotData(scopes, mediaType, db, w)
 	if err != nil {
 		log.Errorf("GetOrgSnapshot error: %v", err)
 		return
 	}
 
-	log.Debugf("Downloaded snapshot id %s", sid)
+	log.Debugf("Downloaded snapshot", scopes)
 	return
 }

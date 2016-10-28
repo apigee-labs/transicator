@@ -38,7 +38,7 @@ var _ = Describe("Combined tests", func() {
 
 		// Take a snapshot. Specify the streaming protobuf format.
 		// We will get a 303 and automatically follow the redirect
-		url := fmt.Sprintf("%s/snapshots?scopes=scope1", snapshotBase)
+		url := fmt.Sprintf("%s/snapshots?scope=scope1", snapshotBase)
 		fmt.Fprintf(GinkgoWriter, "GET %s\n", url)
 		req, err := http.NewRequest("GET", url, nil)
 		Expect(err).Should(Succeed())
