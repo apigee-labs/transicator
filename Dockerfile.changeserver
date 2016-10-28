@@ -25,7 +25,7 @@ RUN \
  && (cd /go/src/github.com/30x/transicator/changeserver; go build -o /changeserver) \
  && rm -r /go
 
-EXPOSE 9000
+EXPOSE 9000 10000
 VOLUME [ "/data" ]
 
-ENTRYPOINT [ "/changeserver", "-p", "9000", "-d", "/data"]
+ENTRYPOINT [ "/changeserver", "-p", "9000", "-mp", "10000", "-d", "/data"]

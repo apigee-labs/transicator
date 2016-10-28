@@ -17,6 +17,6 @@ RUN \
  && (cd /go/src/github.com/30x/transicator/snapshotserver; go build -o /snapshotserver) \
  && rm -r /go
 
-EXPOSE 9001
+EXPOSE 9001 10001
 
-ENTRYPOINT [ "/snapshotserver", "-p", "9001"]
+ENTRYPOINT [ "/snapshotserver", "-p", "9001", "-mp", "10001"]

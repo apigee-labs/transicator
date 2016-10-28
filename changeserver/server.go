@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"sync/atomic"
 
 	"github.com/30x/goscaffold"
 	"github.com/30x/transicator/common"
@@ -25,12 +24,10 @@ const (
 )
 
 type server struct {
-	db             *storage.DB
-	repl           *replication.Replicator
-	tracker        *changeTracker
-	markdownReason atomic.Value
-	markedDown     int32
-	stopChan       chan chan<- bool
+	db       *storage.DB
+	repl     *replication.Replicator
+	tracker  *changeTracker
+	stopChan chan chan<- bool
 }
 
 type errMsg struct {
@@ -79,11 +76,10 @@ func startChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix strin
 	success = true
 
 	s := &server{
-		db:             db,
-		repl:           repl,
-		tracker:        createTracker(),
-		markdownReason: atomic.Value{},
-		stopChan:       make(chan chan<- bool, 1),
+		db:       db,
+		repl:     repl,
+		tracker:  createTracker(),
+		stopChan: make(chan chan<- bool, 1),
 	}
 
 	router := httprouter.New()
@@ -108,9 +104,14 @@ func (s *server) delete() error {
 	return s.db.Delete()
 }
 
-func (s *server) isMarkedDown() bool {
-	md := atomic.LoadInt32(&s.markedDown)
-	return md != 0
+func (s *server) checkHealth() (goscaffold.HealthStatus, error) {
+	_, err := s.db.GetMetadata(lastSequenceKey)
+	if err == nil {
+		return goscaffold.OK, nil
+	}
+	// If we get an error reading from LevelDB, things are really bad.
+	// Mark ourselves "unhealthy" and we may get restarted
+	return goscaffold.Failed, err
 }
 
 func getIntParam(q url.Values, key string, dflt int) (int, error) {

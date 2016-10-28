@@ -9,6 +9,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/30x/goscaffold"
 	"github.com/30x/transicator/pgclient"
 	"github.com/30x/transicator/replication"
 	"github.com/Sirupsen/logrus"
@@ -53,13 +54,6 @@ var _ = BeforeSuite(func() {
 	Expect(err).Should(Succeed())
 	db.Driver().(*pgclient.PgDriver).SetIsolationLevel("repeatable read")
 
-	// Listen on an anonymous port
-	listener, err = net.ListenTCP("tcp", &net.TCPAddr{})
-	Expect(err).Should(Succeed())
-
-	baseURL = fmt.Sprintf("http://%s", listener.Addr().String())
-	fmt.Fprintf(GinkgoWriter, "Base API URL: %s\n", baseURL)
-
 	// Connect to the database and create our test table
 	executeSQL(testTableSQL)
 	insertStmt, err = db.Prepare(
@@ -72,6 +66,14 @@ var _ = BeforeSuite(func() {
 	testServer, err = startChangeServer(mux, testDataDir, dbURL, replicationSlot, "")
 	Expect(err).Should(Succeed())
 
+	// Listen on an anonymous port
+	scaf := goscaffold.CreateHTTPScaffold()
+	err = scaf.Open()
+	Expect(err).Should(Succeed())
+
+	baseURL = fmt.Sprintf("http://%s", scaf.InsecureAddress())
+	fmt.Fprintf(GinkgoWriter, "Base API URL: %s\n", baseURL)
+
 	// Poll until we are connected to PG and replication has begun
 	Eventually(func() replication.State {
 		return testServer.repl.State()
@@ -79,7 +81,7 @@ var _ = BeforeSuite(func() {
 
 	// Start listening for HTTP calls
 	go func() {
-		http.Serve(listener, mux)
+		scaf.Listen(mux)
 	}()
 })
 

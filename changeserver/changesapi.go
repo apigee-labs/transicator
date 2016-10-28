@@ -21,11 +21,6 @@ func (s *server) initChangesAPI(prefix string, router *httprouter.Router) {
 }
 
 func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
-	if s.isMarkedDown() {
-		sendError(resp, req, http.StatusServiceUnavailable, "Marked down")
-		return
-	}
-
 	enc := goscaffold.SelectMediaType(req, []string{jsonContent, protoContent})
 	if enc == "" {
 		resp.WriteHeader(http.StatusUnsupportedMediaType)

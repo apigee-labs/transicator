@@ -3,19 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
-	"time"
 
+	"github.com/30x/goscaffold"
 	"github.com/Sirupsen/logrus"
-	"github.com/tylerb/graceful"
 )
 
 const (
-	defaultPort             = 9000
-	defaultCacheSize        = 65536
-	gracefulShutdownTimeout = 60 * time.Second
+	defaultPort      = 9000
+	defaultCacheSize = 65536
 )
 
 func main() {
@@ -34,6 +31,7 @@ func printUsage() {
 
 func runMain() int {
 	var port int
+	var mgmtPort int
 	var dbDir string
 	var pgURL string
 	var pgSlot string
@@ -42,6 +40,7 @@ func runMain() int {
 	var help bool
 
 	flag.IntVar(&port, "p", defaultPort, "Listen port")
+	flag.IntVar(&mgmtPort, "mp", -1, "Management port (for health checks)")
 	flag.StringVar(&dbDir, "d", "", "Location of database files")
 	flag.StringVar(&pgURL, "u", "", "URL to connect to Postgres")
 	flag.StringVar(&pgSlot, "s", "", "Slot name for Postgres logical replication")
@@ -73,22 +72,18 @@ func runMain() int {
 	}
 	defer server.stop()
 
-	listener, err := net.ListenTCP("tcp", &net.TCPAddr{
-		Port: port,
-	})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error starting server: %s\n", err)
-		return 5
+	scaf := goscaffold.CreateHTTPScaffold()
+	scaf.SetInsecurePort(port)
+	if mgmtPort >= 0 {
+		scaf.SetManagementPort(mgmtPort)
 	}
-	defer listener.Close()
+	scaf.CatchSignals()
+	scaf.SetHealthPath("/health")
+	scaf.SetReadyPath("/ready")
+	scaf.SetHealthChecker(server.checkHealth)
 
-	svr := &http.Server{
-		Handler: mux,
-	}
-
-	// This will intercept signals and carefully stop running HTTP transactions,
-	// then return so that we can close everything above.
-	graceful.Serve(svr, listener, gracefulShutdownTimeout)
+	err = scaf.Listen(mux)
+	logrus.Infof("Shutting down: %s\n", err)
 
 	return 0
 }

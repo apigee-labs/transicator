@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strconv"
 
+	"github.com/30x/goscaffold"
 	"github.com/30x/transicator/pgclient"
 	log "github.com/Sirupsen/logrus"
 	"github.com/julienschmidt/httprouter"
@@ -32,13 +32,15 @@ func printUsage() {
 func main() {
 
 	var (
-		port  int
-		pgURL string
-		debug bool
-		help  bool
+		port     int
+		mgmtPort int
+		pgURL    string
+		debug    bool
+		help     bool
 	)
 
 	flag.IntVar(&port, "p", defaultPort, "Local Binding port")
+	flag.IntVar(&mgmtPort, "mp", -1, "Management port (for health checks)")
 	flag.StringVar(&pgURL, "u", "", "URL to connect to Postgres DB")
 	flag.BoolVar(&debug, "D", false, "Turn on debugging")
 	flag.BoolVar(&help, "h", false, "Print help message")
@@ -93,8 +95,35 @@ func main() {
 			DownloadSnapshot(w, r, db, p)
 		})
 
-	err = http.ListenAndServe(":"+strconv.Itoa(port), router)
-	log.Warnf("Is service running already?, Err: %v\n", err)
-	os.Exit(4)
+	scaf := goscaffold.CreateHTTPScaffold()
+	scaf.SetInsecurePort(port)
+	if mgmtPort >= 0 {
+		scaf.SetManagementPort(mgmtPort)
+	}
+	scaf.CatchSignals()
+	scaf.SetHealthPath("/health")
+	scaf.SetReadyPath("/ready")
+	scaf.SetHealthChecker(func() (goscaffold.HealthStatus, error) {
+		return checkHealth(db)
+	})
 
+	log.Infof("Listening on port %d", port)
+	err = scaf.Listen(router)
+	log.Infof("Shutting down: %s", err)
+}
+
+func checkHealth(db *sql.DB) (goscaffold.HealthStatus, error) {
+	row := db.QueryRow("select * from now()")
+	var now string
+	err := row.Scan(&now)
+	if err == nil {
+		return goscaffold.OK, nil
+	}
+
+	log.Warnf("Not ready: Database error: %s", err)
+	// Return a "Not ready" status. That means that the server should not
+	// receive calls, but it does not need a restart. Don't return a "failed"
+	// status here that would cause a restart. We will be able to reach PG
+	// again when it's ready.
+	return goscaffold.NotReady, err
 }

@@ -10,6 +10,7 @@ import:
   subpackages:
   - proto
 - package: github.com/30x/goscaffold
+  version: master
 testImport:
 - package: github.com/onsi/ginkgo
 - package: github.com/onsi/gomega
