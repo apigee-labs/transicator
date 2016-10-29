@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sync/atomic"
 	"time"
 
 	"github.com/30x/transicator/common"
@@ -32,7 +33,11 @@ func (s *server) runReplication(firstChange common.Sequence) {
 			ackTimer.Reset(acknowledgeDelay)
 
 		case stopped := <-s.stopChan:
-			s.repl.Stop()
+			if atomic.LoadInt32(&s.dropSlot) == 0 {
+				s.repl.Stop()
+			} else {
+				s.repl.StopAndDrop()
+			}
 			ackTimer.Stop()
 			stopped <- true
 			return

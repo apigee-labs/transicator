@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sync/atomic"
 
 	"github.com/30x/goscaffold"
 	"github.com/Sirupsen/logrus"
@@ -81,6 +82,10 @@ func runMain() int {
 	scaf.SetHealthPath("/health")
 	scaf.SetReadyPath("/ready")
 	scaf.SetHealthChecker(server.checkHealth)
+	scaf.SetMarkdown("GET", "/markdown", func() {
+		// This flag tells the stop code to drop the slot.
+		atomic.StoreInt32(&server.dropSlot, 1)
+	})
 
 	err = scaf.Listen(mux)
 	logrus.Infof("Shutting down: %s\n", err)

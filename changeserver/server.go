@@ -27,6 +27,7 @@ type server struct {
 	db       *storage.DB
 	repl     *replication.Replicator
 	tracker  *changeTracker
+	dropSlot int32
 	stopChan chan chan<- bool
 }
 
