@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -49,6 +50,34 @@ var _ = Describe("Replicator tests", func() {
 		Eventually(repl.Changes()).Should(Receive(&change))
 		Expect(change.NewRow["id"].Value).Should(Equal("replication 2"))
 		Consistently(repl.Changes()).ShouldNot(Receive())
+	})
+
+	It("Drop slot", func() {
+		repl, err := CreateReplicator(dbURL, "droptestslot")
+		Expect(err).Should(Succeed())
+		repl.Start()
+		// There may be duplicates, so always drain first
+		drainReplication(repl)
+
+		// Slot should be created pretty soon
+		Eventually(func() string {
+			row := db.QueryRow(
+				"select slot_name from pg_replication_slots where slot_name = 'droptestslot'")
+			var sn string
+			err = row.Scan(&sn)
+			Expect(err).Should(Succeed())
+			return sn
+		}).Should(Equal("droptestslot"))
+
+		repl.StopAndDrop()
+
+		// Slot should be destroyed pretty soon
+		Eventually(func() error {
+			row := db.QueryRow(
+				"select slot_name from pg_replication_slots where slot_name = 'droptestslot'")
+			var sn string
+			return row.Scan(&sn)
+		}).Should(MatchError(sql.ErrNoRows))
 	})
 })
 

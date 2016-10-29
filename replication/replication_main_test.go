@@ -72,6 +72,10 @@ func cleanUpEverything(logit bool) {
 	if err != nil && logit {
 		fmt.Printf("Error deleting replication slot \"txidtestslot\": %s", err)
 	}
+	err = DropSlot(dbURL, "droptestslot")
+	if err != nil && logit {
+		fmt.Printf("Error deleting replication slot \"txidtestslot\": %s", err)
+	}
 	dropTable("transicator_test")
 	dropTable("txid_test")
 }

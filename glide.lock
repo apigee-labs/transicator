@@ -1,8 +1,8 @@
 hash: 2dfbb7983ca3a9740bf74628349d440a3b18fe8f995780281768eb523a5d0b0e
-updated: 2016-10-26T17:40:17.199900713-07:00
+updated: 2016-10-28T15:56:02.500446204-07:00
 imports:
 - name: github.com/30x/goscaffold
-  version: 3884433b5644a945d024e3eee00a4a78683ea03e
+  version: 7df924f98295baba72022ce4567b042413cf2b41
 - name: github.com/golang/protobuf
   version: df1d3ca07d2d07bba352d5b73c4313b4e2a6203e
   subpackages:

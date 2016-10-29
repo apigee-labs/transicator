@@ -28,6 +28,7 @@ type replCommand int
 
 const (
 	stopCmd replCommand = iota
+	stopAndDropCmd
 	disconnectedCmd
 	shutdownCmd
 	acknowedgeCmd
@@ -51,15 +52,16 @@ const (
 A Replicator is a client for the logical replication protocol.
 */
 type Replicator struct {
-	slotName      string
-	connectString string
-	filter        func(c *common.Change) bool
-	state         int32
-	stopWaiter    *sync.WaitGroup
-	changeChan    chan *common.Change
-	updateChan    chan uint64
-	cmdChan       chan replCommand
-	jsonMode      bool
+	slotName         string
+	rawConnectString string
+	connectString    string
+	filter           func(c *common.Change) bool
+	state            int32
+	stopWaiter       *sync.WaitGroup
+	changeChan       chan *common.Change
+	updateChan       chan uint64
+	cmdChan          chan replCommand
+	jsonMode         bool
 }
 
 /*
@@ -76,12 +78,13 @@ func CreateReplicator(connect, sn string) (*Replicator, error) {
 	log.Debugf("Connecting to the database at \"%s\"", connectString)
 
 	repl := &Replicator{
-		slotName:      slotName,
-		connectString: connectString,
-		state:         int32(Stopped),
-		changeChan:    make(chan *common.Change, 100),
-		updateChan:    make(chan uint64, 100),
-		cmdChan:       make(chan replCommand, 1),
+		slotName:         slotName,
+		rawConnectString: connect,
+		connectString:    connectString,
+		state:            int32(Stopped),
+		changeChan:       make(chan *common.Change, 100),
+		updateChan:       make(chan uint64, 100),
+		cmdChan:          make(chan replCommand, 1),
 	}
 	return repl, nil
 }
@@ -142,7 +145,6 @@ DropSlot deletes the logical replication slot created by "Start".
 */
 func DropSlot(connect, sn string) error {
 	slotName := strings.ToLower(sn)
-	// TODO what if there are already queries?
 
 	ddb, err := sql.Open("transicator", connect)
 	if err != nil {
@@ -166,11 +168,24 @@ func (r *Replicator) Changes() <-chan *common.Change {
 
 /*
 Stop stops the replication process and closes the channel. It does not remove
-the replication slot -- for that, use "DropSlot".
+the replication slot -- for that, use "DropSlot" after the channel is closed.
+This method does not return until replication has been stopped.
 */
 func (r *Replicator) Stop() {
 	if r.State() != Stopped {
 		r.cmdChan <- stopCmd
+		r.stopWaiter.Wait()
+	}
+}
+
+/*
+StopAndDrop stops the replication process and closes the channel, and then
+removes the replication slot.
+This method does not return until replication has been stopped.
+*/
+func (r *Replicator) StopAndDrop() {
+	if r.State() != Stopped {
+		r.cmdChan <- stopAndDropCmd
 		r.stopWaiter.Wait()
 	}
 }
@@ -304,6 +319,7 @@ func (r *Replicator) replLoop() {
 			if err == nil {
 				connected = true
 				r.setState(Running)
+				log.Infof("Connected to Postgres using replication slot \"%s\"", r.slotName)
 				go r.readLoop(connection)
 			} else {
 				connectDelay *= 2
@@ -361,18 +377,38 @@ func (r *Replicator) replLoop() {
 					r.cmdChan <- disconnectedCmd
 				}
 
+			// Client called stop with "delete" flag
+			case stopAndDropCmd:
+				r.stop(connected, true, connection)
+				return
+
 			// Client called Stop
 			case stopCmd:
-				log.Debug("Stopping replication")
-				if connected {
-					connection.Close()
-				}
-				r.setState(Stopped)
-				r.stopWaiter.Done()
+				r.stop(connected, false, connection)
 				return
 			}
 		}
 	}
+}
+
+func (r *Replicator) stop(connected, deleteSlot bool,
+	connection *pgclient.PgConnection) {
+	log.Debug("Stopping replication")
+	if connected {
+		connection.Close()
+	}
+	r.setState(Stopped)
+	log.Infof("Stopped replicating from slot \"%s\"", r.slotName)
+
+	if deleteSlot {
+		log.Infof("Dropping replication slot \"%s\"", r.slotName)
+		err := DropSlot(r.rawConnectString, r.slotName)
+		if err != nil {
+			log.Warnf("Error dropping replication slot \"%s\": %s", r.slotName, err)
+		}
+	}
+
+	r.stopWaiter.Done()
 }
 
 /*
