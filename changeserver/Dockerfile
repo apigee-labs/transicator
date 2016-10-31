@@ -24,7 +24,6 @@ RUN \
   && mkdir /data
 
 COPY changeserver /
-COPY metadata/apigee-file.yaml /
 
 EXPOSE 9000
 VOLUME [ "/data" ]

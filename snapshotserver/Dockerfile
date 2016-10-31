@@ -11,7 +11,6 @@
 FROM alpine:3.4
 
 COPY snapshotserver /
-COPY metadata/apigee-file.yaml /
 
 EXPOSE 9000
 
