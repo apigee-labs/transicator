@@ -1,8 +1,8 @@
 hash: bedcc87dbbabaf84a51ef8498c5309d82565aeaed58378bee1958a9a4732c154
-updated: 2016-10-28T17:52:06.652815398-07:00
+updated: 2016-10-31T13:04:55.804530768-07:00
 imports:
 - name: github.com/30x/goscaffold
-  version: 7df924f98295baba72022ce4567b042413cf2b41
+  version: f350475fd0bcb69d7611c2e10d541d6c24a7361e
 - name: github.com/golang/protobuf
   version: df1d3ca07d2d07bba352d5b73c4313b4e2a6203e
   subpackages:
@@ -11,8 +11,41 @@ imports:
   version: 8c199fb6259ffc1af525cc3ad52ee60ba8359669
 - name: github.com/Sirupsen/logrus
   version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
+- name: golang.org/x/sys
+  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  subpackages:
+  - unix
 testImports:
 - name: github.com/onsi/ginkgo
-  version: ""
+  version: 45a5f6ffb2a14e4f29698c16ae4c0a34018a8951
+  subpackages:
+  - config
+  - internal/codelocation
+  - internal/containernode
+  - internal/failer
+  - internal/leafnodes
+  - internal/remote
+  - internal/spec
+  - internal/specrunner
+  - internal/suite
+  - internal/testingtproxy
+  - internal/writer
+  - reporters
+  - reporters/stenographer
+  - types
 - name: github.com/onsi/gomega
-  version: ""
+  version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
+  subpackages:
+  - format
+  - internal/assertion
+  - internal/asyncassertion
+  - internal/oraclematcher
+  - internal/testingtsupport
+  - matchers
+  - matchers/support/goraph/bipartitegraph
+  - matchers/support/goraph/edge
+  - matchers/support/goraph/node
+  - matchers/support/goraph/util
+  - types
+- name: gopkg.in/yaml.v2
+  version: a5b47d31c556af34a302ce5d659e6fea44d90de0
