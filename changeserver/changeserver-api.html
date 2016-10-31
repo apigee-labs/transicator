@@ -196,6 +196,9 @@ font-style: italic;
   <div class="method-summary"></div>
   <ol>
   <li><a href="#changesGet"><code><span class="http-method">get</span> /changes</code></a></li>
+  <li><a href="#healthGet"><code><span class="http-method">get</span> /health</code></a></li>
+  <li><a href="#markdownGet"><code><span class="http-method">get</span> /markdown</code></a></li>
+  <li><a href="#readyGet"><code><span class="http-method">get</span> /ready</code></a></li>
   </ol>
 
   <div class="method"><a name="changesGet"/>
@@ -265,6 +268,98 @@ font-style: italic;
         <a href="#ChangeList">ChangeList</a>
   </div> <!-- method -->
   <hr/>
+  <div class="method"><a name="healthGet"/>
+    <div class="method-path">
+    <a class="up" href="#__Methods">Up</a>
+    <pre class="get"><code class="huge"><span class="http-method">get</span> /health</code></pre></div>
+    <div class="method-summary"> (<span class="nickname">healthGet</span>)</div>
+    <div class="method-notes">Describes whether the server is \&quot;healthy.\&quot; When the server is not healthy, it is not able to process any requests, and should be killed and restarted. If the server was started with a management port enabled, this URL only resolves on that port.</div>
+
+
+
+
+
+
+
+
+    <!--Todo: process Response Object and its headers, schema, examples -->
+
+
+    <h3 class="field-label">Produces</h3>
+    This API call produces the following media types according to the <span class="header">Accept</span> request header;
+    the media type will be conveyed by the <span class="heaader">Content-Type</span> response header.
+    <ul>
+      <li><code>text/plain</code></li>
+      <li><code>application/json</code></li>
+    </ul>
+
+    <h3 class="field-label">Responses</h3>
+    <h4 class="field-label">200</h4>
+    Everything is fine. No output produced.
+        <a href="#"></a>
+    <h4 class="field-label">503</h4>
+    Server is not healthy. Normally returns the status in textual form, but if JSON is selected in the Accept header than JSON will be returned.
+        <a href="#Status">Status</a>
+  </div> <!-- method -->
+  <hr/>
+  <div class="method"><a name="markdownGet"/>
+    <div class="method-path">
+    <a class="up" href="#__Methods">Up</a>
+    <pre class="get"><code class="huge"><span class="http-method">get</span> /markdown</code></pre></div>
+    <div class="method-summary"> (<span class="nickname">markdownGet</span>)</div>
+    <div class="method-notes">Changes the state of the server to denote that it has been marked down. After this is called, the \&quot;/ready\&quot; path will return 503, and all other API calls except \&quot;/health\&quot; will also fail with 503. After this API call has been made, the server will delete its Postgres replication slot when it exits. Management software should call this URL before a planned shutdown to ensure cleanup of Postgres resources. If the server was started with a management port enabled, this URL only resolves on that port.</div>
+
+
+
+
+
+
+
+
+    <!--Todo: process Response Object and its headers, schema, examples -->
+
+
+
+    <h3 class="field-label">Responses</h3>
+    <h4 class="field-label">200</h4>
+    Server is now marked down
+        <a href="#"></a>
+  </div> <!-- method -->
+  <hr/>
+  <div class="method"><a name="readyGet"/>
+    <div class="method-path">
+    <a class="up" href="#__Methods">Up</a>
+    <pre class="get"><code class="huge"><span class="http-method">get</span> /ready</code></pre></div>
+    <div class="method-summary"> (<span class="nickname">readyGet</span>)</div>
+    <div class="method-notes">Describes whether the server is \&quot;ready.\&quot; When the server is not ready, it is not able to process any requests. Load balancers should not route calls to a server that is not ready. The server may not be ready because it is still starting up, or because it is shutting down. It is possible for a server to be \&quot;ready\&quot; but still \&quot;healthy.\&quot; If the server was started with a management port enabled, this URL only resolves on that port.</div>
+
+
+
+
+
+
+
+
+    <!--Todo: process Response Object and its headers, schema, examples -->
+
+
+    <h3 class="field-label">Produces</h3>
+    This API call produces the following media types according to the <span class="header">Accept</span> request header;
+    the media type will be conveyed by the <span class="heaader">Content-Type</span> response header.
+    <ul>
+      <li><code>text/plain</code></li>
+      <li><code>application/json</code></li>
+    </ul>
+
+    <h3 class="field-label">Responses</h3>
+    <h4 class="field-label">200</h4>
+    Everything is fine. No output produced.
+        <a href="#"></a>
+    <h4 class="field-label">503</h4>
+    Server is not ready. Normally returns the status in textual form, but if JSON is selected in the Accept header than JSON will be returned.
+        <a href="#Status">Status</a>
+  </div> <!-- method -->
+  <hr/>
 
   <div class="up"><a href="#__Models">Up</a></div>
   <h2><a name="__Models">Models</a></h2>
@@ -274,6 +369,7 @@ font-style: italic;
   <ol>
     <li><a href="#Change"><code>Change</code></a></li>
     <li><a href="#ChangeList"><code>ChangeList</code></a></li>
+    <li><a href="#Status"><code>Status</code></a></li>
     <li><a href="#Value"><code>Value</code></a></li>
   </ol>
 
@@ -297,6 +393,12 @@ font-style: italic;
       <div class="param">firstSequence (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The oldest sequence present in the databse </div>
 <div class="param">lastSequence (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The newest sequence present in the databse </div>
 <div class="param">changes (optional)</div><div class="param-desc"><span class="param-type"><a href="#Change">array[Change]</a></span> A list of changes, in sequence order. </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3 class="field-label"><a name="Status">Status</a> <a class="up" href="#__Models">Up</a></h3>
+    <div class="field-items">
+      <div class="param">reason </div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The reason that a server has been marked down. Suitable for writing in to logs and diagnostic errors. </div>
     </div>  <!-- field-items -->
   </div>
   <div class="model">

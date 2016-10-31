@@ -92,6 +92,73 @@ paths:
           description: Successful response
           schema:
             $ref: '#/definitions/ChangeList'
+            
+  /health:
+    get:
+      description:
+        Describes whether the server is "healthy." When the
+        server is not healthy, it is not able to process any requests, and
+        should be killed and restarted.
+        If the server was started with a
+        management port enabled, this URL only resolves on that
+        port.
+      produces:
+        - text/plain
+        - application/json
+      responses:
+        200:
+          description: Everything is fine. No output produced.
+        503:
+          description: 
+            Server is not healthy. Normally returns the status in textual
+            form, but if JSON is selected in the Accept header than
+            JSON will be returned.
+          schema:
+            $ref: '#/definitions/Status'
+            
+  /ready:
+    get:
+      description:
+        Describes whether the server is "ready." When the
+        server is not ready, it is not able to process any requests.
+        Load balancers should not route calls to a server that is
+        not ready. The server may not be ready because it is still
+        starting up, or because it is shutting down. It is possible
+        for a server to be "ready" but still "healthy."
+        If the server was started with a
+        management port enabled, this URL only resolves on that
+        port.
+      produces:
+        - text/plain
+        - application/json
+      responses:
+        200:
+          description: Everything is fine. No output produced.
+        503:
+          description: 
+            Server is not ready. Normally returns the status in textual
+            form, but if JSON is selected in the Accept header than
+            JSON will be returned.
+          schema:
+            $ref: '#/definitions/Status'
+            
+  /markdown:
+    get:
+      description:
+        Changes the state of the server to denote that it has been
+        marked down. After this is called, the "/ready" path will return
+        503, and all other API calls except "/health" will also fail with
+        503.
+        After this API call has been made, the server will delete its
+        Postgres replication slot when it exits. Management software
+        should call this URL before a planned shutdown to ensure
+        cleanup of Postgres resources.
+        If the server was started with a
+        management port enabled, this URL only resolves on that
+        port.
+      responses:
+        200:
+          description: Server is now marked down
 
 definitions:
   Value:
@@ -181,3 +248,19 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/Change'
+          
+  Status:
+    description: A response sent by a server that has been marked down.
+    required:
+      - status
+      - reason
+    properties:
+      reason:
+        description: 
+          The reason that a server has been marked down. Suitable for
+          writing in to logs and diagnostic errors.
+        type: string
+      status:
+        description:
+          If the server has been marked down, a reason why.
+          One of "Unhealtly" or "NotReady".
