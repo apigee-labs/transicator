@@ -106,6 +106,7 @@ func main() {
 	scaf.SetHealthChecker(func() (goscaffold.HealthStatus, error) {
 		return checkHealth(db)
 	})
+	scaf.SetMarkdown("GET", "/markdown", nil)
 
 	log.Infof("Listening on port %d", port)
 	err = scaf.Listen(router)
