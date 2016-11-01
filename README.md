@@ -56,7 +56,51 @@ wish to replicate using transicator.
 * changeserver [API](./changeserver/changeserver-api.html) and [OpenAPI spec](./changeserver/api.yaml)
 * snapshot server [API](./snapshotserver/snapshot-api.html) and [OpenAPI spec](./snapshotserver/snapshot-api.yaml)
 
+# Quick Start with Docker
+
+First, start a Postgres server that has the Transicator plugin installed:
+
+    docker run -p 5432:5432 --name pg -d \
+    -e POSTGRES_PASSWORD=changeme thirtyx/transicator-postgres
+
+Now you have a Postgres server running on port 5432 of whatever machine you
+have Docker on. For instance, assuming that Docker runs on localhost, verify
+that you can reach it. (BTW, you set the password above to be "changeme".")
+
+````
+psql -W -h localhost postgres postgres
+Type "help" for help.
+
+postgres=# select * from now();
+              now
+-------------------------------
+ 2016-11-01 22:20:11.092593+00
+(1 row)
+````
+
+Looks great -- control-D to quit, BTW.
+
+Now, start a snapshot server running on port 9001:
+
+    docker run -d -p 9001:9001 thirtyx/transicator-snapshot \
+    -u postgres://postgres:changeme@localhost/postgres
+
+You can test quickly -- this API call should return "303 See Other":
+
+    curl -v http://localhost:9001/snapshots?scope=foo
+
+Finally, start a change server running on port 9000:
+
+    docker run -d -p 9000:9000 thirtyx/transicator-changeserver \
+    -u postgres://postgres:changeme@localhost/postgres -s testslot
+
+This API call will tell you that the database is empty:
+
+    curl http://localhost:9000/changes
+
 # Complete API Example
+
+Now that the servers are running, you can test the API.
 
 To get started, imagine that we have a database that contains some tables
 that have an _apid_scope column, and that there are some rows in those tables
@@ -64,6 +108,7 @@ that have the value "foo" for _apid_scope. For instance, let's create a table
 and insert some values:
 
 ````
+psql -W -h localhost postgres postgres
 postgres=# create table test
     (id varchar primary key,
     val integer,
@@ -84,7 +129,7 @@ INSERT 0 1
 We can now get a snapshot in JSON format using the snapshot server:
 
 ````
-$ curl -H "Accept: application/json" -L http://snapshotserver/snapshots?scopes=foo
+$ curl -H "Accept: application/json" -L http://localhost:9001/snapshots?scope=foo
 
 {"snapshotInfo":"229444:229444:","timestamp":"2016-10-13T17:42:12.171306-07:00",
 "tables":[{"name":"snapshot_test","rows":[]},{"name":"scope","rows":[
@@ -113,7 +158,7 @@ Postgres transactions were visible when the snapshot was created.
 At this point, using the changeserver, a client may issue the following
 API call:
 
-    curl -H "Accept: application/json" "http://changeserver/changes?snapshot=229444:229444:&scope=foo&block=10"
+    curl -H "Accept: application/json" "http://localhost:9000/changes?snapshot=229444:229444:&scope=foo&block=10"
 
 This call asks for all the changes for the scope "foo" starting from the first
 change that was not visible in the sequence. If no changes appear for 10 seconds,
