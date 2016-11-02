@@ -208,12 +208,12 @@ func GetTenantSnapshotData(
 		return err
 	}
 
-	tables, err := getTableNames(db)
+	tables, err := getSchemaAndTableNames(db)
 	if err != nil {
 		log.Errorf("Failed to table names: %+v", err)
 		return err
 	}
-	log.Debugf("Tables in snapshot %v", tables)
+	log.Debugf("Tables in snapshot: %v", tables)
 
 	sdataItem := []common.Table{}
 	snapData := &common.Snapshot{
@@ -236,22 +236,24 @@ func writeJSONSnapshot(
 	snapData *common.Snapshot, tables []string, tenantID []string,
 	db *sql.DB, w io.Writer) error {
 
-	for _, t := range tables {
-		// Not sure how to use parameters here for the "in" query
-		q := fmt.Sprintf("select * from %s where _apid_scope in %s", t, GetTenants(tenantID))
+	for _, tn := range tables {
+		// Postgres won't let us parameterize the table name here, and we don't
+		// know how to parameterize the list in the "in" parameter
+		q := fmt.Sprintf("select * from %s where _apid_scope in %s",
+			tn, GetTenants(tenantID))
 		rows, err := db.Query(q)
 		if err != nil {
 			if strings.Contains(err.Error(), "errorMissingColumn") {
-				log.Warnf("Skipping table %s: no _apid_scope column", t)
+				log.Warnf("Skipping table %s: no _apid_scope column", tn)
 				continue
 			}
-			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
+			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, tn, err)
 			return err
 		}
 		defer rows.Close()
-		err = fillTable(rows, snapData, t)
+		err = fillTable(rows, snapData, tn)
 		if err != nil {
-			log.Errorf("Failed to Insert Table [%s] - Ignored. Err: %+v", t, err)
+			log.Errorf("Failed to Insert Table [%s] - Ignored. Err: %+v", tn, err)
 		}
 	}
 
@@ -335,23 +337,26 @@ func writeProtoSnapshot(
 	return nil
 }
 
-func getTableNames(db *sql.DB) ([]string, error) {
-	nameRows, err := db.Query(
-		"SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+func getSchemaAndTableNames(db *sql.DB) ([]string, error) {
+	nameRows, err := db.Query(`
+		SELECT table_schema, table_name FROM information_schema.tables
+		WHERE table_schema not in ('pg_catalog', 'information_schema')
+		`)
 	if err != nil {
 		log.Errorf("Failed to get tables from DB : %+v", err)
 		return nil, err
 	}
 	defer nameRows.Close()
+
 	var tables []string
 	for nameRows.Next() {
-		var tableName string
-		err = nameRows.Scan(&tableName)
+		var schema, name string
+		err = nameRows.Scan(&schema, &name)
 		if err != nil {
 			log.Errorf("Failed to get table names from DB : %+v", err)
 			return nil, err
 		}
-		tables = append(tables, tableName)
+		tables = append(tables, schema+"."+name)
 	}
 	return tables, nil
 }

@@ -59,13 +59,12 @@ var _ = BeforeSuite(func() {
 	pgdriver.SetIsolationLevel("repeatable read")
 	pgdriver.SetExtendedColumnNames(true)
 
-	if tableExists("snapshot_test") {
-		err = truncateTable("snapshot_test")
-		Expect(err).Should(Succeed())
-	} else {
-		_, err = db.Exec(testTableSQL)
-		Expect(err).Should(Succeed())
+	for _, table := range allTables {
+		dropTable(table)
 	}
+
+	_, err = db.Exec(testTableSQL)
+	Expect(err).Should(Succeed())
 
 	repl, err = replication.CreateReplicator(dbURL, "snapshot_test_slot")
 	Expect(err).Should(Succeed())
@@ -83,8 +82,7 @@ var _ = AfterSuite(func() {
 	if db != nil {
 		fmt.Println(GinkgoWriter, "AfterSuite: drop replication slot")
 		db.Exec("select * from pg_drop_replication_slot('snapshot_test_slot')")
-		tables := []string{"snapshot_test", "APP", "DEVELOPER", "apid_config", "apid_config_scope"}
-		for _, table := range tables {
+		for _, table := range allTables {
 			dropTable(table)
 		}
 		db.Close()
@@ -136,8 +134,18 @@ func getCurrentSnapshotInfo() *SnapInfo {
 	return si
 }
 
+var allTables = []string{
+	"public.app",
+	"public.developer",
+	"public.snapshot_test",
+	"public.apid_config_scope",
+	"public.apid_config",
+	"transicator_tests.schema_table",
+}
+
 const testTableSQL = `
-  create table snapshot_test (
+  create schema if not exists transicator_tests;
+  create table public.snapshot_test (
     id varchar(32) primary key,
     bool boolean,
     chars char(64),
@@ -163,8 +171,8 @@ const testTableSQL = `
  	_apid_scope varchar(255),
 	PRIMARY KEY (id, _apid_scope)
 );
-alter table developer replica identity full;
-  CREATE TABLE APP (
+alter table public.developer replica identity full;
+  CREATE TABLE public.APP (
 	org varchar(255),
 	id varchar(255),
 	dev_id varchar(255) null,
@@ -175,9 +183,9 @@ alter table developer replica identity full;
  	_apid_scope varchar(255),
 	PRIMARY KEY (id, _apid_scope)
 );
-alter table app replica identity full;
+alter table public.app replica identity full;
 
-CREATE TABLE apid_config (
+CREATE TABLE public.apid_config (
     id character varying(36) NOT NULL,
     name character varying(100) NOT NULL,
     description character varying(255),
@@ -188,9 +196,9 @@ CREATE TABLE apid_config (
     updated_by character varying(100),
     CONSTRAINT apid_config_pkey PRIMARY KEY (id)
 );
-alter table apid_config replica identity full;
+alter table public.apid_config replica identity full;
 
-CREATE TABLE apid_config_scope (
+CREATE TABLE public.apid_config_scope (
     id character varying(36) NOT NULL,
     apid_config_id character varying(36) NOT NULL,
     scope character varying(100) NOT NULL,
@@ -203,7 +211,14 @@ CREATE TABLE apid_config_scope (
           REFERENCES apid_config (id)
           ON UPDATE NO ACTION ON DELETE NO ACTION
 );
-alter table apid_config_scope replica identity full;
+alter table public.apid_config_scope replica identity full;
+
+CREATE TABLE transicator_tests.schema_table (
+  id character varying primary key,
+	created_at integer,
+	_apid_scope character varying
+);
+alter table transicator_tests.schema_table replica identity full;
 `
 
 func getCurrentTxid() int32 {
@@ -248,11 +263,12 @@ func getReplChange(r *replication.Replicator) *common.Change {
 var _ = Describe("Taking a snapshot", func() {
 
 	tables := map[string]bool{
-		"app":               true,
-		"developer":         true,
-		"snapshot_test":     true,
-		"apid_config_scope": true,
-		"apid_config":       true,
+		"public.app":                     true,
+		"public.developer":               true,
+		"public.snapshot_test":           true,
+		"public.apid_config_scope":       true,
+		"public.apid_config":             true,
+		"transicator_tests.schema_table": true,
 	}
 
 	BeforeEach(func() {
@@ -280,6 +296,11 @@ var _ = Describe("Taking a snapshot", func() {
 				values
 				('Pepsi', 'aaa-bbb-ccc', 'xxx-yyy-zzz', 'Oracle', 9859348, 'pepsi__dev')
 				`)
+			Expect(err).Should(Succeed())
+			_, err = db.Exec(`
+				insert into transicator_tests.schema_table (id, created_at, _apid_scope)
+			 values ('aaa-bbb-ccc', 9859348, 'pepsi__dev')
+			`)
 			Expect(err).Should(Succeed())
 
 			scope := []string{"pepsi__dev"}
@@ -328,7 +349,7 @@ var _ = Describe("Taking a snapshot", func() {
 					fmt.Fprintf(GinkgoWriter, "Table: %s\n", curTable.Name)
 				case common.Row:
 					row := n.(common.Row)
-					if curTable.Name == "app" {
+					if curTable.Name == "public.app" || curTable.Name == "transicator_tests.schema_table" {
 						var id string
 						err = row.Get("id", &id)
 						Expect(err).Should(Succeed())
@@ -336,7 +357,6 @@ var _ = Describe("Taking a snapshot", func() {
 						err = row.Get("created_at", &timestamp)
 						Expect(err).Should(Succeed())
 
-						Expect(rowCount).Should(Equal(0))
 						Expect(id).Should(Equal("aaa-bbb-ccc"))
 						Expect(timestamp).Should(BeEquivalentTo(9859348))
 						rowCount++
@@ -348,7 +368,7 @@ var _ = Describe("Taking a snapshot", func() {
 					Expect(false).Should(BeTrue())
 				}
 			}
-			Expect(rowCount).Should(Equal(1))
+			Expect(rowCount).Should(Equal(2))
 
 			scope = []string{"pepsi_bad"}
 			buf = &bytes.Buffer{}

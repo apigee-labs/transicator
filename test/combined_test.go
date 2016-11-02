@@ -66,7 +66,7 @@ var _ = Describe("Combined tests", func() {
 				fmt.Fprintf(GinkgoWriter, "Table %s\n", table.Name)
 				tableName = table.Name
 			case common.Row:
-				if tableName == "combined_test" {
+				if tableName == "public.combined_test" {
 					row := n.(common.Row)
 					foundTable = true
 					var id int

@@ -132,10 +132,10 @@ We can now get a snapshot in JSON format using the snapshot server:
 $ curl -H "Accept: application/json" -L http://localhost:9001/snapshots?scope=foo
 
 {"snapshotInfo":"229444:229444:","timestamp":"2016-10-13T17:42:12.171306-07:00",
-"tables":[{"name":"snapshot_test","rows":[]},{"name":"scope","rows":[
+"tables":[{"name":"public.snapshot_test","rows":[]},{"name":"scope","rows":[
 {"_apid_scope":{"value":"foo","type":1043},"val":{"value":"bar","type":1043}}]},
-{"name":"developer","rows":[]},{"name":"app","rows":[]},
-{"name":"test","rows":[{"_apid_scope":{"value":"foo","type":1043},
+{"name":"public.developer","rows":[]},{"name":"app","rows":[]},
+{"name":"public.test","rows":[{"_apid_scope":{"value":"foo","type":1043},
 "id":{"value":"one","type":1043},"val":{"value":"1","type":23}},
 {"_apid_scope":{"value":"foo","type":1043},"id":{"value":"three","type":1043},
 "val":{"value":"3","type":23}}]}]}
@@ -450,9 +450,11 @@ brew info postgresql
 ```
 
 ```
-### Install leveldb
+### Install leveldb and other dependencies
 
     brew install leveldb
+    brew install protobuf
+    brew install protobuf-c
 
 ## Build and install PG logical replication output plugin
 
@@ -518,48 +520,6 @@ up, and eventually fail.
     docker run --rm -it changeserver -u POSTGRES_URL -s SLOT_NAME
     cd 30x/transicator/snapshotserver
     docker run --rm -it snapshotserver -u POSTGRES_URL
-```
-
-## Run the docker container in E2E
-
-On your laptop, install the SSL Keys to access the E2E.
-
-```
-    https://docs.google.com/document/d/1_Sz_duPEKhhnJRJ_YQ5J7NeF5mtDHc1eSPN88RM0UCg/edit
-```
-
-Ensure, binary image (postgres, changeserver or snapshotserver) is docker promoted in E2E,
-by building the source code in E2E.
-
-```
-    http://jenkins-hackathon.aeip.apigee.net/job/build-go-ci/
-```
-
-The services for Postgres, Snapshotserver and Changeserver are alreay running and can
-be verified by:
-
-```
-   kubectl get services
-```
-The pods (for  Postgres, Snapshotserver and Changeserver) themselves can be started
-and stopped. The Cluster IP address should be reachable between pods.
-
-```
-cd  30x/transicator/changeserver
-kubectl delete -f k8sdev/deployment.yaml
-kubectl create -f k8sdev/deployment.yaml
-```
-
-```
-cd  30x/transicator/snapshotserver
-kubectl delete -f k8sdev/deployment.yaml
-kubectl create -f k8sdev/deployment.yaml
-```
-
-```
-cd  30x/transicator/pgoutput
-kubectl delete -f k8sdev/deployment.yaml
-kubectl create -f k8sdev/deployment.yaml
 ```
 
 ## To delete a replication slot:
