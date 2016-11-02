@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/30x/goscaffold"
 	"github.com/30x/transicator/common"
@@ -16,7 +17,6 @@ import (
 
 const (
 	jsonContent     = "application/json"
-	formContent     = "application/www-form-urlencoded"
 	protoContent    = "application/transicator+protobuf"
 	textContent     = "text/plain"
 	lastSequenceKey = "_ls"
@@ -27,6 +27,7 @@ type server struct {
 	db       *storage.DB
 	repl     *replication.Replicator
 	tracker  *changeTracker
+	slotName string
 	dropSlot int32
 	stopChan chan chan<- bool
 }
@@ -37,6 +38,7 @@ type errMsg struct {
 
 func startChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix string) (*server, error) {
 	success := false
+	slotName := sanitizeSlotName(pgSlot)
 
 	db, err := storage.OpenDB(dbDir, defaultCacheSize)
 	if err != nil {
@@ -63,7 +65,7 @@ func startChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix strin
 		}
 	}
 
-	repl, err := replication.CreateReplicator(pgURL, pgSlot)
+	repl, err := replication.CreateReplicator(pgURL, slotName)
 	if err != nil {
 		return nil, err
 	}
@@ -79,6 +81,7 @@ func startChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix strin
 	s := &server{
 		db:       db,
 		repl:     repl,
+		slotName: slotName,
 		tracker:  createTracker(),
 		stopChan: make(chan chan<- bool, 1),
 	}
@@ -146,4 +149,27 @@ func sendError(resp http.ResponseWriter, req *http.Request, code int, msg string
 		resp.WriteHeader(code)
 		resp.Write([]byte(msg))
 	}
+}
+
+/*
+sanitizeSlotName converts the name from the "slot" API parameter to a name
+that will actually work in Postgres. Postgres slot names can only contain
+upper and lower case letters, numbers, and underscores. This method
+converts dashes to underscores, and removes everything else.
+*/
+func sanitizeSlotName(name string) string {
+	return strings.Map(func(c rune) rune {
+		switch {
+		case
+			c >= 'a' && c <= 'z',
+			c >= 'A' && c <= 'Z',
+			c >= '0' && c <= '9',
+			c == '_':
+			return c
+		case c == '-':
+			return '_'
+		default:
+			return -1
+		}
+	}, name)
 }
