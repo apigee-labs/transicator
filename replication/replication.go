@@ -402,13 +402,30 @@ func (r *Replicator) stop(connected, deleteSlot bool,
 
 	if deleteSlot {
 		log.Infof("Dropping replication slot \"%s\"", r.slotName)
-		err := DropSlot(r.rawConnectString, r.slotName)
+		err := r.dropSlot()
 		if err != nil {
 			log.Warnf("Error dropping replication slot \"%s\": %s", r.slotName, err)
 		}
 	}
 
 	r.stopWaiter.Done()
+}
+
+/*
+dropSlot drops the replication slot using the replication protocol, in
+the unlikely event that we are not able to use any other protocol.
+This requires us to open a new connection in replication mode.
+*/
+func (r *Replicator) dropSlot() error {
+	conn, err := pgclient.Connect(r.connectString)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, _, err = conn.SimpleQuery(fmt.Sprintf(
+		"DROP_REPLICATION_SLOT %s", r.slotName))
+	return err
 }
 
 /*
