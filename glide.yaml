@@ -1,4 +1,5 @@
 package: github.com/30x/transicator
+license: Apache-2.0
 import:
 - package: github.com/Sirupsen/logrus
   version: ~0.10.0
