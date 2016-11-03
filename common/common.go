@@ -79,6 +79,9 @@ type Change struct {
 	// to find a CommitSequence from a particular snapshot. (TXIDs are 32
 	// bits inside Postgres but we may be able to expand this in the future.)
 	TransactionID uint32 `json:"txid"`
+	// The time when the record was inserted to the database, in seconds since
+	// the Unix epoch.
+	Timestamp int64 `json:"timestamp,omitempty"`
 	// For an insert operation, the columns that are being inserted. For an update,
 	// the new value of the columns
 	NewRow Row `json:"newRow,omitempty"`

@@ -27,6 +27,7 @@ message ChangePb {
   optional uint32 transactionID = 7;
   repeated ColumnPb newColumns = 8;
   repeated ColumnPb oldColumns = 9;
+  optional int64 timestamp = 10;
 }
 
 message ChangeListPb {

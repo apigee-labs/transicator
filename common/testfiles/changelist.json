@@ -38,6 +38,7 @@
       "commitSequence": 140,
       "commitIndex": 1,
       "txid": 11,
+      "timestamp": 1478193681809,
       "newRow": {
         "foo": { "value": "foo", "type": 1 },
         "bar": { "value": "456", "type": 2 }

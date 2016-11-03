@@ -287,6 +287,7 @@ func unconvertChangeProto(cp *ChangePb) *Change {
 		CommitIndex:    cp.GetCommitIndex(),
 		ChangeSequence: cp.GetChangeSequence(),
 		TransactionID:  cp.GetTransactionID(),
+		Timestamp:      cp.GetTimestamp(),
 	}
 
 	if len(cp.GetNewColumns()) > 0 {
@@ -402,6 +403,9 @@ func (c *Change) convertProto() *ChangePb {
 	if c.TransactionID != 0 {
 		cp.TransactionID = proto.Uint32(c.TransactionID)
 	}
+	if c.Timestamp != 0 {
+		cp.Timestamp = proto.Int64(c.Timestamp)
+	}
 	cp.NewColumns = unmakeRow(c.NewRow)
 	cp.OldColumns = unmakeRow(c.OldRow)
 	return cp
@@ -438,7 +442,7 @@ func (s *Snapshot) AddTables(tb Table) []Table {
 /*
 AddRowstoTable is a helper function that inserts rows to an existing table
 */
-func (sid *Table) AddRowstoTable(rv Row) []Row {
-	sid.Rows = append(sid.Rows, rv)
-	return sid.Rows
+func (t *Table) AddRowstoTable(rv Row) []Row {
+	t.Rows = append(t.Rows, rv)
+	return t.Rows
 }
