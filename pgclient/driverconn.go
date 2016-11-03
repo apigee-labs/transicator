@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"sync"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -85,21 +87,51 @@ func (c *PgDriverConn) Prepare(query string) (driver.Stmt, error) {
 	return makeStatement(stmtName, query, c)
 }
 
-// Exec is the fast path for sql with no parameters. It uses the "simple
+// Exec is the fast path for SQL that the caller did not individually prepare.
+// If there are no parameters, it uses the "simple
 // query protocol" which works with fewer messages to the database.
-// We chose not to implement "Query" as well because the simple query protocol
-// does not allow us to return a large result set one set of rows at a time,
-// so we'd run out of memory.
+// Otherwise, it uses the default (unnamed) prepared statement.
 func (c *PgDriverConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-	if len(args) > 0 {
-		return nil, driver.ErrSkip
+	if len(args) == 0 {
+		rowCount, err := c.conn.SimpleExec(query)
+		if err == nil {
+			return driver.RowsAffected(rowCount), nil
+		}
+		return nil, err
 	}
 
-	rowCount, err := c.conn.SimpleExec(query)
-	if err == nil {
-		return driver.RowsAffected(rowCount), nil
+	log.Debug("Making unnamed statement")
+	stmt, err := makeStatement("", query, c)
+	if err != nil {
+		return nil, err
 	}
-	return nil, err
+
+	ni := stmt.NumInput()
+	if len(args) != ni {
+		return nil, fmt.Errorf("Number of arguments does not match required %d", ni)
+	}
+
+	// Now just execute it normally
+	return stmt.Exec(args)
+}
+
+// Query works like a normal prepared query but it uses the unnamed prepared
+// statement to save a message. We don't use the simple query protocol
+// here because it does not allow us to stream the rows
+func (c *PgDriverConn) Query(query string, args []driver.Value) (driver.Rows, error) {
+	log.Debug("Making unnamed statement")
+	stmt, err := makeStatement("", query, c)
+	if err != nil {
+		return nil, err
+	}
+
+	ni := stmt.NumInput()
+	if len(args) != ni {
+		return nil, fmt.Errorf("Number of arguments does not match required %d", ni)
+	}
+
+	// Now just execute it normally
+	return stmt.Query(args)
 }
 
 // Close closes the connection
