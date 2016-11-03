@@ -312,6 +312,41 @@ var _ = Describe("Changes API Tests", func() {
 		Expect(compareSequence(cl, 0, lastTestSequence)).Should(BeTrue())
 		lastChangeSequence = cl.Changes[0].GetSequence()
 	})
+
+	It("Cleanup", func() {
+		testServer.startCleanup(5 * time.Second)
+		defer func() {
+			testServer.cleaner.stop()
+			testServer.cleaner = nil
+		}()
+
+		lastTestSequence++
+		_, err := insertStmt.Exec(lastTestSequence, "clean")
+		Expect(err).Should(Succeed())
+		var newLast common.Sequence
+
+		// Should still be there for five seconds...
+		Eventually(func() int {
+			lc := getChanges(fmt.Sprintf(
+				"%s/changes?scope=clean", baseURL))
+			if len(lc.Changes) > 0 {
+				Expect(compareSequence(lc, 0, lastTestSequence)).Should(BeTrue())
+				newLast = lc.Changes[0].GetSequence()
+			}
+			return len(lc.Changes)
+		}, 2*time.Second).Should(Equal(1))
+
+		defer func() {
+			lastChangeSequence = newLast
+		}()
+
+		// And should be cleaned up within 10
+		Eventually(func() int {
+			lcc := getChanges(fmt.Sprintf(
+				"%s/changes?scope=clean", baseURL))
+			return len(lcc.Changes)
+		}, 10*time.Second, time.Second).Should(BeZero())
+	})
 })
 
 func getChanges(url string) *common.ChangeList {

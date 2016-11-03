@@ -52,6 +52,9 @@ func (s *server) handleChange(c *common.Change, firstChange common.Sequence) com
 	if changeSeq.Compare(firstChange) > 0 {
 		scope := getScope(c)
 		log.Debugf("Received change %d for scope %s", c.ChangeSequence, scope)
+		if c.Timestamp == 0 {
+			c.Timestamp = time.Now().Unix()
+		}
 		dataBuf := encodeChangeProto(c)
 		s.db.PutEntryAndMetadata(
 			scope, c.CommitSequence, c.CommitIndex, dataBuf,

@@ -27,6 +27,7 @@ type server struct {
 	db       *storage.DB
 	repl     *replication.Replicator
 	tracker  *changeTracker
+	cleaner  *cleaner
 	slotName string
 	dropSlot int32
 	stopChan chan chan<- bool
@@ -97,6 +98,9 @@ func startChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix strin
 }
 
 func (s *server) stop() {
+	if s.cleaner != nil {
+		s.cleaner.stop()
+	}
 	stopped := make(chan bool, 1)
 	s.stopChan <- stopped
 	<-stopped

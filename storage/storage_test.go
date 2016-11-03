@@ -94,6 +94,18 @@ var _ = Describe("Storage Main Test", func() {
 		Expect(err).Should(Succeed())
 	})
 
+	It("Read not found", func() {
+		buf, err := testDB.GetEntry("foo", 0, 0)
+		Expect(err).Should(Succeed())
+		Expect(buf).Should(BeNil())
+	})
+
+	It("Read not found multi", func() {
+		bufs, err := testDB.GetEntries("foo", 0, 0, 100, nil)
+		Expect(err).Should(Succeed())
+		Expect(bufs).Should(BeEmpty())
+	})
+
 	It("Reading sequences", func() {
 		val1 := []byte("Hello!")
 		val2 := []byte("World.")
@@ -147,6 +159,65 @@ var _ = Describe("Storage Main Test", func() {
 		// test that they work when we start in the middle
 		testGetSequences([]string{"c", "b", "a"}, 2, 0, 3,
 			[][]byte{val2, val1, val1})
+	})
+
+	It("Purge empty database", func() {
+		count, err := testDB.PurgeEntries(func(buf []byte) bool {
+			return true
+		})
+		Expect(err).Should(Succeed())
+		Expect(count).Should(BeZero())
+	})
+
+	It("Purge some entries", func() {
+		val1 := []byte("Hello")
+		val2 := []byte("Goodbye")
+
+		testDB.PutEntry("a", 0, 0, val1)
+		testDB.PutEntry("a", 1, 0, val2)
+		testDB.PutEntry("a", 1, 1, val1)
+		testDB.PutEntry("a", 2, 0, val2)
+		testDB.PutEntry("b", 3, 0, val1)
+		testDB.PutEntry("c", 4, 0, val1)
+		testDB.PutEntry("c", 4, 1, val2)
+		testDB.PutEntry("", 10, 0, val1)
+		testDB.PutEntry("", 11, 1, val2)
+
+		// Purge only one value
+		count, err := testDB.PurgeEntries(func(buf []byte) bool {
+			return bytes.Equal(buf, val2)
+		})
+		Expect(err).Should(Succeed())
+		Expect(count).Should(BeEquivalentTo(4))
+
+		// Verify that re-purge does nothing
+		count, err = testDB.PurgeEntries(func(buf []byte) bool {
+			return bytes.Equal(buf, val2)
+		})
+		Expect(err).Should(Succeed())
+		Expect(count).Should(BeZero())
+
+		found, err := testDB.GetEntry("a", 0, 0)
+		Expect(err).Should(Succeed())
+		Expect(bytes.Equal(found, val1)).Should(BeTrue())
+
+		found, err = testDB.GetEntry("a", 0, 1)
+		Expect(err).Should(Succeed())
+		Expect(found).Should(BeNil())
+
+		// Purge the rest of the entries
+		count, err = testDB.PurgeEntries(func(buf []byte) bool {
+			return true
+		})
+		Expect(err).Should(Succeed())
+		Expect(count).Should(BeEquivalentTo(5))
+
+		// Verify that everything is gone now
+		count, err = testDB.PurgeEntries(func(buf []byte) bool {
+			return true
+		})
+		Expect(err).Should(Succeed())
+		Expect(count).Should(BeZero())
 	})
 })
 

@@ -241,6 +241,9 @@ func (s *DB) GetEntry(scope string, lsn uint64, index uint32) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if valBuf == nil {
+		return nil, nil
+	}
 	defer C.leveldb_free(unsafe.Pointer(valBuf))
 	return ptrToBytes(valBuf, valLen), nil
 }
@@ -325,9 +328,43 @@ func (s *DB) GetMultiEntries(scopes []string, metadataKeys []string,
 	return final, metadata, nil
 }
 
+/*
+PurgeEntries deletes everything from the database for which "filter" returns
+true. It always returns the number of records that were actually deleted
+(which could be zero). If there is an error during the purge process,
+then a non-nil error will be returned. Be aware that this operation may
+take a long time, so it is important to run it in a separate goroutine.
+*/
+func (s *DB) PurgeEntries(filter func([]byte) bool) (uint64, error) {
+	it := C.leveldb_create_iterator(s.db, defaultReadOptions)
+	defer C.leveldb_iter_destroy(it)
+	C.leveldb_iter_seek_to_first(it)
+
+	var purgeCount uint64
+
+	for C.leveldb_iter_valid(it) != 0 {
+		var dataLen C.size_t
+		data := C.leveldb_iter_value(it, &dataLen)
+		dataBuf := ptrToBytes(unsafe.Pointer(data), dataLen)
+
+		if filter(dataBuf) {
+			var keyLen C.size_t
+			key := C.leveldb_iter_key(it, &keyLen)
+			err := s.deleteEntry(unsafe.Pointer(key), keyLen)
+			if err != nil {
+				return purgeCount, err
+			}
+			purgeCount++
+		}
+		C.leveldb_iter_next(it)
+	}
+	return purgeCount, nil
+}
+
 func (s *DB) readOneRange(scope string, startLSN uint64,
 	startIndex uint32, limit int, ro *C.leveldb_readoptions_t,
 	filter func([]byte) bool) (readResults, error) {
+
 	startKeyBuf, startKeyLen := indexToKey(IndexKey, scope, startLSN, startIndex)
 	defer freePtr(startKeyBuf)
 	endKeyBuf, endKeyLen := indexToKey(IndexKey, scope, math.MaxInt64, math.MaxInt32)

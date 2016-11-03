@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"sync/atomic"
+	"time"
 
 	"github.com/30x/goscaffold"
 	"github.com/Sirupsen/logrus"
@@ -27,7 +28,10 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
 	fmt.Fprintln(os.Stderr,
-		"changeserver -p 9000 -d ./data -u postgres://admin@localhost/postgres -s replication1")
+		"changeserver -p 9000 -d ./data -u postgres://admin:secret@localhost/postgres -s replication1 -m 24h")
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "  The value of the \"-m\" parameter for maximum age is a Golang")
+	fmt.Fprintln(os.Stderr, "\"duration\": use \"m\", \"s\", and \"h\" for minutes, seconds, and hours")
 }
 
 func runMain() int {
@@ -37,6 +41,7 @@ func runMain() int {
 	var pgURL string
 	var pgSlot string
 	var prefix string
+	var maxAgeParam string
 	var debug bool
 	var help bool
 
@@ -45,6 +50,7 @@ func runMain() int {
 	flag.StringVar(&dbDir, "d", "", "Location of database files")
 	flag.StringVar(&pgURL, "u", "", "URL to connect to Postgres")
 	flag.StringVar(&pgSlot, "s", "", "Slot name for Postgres logical replication")
+	flag.StringVar(&maxAgeParam, "m", "", "Purge records older than this age.")
 	flag.BoolVar(&debug, "D", false, "Turn on debugging")
 	flag.StringVar(&prefix, "P", "", "Optional prefix URL for all API calls")
 	flag.BoolVar(&help, "h", false, "Print help message")
@@ -60,6 +66,18 @@ func runMain() int {
 		return 3
 	}
 
+	var maxAge time.Duration
+	var err error
+	if maxAgeParam != "" {
+		maxAge, err = time.ParseDuration(maxAgeParam)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Invalid value for max age: \"%s\": %s\n",
+				maxAgeParam, err)
+			printUsage()
+			return 4
+		}
+	}
+
 	if debug {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
@@ -72,6 +90,10 @@ func runMain() int {
 		return 4
 	}
 	defer server.stop()
+
+	if maxAge > 0 {
+		server.startCleanup(maxAge)
+	}
 
 	scaf := goscaffold.CreateHTTPScaffold()
 	scaf.SetInsecurePort(port)
