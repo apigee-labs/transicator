@@ -170,6 +170,7 @@ func intToPtr(v int64) (unsafe.Pointer, C.size_t) {
 }
 
 func bytesToPtr(bb []byte) (unsafe.Pointer, C.size_t) {
+	// TODO Replace with C.CBytes. However this causes an error from "go vet"
 	bsLen := C.size_t(len(bb))
 	buf := C.malloc(bsLen)
 	copy((*[1 << 30]byte)(buf)[:], bb)
@@ -183,9 +184,7 @@ func intToBytes(v int64) []byte {
 }
 
 func ptrToBytes(ptr unsafe.Pointer, len C.size_t) []byte {
-	bb := make([]byte, int(len))
-	copy(bb[:], (*[1 << 30]byte)(unsafe.Pointer(ptr))[:])
-	return bb
+	return C.GoBytes(ptr, C.int(len))
 }
 
 func ptrToInt(ptr unsafe.Pointer, len C.size_t) int64 {
