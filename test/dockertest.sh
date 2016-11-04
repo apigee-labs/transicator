@@ -82,12 +82,12 @@ echo "*** changeserver logs ***"
 docker logs ${csName}
 echo "*** snapshotserver logs ***"
 docker logs ${ssName}
+echo "*** PG logs ***"
+docker logs ${dbName}
 
 # Clean up
 docker rm -f ${csName}
 docker rm -f ${ssName}
-
-#docker logs ${dbName}
 docker rm -f ${dbName}
 
 # --no-prune here will leave intermediate images around, which speeds

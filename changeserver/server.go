@@ -24,20 +24,21 @@ const (
 )
 
 type server struct {
-	db       *storage.DB
-	repl     *replication.Replicator
-	tracker  *changeTracker
-	cleaner  *cleaner
-	slotName string
-	dropSlot int32
-	stopChan chan chan<- bool
+	db          *storage.DB
+	repl        *replication.Replicator
+	tracker     *changeTracker
+	cleaner     *cleaner
+	firstChange common.Sequence
+	slotName    string
+	dropSlot    int32
+	stopChan    chan chan<- bool
 }
 
 type errMsg struct {
 	Error string `json:"error"`
 }
 
-func startChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix string) (*server, error) {
+func createChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix string) (*server, error) {
 	success := false
 	slotName := sanitizeSlotName(pgSlot)
 
@@ -70,21 +71,16 @@ func startChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix strin
 	if err != nil {
 		return nil, err
 	}
-	repl.Start()
-	defer func() {
-		if !success {
-			repl.Stop()
-		}
-	}()
 
 	success = true
 
 	s := &server{
-		db:       db,
-		repl:     repl,
-		slotName: slotName,
-		tracker:  createTracker(),
-		stopChan: make(chan chan<- bool, 1),
+		db:          db,
+		repl:        repl,
+		slotName:    slotName,
+		firstChange: firstChange,
+		tracker:     createTracker(),
+		stopChan:    make(chan chan<- bool, 1),
 	}
 
 	router := httprouter.New()
@@ -92,9 +88,12 @@ func startChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix strin
 
 	s.initChangesAPI(urlPrefix, router)
 	s.initDiagAPI(urlPrefix, router)
-	go s.runReplication(firstChange)
 
 	return s, nil
+}
+func (s *server) start() {
+	s.repl.Start()
+	go s.runReplication(s.firstChange)
 }
 
 func (s *server) stop() {

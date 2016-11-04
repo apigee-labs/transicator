@@ -84,11 +84,12 @@ func runMain() int {
 
 	mux := http.NewServeMux()
 
-	server, err := startChangeServer(mux, dbDir, pgURL, pgSlot, prefix)
+	server, err := createChangeServer(mux, dbDir, pgURL, pgSlot, prefix)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error starting server: %s\n", err)
 		return 4
 	}
+	server.start()
 	defer server.stop()
 
 	if maxAge > 0 {

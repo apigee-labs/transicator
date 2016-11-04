@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/30x/goscaffold"
+	"github.com/30x/transicator/common"
 	"github.com/30x/transicator/pgclient"
 	"github.com/30x/transicator/replication"
 	"github.com/Sirupsen/logrus"
@@ -63,8 +64,17 @@ var _ = BeforeSuite(func() {
 	// Start the server, which will be ready to respond to API calls
 	// and which will also start replication with the database
 	mux := http.NewServeMux()
-	testServer, err = startChangeServer(mux, testDataDir, dbURL, replicationSlot, "")
+	testServer, err = createChangeServer(mux, testDataDir, dbURL, replicationSlot, "")
 	Expect(err).Should(Succeed())
+
+	// For the tests, filter out changes for tables not part of these unit
+	// tests. Otherwise when we run many test suites in succession this suite
+	// fails due to the spurious changes.
+	testServer.repl.SetChangeFilter(func(c *common.Change) bool {
+		return c.Table == "public.changeserver_test"
+	})
+
+	testServer.start()
 
 	// Listen on an anonymous port
 	scaf := goscaffold.CreateHTTPScaffold()
