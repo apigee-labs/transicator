@@ -77,7 +77,7 @@ var _ = Describe("Replicator tests", func() {
 				"select slot_name from pg_replication_slots where slot_name = 'droptestslot'")
 			var sn string
 			return row.Scan(&sn)
-		}).Should(MatchError(sql.ErrNoRows))
+		}, 5*time.Second).Should(MatchError(sql.ErrNoRows))
 	})
 })
 

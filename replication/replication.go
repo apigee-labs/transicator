@@ -3,6 +3,7 @@ package replication
 import (
 	"database/sql"
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
 	"sync"
@@ -22,6 +23,9 @@ const (
 	// Make sure that we always reconnect eventually
 	maxReconnectDelay     = time.Minute
 	initialReconnectDelay = 100 * time.Millisecond
+	// Retry dropping the slot because sometimes it takes a few seconds
+	// for it to be actually dropper
+	dropRetries = 10
 )
 
 type replCommand int
@@ -299,6 +303,8 @@ receives commands from the client and passes them on as appropriate.
 func (r *Replicator) replLoop() {
 	var highLSN uint64
 	var connected bool
+	var stopping bool
+	var dropping bool
 	var connection *pgclient.PgConnection
 	var err error
 	connectDelay := initialReconnectDelay
@@ -357,6 +363,12 @@ func (r *Replicator) replLoop() {
 			// Read loop exiting due to connection failure.
 			case disconnectedCmd:
 				connected = false
+				if stopping {
+					// But it was on purpose...
+					r.finishStop(dropping, connection)
+					return
+				}
+
 				log.Warning("Disconnected from Postgres.")
 				r.setState(Connecting)
 				connection.Close()
@@ -379,24 +391,34 @@ func (r *Replicator) replLoop() {
 
 			// Client called stop with "delete" flag
 			case stopAndDropCmd:
-				r.stop(connected, true, connection)
-				return
+				if connected {
+					dropping = true
+					stopping = true
+					connection.Close()
+				} else {
+					r.finishStop(true, connection)
+					return
+				}
 
 			// Client called Stop
 			case stopCmd:
-				r.stop(connected, false, connection)
-				return
+				if connected {
+					stopping = true
+					log.Infof("Closing connection to Postgres")
+					connection.Close()
+				} else {
+					r.finishStop(false, connection)
+					return
+				}
 			}
 		}
 	}
 }
 
-func (r *Replicator) stop(connected, deleteSlot bool,
+func (r *Replicator) finishStop(
+	deleteSlot bool,
 	connection *pgclient.PgConnection) {
-	log.Debug("Stopping replication")
-	if connected {
-		connection.Close()
-	}
+
 	r.setState(Stopped)
 	log.Infof("Stopped replicating from slot \"%s\"", r.slotName)
 
@@ -415,6 +437,8 @@ func (r *Replicator) stop(connected, deleteSlot bool,
 dropSlot drops the replication slot using the replication protocol, in
 the unlikely event that we are not able to use any other protocol.
 This requires us to open a new connection in replication mode.
+Since we do this right after closing the connection, give it a few
+retries.
 */
 func (r *Replicator) dropSlot() error {
 	conn, err := pgclient.Connect(r.connectString)
@@ -423,8 +447,14 @@ func (r *Replicator) dropSlot() error {
 	}
 	defer conn.Close()
 
-	_, _, err = conn.SimpleQuery(fmt.Sprintf(
-		"DROP_REPLICATION_SLOT %s", r.slotName))
+	for try := 0; try < dropRetries; try++ {
+		_, err = conn.SimpleExec(fmt.Sprintf(
+			"DROP_REPLICATION_SLOT %s", r.slotName))
+		if err == nil {
+			return nil
+		}
+		time.Sleep(time.Second)
+	}
 	return err
 }
 
@@ -438,7 +468,9 @@ func (r *Replicator) readLoop(connection *pgclient.PgConnection) {
 	for {
 		m, err := connection.ReadMessage()
 		if err != nil {
-			log.Warningf("Error reading from server: %s", err)
+			if err != io.EOF {
+				log.Warningf("Error reading from server: %s", err)
+			}
 			errChange := &common.Change{
 				Error: err,
 			}
