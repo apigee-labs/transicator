@@ -55,7 +55,7 @@ func main() {
 		os.Exit(2)
 	}
 	if pgURL == "" {
-		fmt.Fprintln(os.Stderr, "-d, -u, and -s parameters are all required")
+		fmt.Fprintln(os.Stderr, "-d and -u parameters are required")
 		printUsage()
 		os.Exit(3)
 	}

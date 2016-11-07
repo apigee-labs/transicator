@@ -72,7 +72,7 @@ wish to replicate using transicator.
 First, start a Postgres server that has the Transicator plugin installed:
 
     docker run -p 5432:5432 --name pg -d \
-    -e POSTGRES_PASSWORD=changeme thirtyx/transicator-postgres
+    -e POSTGRES_PASSWORD=changeme apigeelabs/transicator-postgres
 
 Now you have a Postgres server running on port 5432 of whatever machine you
 have Docker on. For instance, assuming that Docker runs on localhost, verify
@@ -93,7 +93,7 @@ Looks great -- control-D to quit, BTW.
 
 Now, start a snapshot server running on port 9001:
 
-    docker run -d -p 9001:9001 thirtyx/transicator-snapshot \
+    docker run -d -p 9001:9001 apigeelabs/transicator-snapshot \
     -u postgres://postgres:changeme@localhost/postgres
 
 You can test quickly -- this API call should return "303 See Other":
@@ -102,7 +102,7 @@ You can test quickly -- this API call should return "303 See Other":
 
 Finally, start a change server running on port 9000:
 
-    docker run -d -p 9000:9000 thirtyx/transicator-changeserver \
+    docker run -d -p 9000:9000 apigeelabs/transicator-changeserver \
     -u postgres://postgres:changeme@localhost/postgres -s testslot
 
 This API call will tell you that the database is empty:
@@ -420,6 +420,40 @@ streaming way on the snapshot server, whereas JSON snapshots are not.
 So, there are advantages to using protobuf-format snapshots whenever
 possible.)
 
+# Command-line Options
+
+## Snapshot server
+
+* -p (required): The port to listen on using HTTP.
+* -mp (optional): The port to listen on for health checks. If not set, will use
+the standard port.
+* -u (required): The Postgres URL. See below for URL formats.
+* -D (optional): Turn on debug logging.
+
+For example, a standard snapshot server startup might look like this:
+
+    snapshotserver -p 9000 -u postgres://user:pass@host/database
+
+## Change server
+
+* -p (required): The port to listen on using HTTP.
+* -mp (optional): The port to listen on for health checks. If not set, will use
+the standard port.
+* -u (required): The Postgres URL. See below for URL formats.
+* -s (required): The name of the Postgres logical decoding slot. If multiple change
+servers connect to the same database, then it is important that this name
+be unique.
+* -m (optional): The lifetime for records in the database before they
+are automatically purged to save space. This parameter is in the same format
+as the Go language "time.ParseDuration" method, so values like "24h" and
+"60m" are valid.
+* -D (optional): Turn on debug logging.
+
+For example, a standard change server startup might look like this:
+
+    changeserver -p 9001 -u postgres://user:pass@host/database \
+    -s slot1 -m 72h
+
 # Postgres Usage Notes
 
 ## URLs
@@ -470,14 +504,14 @@ brew info postgresql
 ## Build and install PG logical replication output plugin
 
 ```
-    cd 30x/transicator/pgoutput/
+    cd apigee-labs/transicator/pgoutput/
     make install
 ```
 
 ## Build changeserver and snapshotserver (non Docker):
 
 ```
-    cd 30x/transicator/
+    cd apigee-labs/transicator/
     make
 ```
 
@@ -501,14 +535,14 @@ install anything else in order to run these tests.
 ## Build Docker Containers for Changeserver, snapshotserver and postgres
 
 ```
-    cd 30x/transicator/
+    cd apigee-labs/transicator/
     make docker
 ```
 Optionally, you can also build docker inside the respective modules.
 For example:
 
 ```
-    cd 30x/transicator/changeserver
+    cd apigee-labs/transicator/changeserver
     make docker
 ```
 
@@ -527,9 +561,9 @@ or the database will grow its transaction log forever and not clean it
 up, and eventually fail.
 
 ```
-    cd  30x/transicator/changeserver
+    cd apigee-labs/transicator/changeserver
     docker run --rm -it changeserver -u POSTGRES_URL -s SLOT_NAME
-    cd 30x/transicator/snapshotserver
+    cd apigee-labs/transicator/snapshotserver
     docker run --rm -it snapshotserver -u POSTGRES_URL
 ```
 
