@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/30x/goscaffold"
-	"github.com/30x/transicator/pgclient"
+	"github.com/apigee-labs/transicator/pgclient"
 	log "github.com/Sirupsen/logrus"
 	"github.com/julienschmidt/httprouter"
 )

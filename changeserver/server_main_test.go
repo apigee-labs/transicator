@@ -10,9 +10,9 @@ import (
 	"testing"
 
 	"github.com/30x/goscaffold"
-	"github.com/30x/transicator/common"
-	"github.com/30x/transicator/pgclient"
-	"github.com/30x/transicator/replication"
+	"github.com/apigee-labs/transicator/common"
+	"github.com/apigee-labs/transicator/pgclient"
+	"github.com/apigee-labs/transicator/replication"
 	"github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"

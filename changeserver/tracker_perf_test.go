@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/30x/transicator/common"
+	"github.com/apigee-labs/transicator/common"
 )
 
 func BenchmarkTracker1(b *testing.B) {
