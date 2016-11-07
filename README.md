@@ -1,13 +1,24 @@
 # Transicator
 
-This is suite of programs, plus a Postgres plugin, that allows us to
-use the Postgres "logical decoding" feature to distribute a consistent
-set of changes from Postgres to many consumers.
+![Transicator Logo](https://lh3.googleusercontent.com/P--5HGE1KBp25Vq4ZU4I6xAep73oQlsk_by3KcoDV0JH5jXHVxQem4lwqr4rR8RxOwOVFDyYhmnfsX0=w1449-h1339)
+
+Transicator is a transaction replicator.
+
+It builds on the "logical decoding" capability of Postgres to allow a large
+number of occassionally-connected clients to consistently consume
+changes made to a Postgres database.
+
+For example, at Apigee, we are using Transicator to push configuration data
+to a large number of usually-but-not-always-connected infrastructure servers.
+Transicator allows us to "program" this network of servers using standard
+RDBMS technology on the "top," and then have the changes be consumed by a
+large number of clients using an HTTP-based API.
+
+In order to consume changes, all a client needs is to be able to make an HTTPs
+request to the Transicator servers. This makes it possible to create clients
+for Transicator that run in a variety of constrained environments.
 
 # Overview
-
-Transicator is designed to distribute changes to a Postgres database to a large
-number of clients via an API.
 
 There are three components to Transicator:
 
