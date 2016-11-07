@@ -21,6 +21,8 @@ const (
 	protocolVersion = (3 << 16)
 	// Magic number needed to initate SSL stuff
 	sslMagicNumber = 80877103
+	// Magic number needed for a cancel operation
+	cancelMagicNumber = 80877102
 )
 
 /*
@@ -28,7 +30,11 @@ A PgConnection represents a connection to the database.
 */
 type PgConnection struct {
 	conn        net.Conn
+	host        string
+	port        int
 	readTimeout time.Duration
+	pid         int32
+	key         int32
 }
 
 /*
@@ -52,6 +58,8 @@ func Connect(connect string) (*PgConnection, error) {
 	}
 	c := &PgConnection{
 		conn: conn,
+		host: ci.host,
+		port: ci.port,
 	}
 
 	success := false
@@ -213,7 +221,10 @@ func (c *PgConnection) finishConnect(ci *connectInfo) error {
 
 		switch im.Type() {
 		case BackEndKeyData:
-			// Back end key data -- ignore
+			err = c.parseKeyData(im)
+			if err != nil {
+				return err
+			}
 		case ReadyForQuery:
 			// Ready for query!
 			return nil
@@ -223,6 +234,21 @@ func (c *PgConnection) finishConnect(ci *connectInfo) error {
 			return fmt.Errorf("Invalid database response %v", im.Type())
 		}
 	}
+}
+
+func (c *PgConnection) parseKeyData(im *InputMessage) error {
+	pid, err := im.ReadInt32()
+	if err != nil {
+		return err
+	}
+	key, err := im.ReadInt32()
+	if err != nil {
+		return err
+	}
+	log.Debugf("Connected to PID %d", pid)
+	c.pid = pid
+	c.key = key
+	return nil
 }
 
 /*
@@ -261,26 +287,50 @@ func (c *PgConnection) sendFlush() error {
 }
 
 /*
+readWithTimeout works by setting a deadline on the read I/O and then by
+sending a cancel for our postgres connection if it is exceeded.
+*/
+func (c *PgConnection) readWithTimeout(buf []byte) error {
+	useTimeout := true
+	for {
+		if useTimeout && c.readTimeout > 0 {
+			log.Debugf("Setting deadline %s in the future", c.readTimeout)
+			c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
+		}
+
+		_, err := io.ReadFull(c.conn, buf)
+		c.conn.SetReadDeadline(time.Time{})
+
+		switch err.(type) {
+		case nil:
+			return nil
+		case net.Error:
+			if err.(net.Error).Timeout() {
+				cancelErr := c.sendCancel()
+				if cancelErr != nil {
+					log.Debugf("Error sending cancel: %s", cancelErr)
+				}
+				useTimeout = false
+			} else {
+				log.Debugf("Read error: %s", err)
+				return err
+			}
+		default:
+			log.Debugf("Read error: %s", err)
+			return err
+		}
+	}
+}
+
+/*
 ReadMessage reads a single message from the socket, and decodes its type byte
 and length.
 */
 func (c *PgConnection) ReadMessage() (*InputMessage, error) {
 	hdr := make([]byte, 5)
-
-	var err error
-	for {
-		if c.readTimeout > 0 {
-			log.Debugf("Setting deadline %s in the future", c.readTimeout)
-			c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
-		}
-
-		_, err = io.ReadFull(c.conn, hdr)
-		if err != nil {
-			log.Debugf("Read error: %s", err)
-			return nil, err
-		}
-		c.conn.SetReadDeadline(time.Time{})
-		break
+	err := c.readWithTimeout(hdr)
+	if err != nil {
+		return nil, err
 	}
 
 	hdrBuf := bytes.NewBuffer(hdr)
@@ -338,6 +388,29 @@ func (c *PgConnection) readStandardMessage() (*InputMessage, error) {
 			return im, nil
 		}
 	}
+}
+
+/*
+sendCancel opens a new connection and sends a cancel request for the key
+and secret associated with this connection. As per the Postgres protocol,
+a "nil" error return does not necessarily mean that the request will
+be cancelled.
+*/
+func (c *PgConnection) sendCancel() error {
+	log.Debugf("Sending cancel to PID %d", c.pid)
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", c.host, c.port))
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	cancel := NewStartupMessage()
+	cancel.WriteInt32(cancelMagicNumber)
+	cancel.WriteInt32(c.pid)
+	cancel.WriteInt32(c.key)
+
+	_, err = conn.Write(cancel.Encode())
+	return err
 }
 
 /*

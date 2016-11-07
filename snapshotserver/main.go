@@ -6,15 +6,19 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/30x/goscaffold"
-	"github.com/apigee-labs/transicator/pgclient"
 	log "github.com/Sirupsen/logrus"
+	"github.com/apigee-labs/transicator/pgclient"
 	"github.com/julienschmidt/httprouter"
 )
 
 const (
+	// Default listen port
 	defaultPort = 9090
+	// Default timeout for individual Postgres transactions
+	defaultPGTimeout = 30 * time.Second
 )
 
 func printUsage() {
@@ -76,6 +80,7 @@ func main() {
 	pgdriver := db.Driver().(*pgclient.PgDriver)
 	pgdriver.SetIsolationLevel("repeatable read")
 	pgdriver.SetExtendedColumnNames(true)
+	pgdriver.SetReadTimeout(defaultPGTimeout)
 	defer db.Close()
 
 	router := httprouter.New()
