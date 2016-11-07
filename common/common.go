@@ -78,7 +78,7 @@ type Change struct {
 	// The Postgres Transaction ID when this change committed. This may be used
 	// to find a CommitSequence from a particular snapshot. (TXIDs are 32
 	// bits inside Postgres but we may be able to expand this in the future.)
-	TransactionID uint32 `json:"txid"`
+	TransactionID uint64 `json:"txid"`
 	// For an insert operation, the columns that are being inserted. For an update,
 	// the new value of the columns
 	NewRow Row `json:"newRow,omitempty"`

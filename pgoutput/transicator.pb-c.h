@@ -84,7 +84,7 @@ struct  _Common__ChangePb
   protobuf_c_boolean has_commitindex;
   uint32_t commitindex;
   protobuf_c_boolean has_transactionid;
-  uint32_t transactionid;
+  uint64_t transactionid;
   size_t n_newcolumns;
   Common__ColumnPb **newcolumns;
   size_t n_oldcolumns;
