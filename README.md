@@ -1,6 +1,6 @@
 # Transicator
 
-![Transicator Logo](https://lh3.googleusercontent.com/P--5HGE1KBp25Vq4ZU4I6xAep73oQlsk_by3KcoDV0JH5jXHVxQem4lwqr4rR8RxOwOVFDyYhmnfsX0=w1449-h1339)
+![Transicator Logo](./docs/transicator-smaller.jpg)
 
 Transicator is a transaction replicator.
 
