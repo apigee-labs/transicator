@@ -37,10 +37,10 @@ docker run -i \
   -e PGPASSWORD=${TEST_PG_PW} \
   -e DBHOST=postgres \
   ${testName} \
-  /go/src/github.com/30x/transicator/test/container_test_script.sh
+  /go/src/github.com/apigee-labs/transicator/test/container_test_script.sh
 
 # Copy JUnit test files and rm container
-docker cp ${testName}:/go/src/github.com/30x/transicator/test-reports/. ./docker-test-reports
+docker cp ${testName}:/go/src/github.com/apigee-labs/transicator/test-reports/. ./docker-test-reports
 docker rm ${testName}
 
 # Build changeserver and snapshot server images
@@ -73,9 +73,9 @@ docker run -i \
   -e CHANGE_PORT=9000 \
   -e SNAPSHOT_PORT=9001 \
   ${testName} \
-  /go/src/github.com/30x/transicator/test/combined_test_script.sh
+  /go/src/github.com/apigee-labs/transicator/test/combined_test_script.sh
 
-docker cp ${testName}:/go/src/github.com/30x/transicator/test-reports/. ./docker-test-reports
+docker cp ${testName}:/go/src/github.com/apigee-labs/transicator/test-reports/. ./docker-test-reports
 docker rm ${testName}
 
 echo "*** changeserver logs ***"
