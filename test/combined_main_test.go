@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/30x/transicator/pgclient"
+	"github.com/apigee-labs/transicator/pgclient"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"

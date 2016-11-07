@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/30x/goscaffold"
-	"github.com/30x/transicator/common"
-	"github.com/30x/transicator/replication"
+	"github.com/apigee-labs/transicator/common"
+	"github.com/apigee-labs/transicator/replication"
 	log "github.com/Sirupsen/logrus"
 	"github.com/julienschmidt/httprouter"
 )
