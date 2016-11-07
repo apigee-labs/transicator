@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	debugTests = false
+	debugTests = true
 )
 
 var dbURL string

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -26,7 +27,8 @@ const (
 A PgConnection represents a connection to the database.
 */
 type PgConnection struct {
-	conn net.Conn
+	conn        net.Conn
+	readTimeout time.Duration
 }
 
 /*
@@ -84,6 +86,10 @@ func Connect(connect string) (*PgConnection, error) {
 		success = true
 	}
 	return c, err
+}
+
+func (c *PgConnection) setReadTimeout(t time.Duration) {
+	c.readTimeout = t
 }
 
 func (c *PgConnection) startSSL(ci *connectInfo) error {
@@ -260,9 +266,21 @@ and length.
 */
 func (c *PgConnection) ReadMessage() (*InputMessage, error) {
 	hdr := make([]byte, 5)
-	_, err := io.ReadFull(c.conn, hdr)
-	if err != nil {
-		return nil, err
+
+	var err error
+	for {
+		if c.readTimeout > 0 {
+			log.Debugf("Setting deadline %s in the future", c.readTimeout)
+			c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
+		}
+
+		_, err = io.ReadFull(c.conn, hdr)
+		if err != nil {
+			log.Debugf("Read error: %s", err)
+			return nil, err
+		}
+		c.conn.SetReadDeadline(time.Time{})
+		break
 	}
 
 	hdrBuf := bytes.NewBuffer(hdr)

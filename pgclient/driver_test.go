@@ -3,6 +3,7 @@ package pgclient
 import (
 	"database/sql"
 	"strconv"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -356,5 +357,45 @@ var _ = Describe("Driver tests", func() {
 		Expect(cols[0]).Should(Equal("id:23"))
 		Expect(cols[1]).Should(Equal("string:1043"))
 		Expect(cols[2]).Should(Equal("int:20"))
+	})
+
+	It("Query Timeout", func() {
+		if dbURL == "" {
+			return
+		}
+
+		tdb, err := sql.Open("transicator", dbURL)
+		Expect(err).Should(Succeed())
+		defer tdb.Close()
+		tdb.Driver().(*PgDriver).SetReadTimeout(time.Second)
+
+		_, err = tdb.Exec(`
+			create table block_test(id text primary key)
+		`)
+		Expect(err).Should(Succeed())
+
+		// Start a transaction that will get a shared lock on the table
+		tx, err := tdb.Begin()
+		Expect(err).Should(Succeed())
+		_, err = tx.Exec("insert into block_test values('one')")
+		Expect(err).Should(Succeed())
+
+		// Try to drop the table. Expect this to fail with a timeout error
+		doneChan := make(chan error)
+
+		go func() {
+			_, gerr := tdb.Exec("drop table block_test")
+			doneChan <- gerr
+		}()
+
+		// We expect that thing to block with an error.
+		// TODO verify what the error actually is
+		Eventually(doneChan, 5*time.Second).Should(Receive())
+
+		// Commit the transaction and now lock should be droppped
+		err = tx.Commit()
+		Expect(err).Should(Succeed())
+		_, err = tdb.Exec("drop table block_test")
+		Expect(err).Should(Succeed())
 	})
 })

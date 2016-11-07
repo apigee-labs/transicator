@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -33,6 +34,7 @@ func RegisterDriver() bool {
 type PgDriver struct {
 	isolationLevel      string
 	extendedColumnNames bool
+	readTimeout         time.Duration
 }
 
 // Open takes a Postgres URL as used elsewhere in this package
@@ -47,7 +49,11 @@ func (d *PgDriver) Open(url string) (driver.Conn, error) {
 		if err != nil {
 			return nil, err
 		}
+		// TODO call AddrError.Timeout() to see if the error is a timeout
+		// then cancel and go back and retry the read.
+		// We should get a "cancelled" error!
 	}
+	pgc.setReadTimeout(d.readTimeout)
 	return &PgDriverConn{
 		driver: d,
 		conn:   pgc,
@@ -71,6 +77,15 @@ is the integer postgres type ID.
 */
 func (d *PgDriver) SetExtendedColumnNames(extended bool) {
 	d.extendedColumnNames = extended
+}
+
+/*
+SetReadTimeout enables a timeout on all "read" operations from the database.
+This effectively bounds the amount of time that the database can spend
+on any single SQL operation.
+*/
+func (d *PgDriver) SetReadTimeout(t time.Duration) {
+	d.readTimeout = t
 }
 
 // PgDriverConn implements Conn
