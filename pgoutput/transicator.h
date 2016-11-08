@@ -21,4 +21,6 @@ extern void transicatorOutputChangeProto(
   ReorderBufferChange *change,
   DecodingState* state);
 
+extern uint64 convert_xid(TransactionId xid);
+
 #endif

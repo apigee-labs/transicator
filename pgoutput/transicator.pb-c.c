@@ -518,7 +518,7 @@ const ProtobufCMessageDescriptor common__column_pb__descriptor =
   (ProtobufCMessageInit) common__column_pb__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor common__change_pb__field_descriptors[9] =
+static const ProtobufCFieldDescriptor common__change_pb__field_descriptors[11] =
 {
   {
     "operation",
@@ -596,7 +596,7 @@ static const ProtobufCFieldDescriptor common__change_pb__field_descriptors[9] =
     "transactionID",
     7,
     PROTOBUF_C_LABEL_OPTIONAL,
-    PROTOBUF_C_TYPE_UINT64,
+    PROTOBUF_C_TYPE_UINT32,
     offsetof(Common__ChangePb, has_transactionid),
     offsetof(Common__ChangePb, transactionid),
     NULL,
@@ -628,6 +628,30 @@ static const ProtobufCFieldDescriptor common__change_pb__field_descriptors[9] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "timestamp",
+    10,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_INT64,
+    offsetof(Common__ChangePb, has_timestamp),
+    offsetof(Common__ChangePb, timestamp),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "transactionIDEpoch",
+    11,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_UINT64,
+    offsetof(Common__ChangePb, has_transactionidepoch),
+    offsetof(Common__ChangePb, transactionidepoch),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned common__change_pb__field_indices_by_name[] = {
   4,   /* field[4] = changeSequence */
@@ -638,12 +662,14 @@ static const unsigned common__change_pb__field_indices_by_name[] = {
   0,   /* field[0] = operation */
   2,   /* field[2] = sequence */
   1,   /* field[1] = table */
+  9,   /* field[9] = timestamp */
   6,   /* field[6] = transactionID */
+  10,   /* field[10] = transactionIDEpoch */
 };
 static const ProtobufCIntRange common__change_pb__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 9 }
+  { 0, 11 }
 };
 const ProtobufCMessageDescriptor common__change_pb__descriptor =
 {
@@ -653,7 +679,7 @@ const ProtobufCMessageDescriptor common__change_pb__descriptor =
   "Common__ChangePb",
   "common",
   sizeof(Common__ChangePb),
-  9,
+  11,
   common__change_pb__field_descriptors,
   common__change_pb__field_indices_by_name,
   1,  common__change_pb__number_ranges,

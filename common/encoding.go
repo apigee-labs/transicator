@@ -286,8 +286,13 @@ func unconvertChangeProto(cp *ChangePb) *Change {
 		CommitSequence: cp.GetCommitSequence(),
 		CommitIndex:    cp.GetCommitIndex(),
 		ChangeSequence: cp.GetChangeSequence(),
-		TransactionID:  cp.GetTransactionID(),
 		Timestamp:      cp.GetTimestamp(),
+	}
+
+	if cp.GetTransactionIDEpoch() > 0 {
+		c.TransactionID = cp.GetTransactionIDEpoch()
+	} else {
+		c.TransactionID = uint64(cp.GetTransactionID())
 	}
 
 	if len(cp.GetNewColumns()) > 0 {
@@ -401,7 +406,7 @@ func (c *Change) convertProto() *ChangePb {
 		cp.CommitIndex = proto.Uint32(c.CommitIndex)
 	}
 	if c.TransactionID != 0 {
-		cp.TransactionID = proto.Uint64(c.TransactionID)
+		cp.TransactionIDEpoch = proto.Uint64(c.TransactionID)
 	}
 	if c.Timestamp != 0 {
 		cp.Timestamp = proto.Int64(c.Timestamp)

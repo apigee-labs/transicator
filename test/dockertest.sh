@@ -82,8 +82,9 @@ echo "*** changeserver logs ***"
 docker logs ${csName}
 echo "*** snapshotserver logs ***"
 docker logs ${ssName}
-echo "*** PG logs ***"
-docker logs ${dbName}
+# Uncomment this to see a lot of logs...
+#echo "*** PG logs ***"
+#docker logs ${dbName}
 
 # Clean up
 docker rm -f ${csName}

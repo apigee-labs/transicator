@@ -185,7 +185,7 @@ func filterChanges(changes []*common.Change, snap string) []int {
 	Expect(err).Should(Succeed())
 
 	for i, change := range changes {
-		if !ss.Contains(uint32(change.TransactionID)) {
+		if !ss.Contains(change.TransactionID) {
 			ret = append(ret, i)
 		}
 	}

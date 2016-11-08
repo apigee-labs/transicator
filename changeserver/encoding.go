@@ -11,7 +11,7 @@ import (
 
 const (
 	minMsgVersion byte = 1
-	msgVersion    byte = 2
+	msgVersion    byte = 3
 )
 
 var networkByteOrder = binary.BigEndian
@@ -46,13 +46,16 @@ func decodeChangeProto(rawBuf []byte) (*common.Change, error) {
 	}
 	// Skip transaction ID and maybe timestamp
 	buf.Next(4)
+	if version > 2 {
+		buf.Next(4)
+	}
 	if version > 1 {
 		buf.Next(8)
 	}
 	return common.UnmarshalChangeProto(buf.Bytes())
 }
 
-func decodeChangeTXID(rawBuf []byte) (uint32, error) {
+func decodeChangeTXID(rawBuf []byte) (uint64, error) {
 	if len(rawBuf) < 5 {
 		return 0, errors.New("Input record too short")
 	}
@@ -64,9 +67,16 @@ func decodeChangeTXID(rawBuf []byte) (uint32, error) {
 	if version < minMsgVersion || version > msgVersion {
 		return 0, fmt.Errorf("Invalid message version %d", version)
 	}
+
+	if version > 2 {
+		var txid uint64
+		err = binary.Read(buf, networkByteOrder, &txid)
+		return txid, err
+	}
+
 	var txid uint32
 	err = binary.Read(buf, networkByteOrder, &txid)
-	return txid, err
+	return uint64(txid), err
 }
 
 func decodeChangeTimestamp(rawBuf []byte) (int64, error) {
@@ -87,6 +97,10 @@ func decodeChangeTimestamp(rawBuf []byte) (int64, error) {
 
 	// Skip txid
 	buf.Next(4)
+	if version > 2 {
+		buf.Next(4)
+	}
+
 	var ts int64
 	err = binary.Read(buf, networkByteOrder, &ts)
 	return ts, err

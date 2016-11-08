@@ -148,7 +148,7 @@ void transicatorOutputChangeString(
   appendStringInfo(ctx->out, ",\"changeSequence\":%lu", change->lsn);
   appendStringInfo(ctx->out, ",\"commitSequence\":%lu", txn->final_lsn);
   appendStringInfo(ctx->out, ",\"commitIndex\":%u", state->index);
-  appendStringInfo(ctx->out, ",\"txid\":%u", txn->xid);
+  appendStringInfo(ctx->out, ",\"txid\":%lu", convert_xid(txn->xid));
 
   state->index++;
 

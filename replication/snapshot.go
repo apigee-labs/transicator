@@ -14,9 +14,9 @@ Each represents a transaction id, which is 32 bits and may roll over in the
 lifetime of the database.
 */
 type Snapshot struct {
-	Xmin uint32
-	Xmax uint32
-	Xips map[uint32]bool
+	Xmin uint64
+	Xmax uint64
+	Xips map[uint64]bool
 }
 
 var snapRe = regexp.MustCompile("^([0-9]*):([0-9]*):(([0-9],?)+)?$")
@@ -31,35 +31,35 @@ func MakeSnapshot(snap string) (*Snapshot, error) {
 		return nil, errors.New("Invalid snapshot")
 	}
 
-	xmin, err := strconv.ParseUint(pre[1], 10, 32)
+	xmin, err := strconv.ParseUint(pre[1], 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	xmax, err := strconv.ParseUint(pre[2], 10, 32)
+	xmax, err := strconv.ParseUint(pre[2], 10, 64)
 	if err != nil {
 		return nil, err
 	}
 
 	xipss := strings.Split(pre[3], ",")
-	var xips map[uint32]bool
+	var xips map[uint64]bool
 
 	for _, s := range xipss {
 		if s == "" {
 			continue
 		}
 		if xips == nil {
-			xips = make(map[uint32]bool)
+			xips = make(map[uint64]bool)
 		}
-		ip, err := strconv.ParseUint(s, 10, 32)
+		ip, err := strconv.ParseUint(s, 10, 64)
 		if err != nil {
 			return nil, err
 		}
-		xips[uint32(ip)] = true
+		xips[ip] = true
 	}
 
 	return &Snapshot{
-		Xmin: uint32(xmin),
-		Xmax: uint32(xmax),
+		Xmin: xmin,
+		Xmax: xmax,
 		Xips: xips,
 	}, nil
 }
@@ -71,7 +71,7 @@ the range xmin:xmax and or they were not in the "xips" list.
 If this returns true, then for a given snapshot ID and TXID, the change
 would be visible at the time that the snapshot was made.
 */
-func (s *Snapshot) Contains(txid uint32) bool {
+func (s *Snapshot) Contains(txid uint64) bool {
 	if txid < s.Xmin {
 		return true
 	}

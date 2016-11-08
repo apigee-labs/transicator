@@ -126,3 +126,32 @@ void _PG_output_plugin_init(OutputPluginCallbacks *cb) {
   cb->change_cb = outputChange;
   cb->filter_by_origin_cb = outputFilter;
 }
+
+ /*
+  * do a TransactionId -> txid conversion for an XID near the given epoch
+  * NOTE: This is heavily borrowed from http://doxygen.postgresql.org/txid_8c.html#ab7c28f6665db1d30fcaf26c93d74a3aa
+  */
+ uint64 convert_xid(TransactionId xid)
+ {
+     uint64      epoch;
+     uint32      current_epoch;
+     TransactionId current_xid;
+
+
+     /* return special xid's as-is */
+     if (!TransactionIdIsNormal(xid))
+         return (uint64) xid;
+
+     GetNextXidAndEpoch(&current_xid, &current_epoch);
+
+     /* xid can be on either side when near wrap-around */
+     epoch = (uint64)current_epoch;
+     if (xid > current_xid &&
+         TransactionIdPrecedes(xid, current_xid))
+         epoch--;
+     else if (xid < current_xid &&
+              TransactionIdFollows(xid, current_xid))
+         epoch++;
+
+     return (epoch << 32) | xid;
+ }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/apigee-labs/transicator/common"
+	"github.com/golang/protobuf/proto"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -45,32 +46,36 @@ var _ = Describe("Miscellaneous tests", func() {
 	})
 
 	It("Decode old record", func() {
-		c := &common.Change{
-			Operation:     common.Insert,
-			Table:         "foo",
-			TransactionID: 1234,
-			Timestamp:     time.Now().Unix(),
+		ts := time.Now().Unix()
+		cp := &common.ChangePb{
+			Operation:     proto.Int32(int32(common.Insert)),
+			Table:         proto.String("foo"),
+			Timestamp:     proto.Int64(ts),
+			TransactionID: proto.Uint32(1234),
 		}
 
 		// manually construct an old-version record
+		var smallTID uint32 = 1234
 		buf := &bytes.Buffer{}
 		buf.WriteByte(1)
-		binary.Write(buf, networkByteOrder, &c.TransactionID)
-		buf.Write(c.MarshalProto())
+		binary.Write(buf, networkByteOrder, &smallTID)
+		marsh, err := proto.Marshal(cp)
+		Expect(err).Should(Succeed())
+		buf.Write(marsh)
 		enc := buf.Bytes()
 
 		ca, err := decodeChangeProto(enc)
 		Expect(err).Should(Succeed())
-		Expect(ca.Operation).Should(Equal(c.Operation))
-		Expect(ca.Table).Should(Equal(c.Table))
-		Expect(ca.TransactionID).Should(Equal(c.TransactionID))
-		Expect(ca.Timestamp).Should(Equal(c.Timestamp))
+		Expect(ca.Operation).Should(BeEquivalentTo(common.Insert))
+		Expect(ca.Table).Should(Equal("foo"))
+		Expect(ca.TransactionID).Should(BeEquivalentTo(smallTID))
+		Expect(ca.Timestamp).Should(Equal(ts))
 
 		txid, err := decodeChangeTXID(enc)
 		Expect(err).Should(Succeed())
-		Expect(txid).Should(Equal(c.TransactionID))
+		Expect(txid).Should(BeEquivalentTo(smallTID))
 
-		ts, err := decodeChangeTimestamp(enc)
+		ts, err = decodeChangeTimestamp(enc)
 		Expect(err).Should(Succeed())
 		Expect(ts).Should(BeZero())
 	})
