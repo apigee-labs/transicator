@@ -24,7 +24,7 @@ message ChangePb {
   optional uint64 commitSequence = 4;
   optional uint64 changeSequence = 5;
   optional uint32 commitIndex = 6;
-  optional uint32 transactionID = 7;
+  optional uint64 transactionID = 7;
   repeated ColumnPb newColumns = 8;
   repeated ColumnPb oldColumns = 9;
   optional int64 timestamp = 10;

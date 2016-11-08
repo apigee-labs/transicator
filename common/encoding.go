@@ -401,7 +401,7 @@ func (c *Change) convertProto() *ChangePb {
 		cp.CommitIndex = proto.Uint32(c.CommitIndex)
 	}
 	if c.TransactionID != 0 {
-		cp.TransactionID = proto.Uint32(c.TransactionID)
+		cp.TransactionID = proto.Uint64(c.TransactionID)
 	}
 	if c.Timestamp != 0 {
 		cp.Timestamp = proto.Int64(c.Timestamp)

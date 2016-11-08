@@ -1,12 +1,43 @@
 #include <postgres.h>
 #include <catalog/pg_type.h>
 #include <access/xlogdefs.h>
+#include <access/xlog.h>
 #include <utils/builtins.h>
 #include <utils/lsyscache.h>
 #include <replication/output_plugin.h>
 #include <replication/logical.h>
 #include <transicator.h>
 #include <transicator.pb-c.h>
+
+
+ /*
+  * do a TransactionId -> txid conversion for an XID near the given epoch
+  * NOTE: This is heavily borrowed from http://doxygen.postgresql.org/txid_8c.html#ab7c28f6665db1d30fcaf26c93d74a3aa
+  */
+static uint64 convert_xid(TransactionId xid)
+ {
+     uint64      epoch;
+     uint32      current_epoch;
+     TransactionId current_xid;
+
+
+     /* return special xid's as-is */
+     if (!TransactionIdIsNormal(xid))
+         return (uint64) xid;
+
+     GetNextXidAndEpoch(&current_xid, &current_epoch);
+
+     /* xid can be on either side when near wrap-around */
+     epoch = (uint64)current_epoch;
+     if (xid > current_xid &&
+         TransactionIdPrecedes(xid, current_xid))
+         epoch--;
+     else if (xid < current_xid &&
+              TransactionIdFollows(xid, current_xid))
+         epoch++;
+
+     return (epoch << 32) | xid;
+ }
 
 static size_t countColumns(TupleDesc tupdesc) {
   int natt;
@@ -158,7 +189,7 @@ void transicatorOutputChangeProto(
   pb.has_commitsequence = 1;
   pb.commitindex = state->index;
   pb.has_commitindex = 1;
-  pb.transactionid = txn->xid;
+  pb.transactionid = convert_xid(txn->xid);
   pb.has_transactionid = 1;
 
   state->index++;

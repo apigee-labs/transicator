@@ -596,7 +596,7 @@ static const ProtobufCFieldDescriptor common__change_pb__field_descriptors[9] =
     "transactionID",
     7,
     PROTOBUF_C_LABEL_OPTIONAL,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_UINT64,
     offsetof(Common__ChangePb, has_transactionid),
     offsetof(Common__ChangePb, transactionid),
     NULL,

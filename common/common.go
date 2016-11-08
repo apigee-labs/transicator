@@ -77,8 +77,9 @@ type Change struct {
 	CommitIndex uint32 `json:"commitIndex"`
 	// The Postgres Transaction ID when this change committed. This may be used
 	// to find a CommitSequence from a particular snapshot. (TXIDs are 32
-	// bits inside Postgres but we may be able to expand this in the future.)
-	TransactionID uint32 `json:"txid"`
+	// bits inside Postgres. We put the Postgres "epoch" in the high 32 bits
+	// so that we deliver a 64-bit value that will not wrap around.)
+	TransactionID uint64 `json:"txid"`
 	// The time when the record was inserted to the database, in seconds since
 	// the Unix epoch.
 	Timestamp int64 `json:"timestamp,omitempty"`
