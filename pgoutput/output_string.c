@@ -134,7 +134,6 @@ void transicatorOutputChangeString(
   class_form = RelationGetForm(relation);
   tupdesc = RelationGetDescr(relation);
 
-  OutputPluginPrepareWrite(ctx, true);
   appendStringInfoChar(ctx->out, '{');
 
   /* TODO will this produce double-quoted table names? */
