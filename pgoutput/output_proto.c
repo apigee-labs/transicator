@@ -70,6 +70,7 @@ static void tuple_to_proto(
 {
   int	natt;
   int cp = 0;
+  int colnum = 0;
 
   for (natt = 0; natt < tupdesc->natts; natt++)
 	{
@@ -87,7 +88,7 @@ static void tuple_to_proto(
 
     col = (Common__ColumnPb*)palloc(sizeof(Common__ColumnPb));
     common__column_pb__init(col);
-    cols[natt] = col;
+    cols[colnum++] = col;
 
     typ =  attr->atttypid;
     col->name = NameStr(attr->attname);
@@ -211,5 +212,4 @@ void transicatorOutputChangeProto(
 
   OutputPluginPrepareWrite(ctx, true);
   appendBinaryStringInfo(ctx->out, (char*)pack, packSize);
-  OutputPluginWrite(ctx, true);
 }

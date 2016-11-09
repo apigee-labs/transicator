@@ -116,6 +116,7 @@ static void outputChange(
   /* Switch back to original context and release everything we "palloc"ed */
   MemoryContextSwitchTo(oldMemCtx);
   MemoryContextReset(state->memCtx);
+  OutputPluginWrite(ctx, true);
 }
 
 void _PG_output_plugin_init(OutputPluginCallbacks *cb) {

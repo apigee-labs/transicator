@@ -195,5 +195,4 @@ void transicatorOutputChangeString(
   }
 
   appendStringInfoChar(ctx->out, '}');
-  OutputPluginWrite(ctx, true);
 }
