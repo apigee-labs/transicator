@@ -107,6 +107,7 @@ static void outputChange(
 
   /* Switch to our private memory context so that we will not leak. */
   oldMemCtx = MemoryContextSwitchTo(state->memCtx);
+  OutputPluginPrepareWrite(ctx, true);
   if (state->isBinary) {
     transicatorOutputChangeProto(ctx, txn, relation, change, state);
   } else {

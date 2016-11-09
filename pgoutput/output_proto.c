@@ -88,6 +88,12 @@ static void tuple_to_proto(
 
     col = (Common__ColumnPb*)palloc(sizeof(Common__ColumnPb));
     common__column_pb__init(col);
+    // NOTE: You cannot use natt here as the array index, as it's counting
+    // the number of entries in tupdesc, but we've previously computed and
+    // allocated the cols array based on a count that doesn't include the
+    // attr's that are dropped or have a negative attnum. If you use
+    // natt to index into cols, you risk jumping off the end of the array
+    // and causing a pg crash.
     cols[colnum++] = col;
 
     typ =  attr->atttypid;
@@ -210,6 +216,5 @@ void transicatorOutputChangeProto(
   pack = (uint8_t*)palloc(sizeof(uint8_t) * packSize);
   common__change_pb__pack(&pb, pack);
 
-  OutputPluginPrepareWrite(ctx, true);
   appendBinaryStringInfo(ctx->out, (char*)pack, packSize);
 }
