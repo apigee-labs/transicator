@@ -15,8 +15,6 @@ import (
 )
 
 const (
-	// Default listen port
-	defaultPort = 9090
 	// Default timeout for individual Postgres transactions
 	defaultPGTimeout = 30 * time.Second
 )
@@ -36,14 +34,16 @@ func printUsage() {
 func main() {
 
 	var (
-		port     int
-		mgmtPort int
-		pgURL    string
-		debug    bool
-		help     bool
+		port       int
+		securePort int
+		mgmtPort   int
+		pgURL      string
+		debug      bool
+		help       bool
 	)
 
-	flag.IntVar(&port, "p", defaultPort, "Local Binding port")
+	flag.IntVar(&port, "p", -1, "Local Binding port")
+	flag.IntVar(&securePort, "sp", -1, "HTTP listen port")
 	flag.IntVar(&mgmtPort, "mp", -1, "Management port (for health checks)")
 	flag.StringVar(&pgURL, "u", "", "URL to connect to Postgres DB")
 	flag.BoolVar(&debug, "D", false, "Turn on debugging")

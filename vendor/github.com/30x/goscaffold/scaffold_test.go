@@ -1,6 +1,7 @@
 package goscaffold
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,14 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+var insecureClient = &http.Client{
+	Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	},
+}
 
 var _ = Describe("Scaffold Tests", func() {
 	It("Validate framework", func() {
@@ -266,6 +275,63 @@ var _ = Describe("Scaffold Tests", func() {
 		s.Shutdown(nil)
 		Eventually(stopChan).Should(Receive(Equal(ErrManualStop)))
 	})
+
+	It("Secure And Insecure Ports", func() {
+		s := CreateHTTPScaffold()
+		s.SetSecurePort(0)
+		s.SetKeyFile("./testkeys/clearkey.pem")
+		s.SetCertFile("./testkeys/clearcert.pem")
+		stopChan := make(chan error)
+		err := s.Open()
+		Expect(err).Should(Succeed())
+
+		go func() {
+			fmt.Fprintf(GinkgoWriter, "Gonna listen on %s and %s\n",
+				s.InsecureAddress(), s.SecureAddress())
+			stopErr := s.Listen(&testHandler{})
+			fmt.Fprintf(GinkgoWriter, "Done listening\n")
+			stopChan <- stopErr
+		}()
+
+		Eventually(func() bool {
+			return testGet(s, "")
+		}, 5*time.Second).Should(BeTrue())
+		Eventually(func() bool {
+			return testGetSecure(s, "")
+		}, time.Second).Should(BeTrue())
+
+		shutdownErr := errors.New("Validate")
+		s.Shutdown(shutdownErr)
+		Eventually(stopChan).Should(Receive(Equal(shutdownErr)))
+	})
+
+	It("Secure Port Only", func() {
+		s := CreateHTTPScaffold()
+		s.SetSecurePort(0)
+		s.SetInsecurePort(-1)
+		s.SetKeyFile("./testkeys/clearkey.pem")
+		s.SetCertFile("./testkeys/clearcert.pem")
+		stopChan := make(chan error)
+		err := s.Open()
+		Expect(err).Should(Succeed())
+		Expect(s.InsecureAddress()).Should(BeEmpty())
+
+		go func() {
+			fmt.Fprintf(GinkgoWriter, "Gonna listen on %s\n",
+				s.SecureAddress())
+			stopErr := s.Listen(&testHandler{})
+			fmt.Fprintf(GinkgoWriter, "Done listening\n")
+			stopChan <- stopErr
+		}()
+
+		Eventually(func() bool {
+			return testGetSecure(s, "")
+		}, 5*time.Second).Should(BeTrue())
+
+		shutdownErr := errors.New("Validate")
+		s.Shutdown(shutdownErr)
+		Eventually(stopChan).Should(Receive(Equal(shutdownErr)))
+	})
 })
 
 func getText(url string) (int, string) {
@@ -297,6 +363,20 @@ func getJSON(url string) (int, map[string]string) {
 
 func testGet(s *HTTPScaffold, path string) bool {
 	resp, err := http.Get(fmt.Sprintf("http://%s", s.InsecureAddress()))
+	if err != nil {
+		fmt.Fprintf(GinkgoWriter, "Get %s = %s\n", path, err)
+		return false
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		fmt.Fprintf(GinkgoWriter, "Get %s = %d\n", path, resp.StatusCode)
+		return false
+	}
+	return true
+}
+
+func testGetSecure(s *HTTPScaffold, path string) bool {
+	resp, err := insecureClient.Get(fmt.Sprintf("https://%s", s.SecureAddress()))
 	if err != nil {
 		fmt.Fprintf(GinkgoWriter, "Get %s = %s\n", path, err)
 		return false
