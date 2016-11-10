@@ -13,7 +13,6 @@ import (
 )
 
 const (
-	defaultPort      = 9000
 	defaultCacheSize = 65536
 )
 
@@ -36,21 +35,27 @@ func printUsage() {
 
 func runMain() int {
 	var port int
+	var securePort int
 	var mgmtPort int
 	var dbDir string
 	var pgURL string
 	var pgSlot string
 	var prefix string
 	var maxAgeParam string
+	var cert string
+	var key string
 	var debug bool
 	var help bool
 
-	flag.IntVar(&port, "p", defaultPort, "Listen port")
+	flag.IntVar(&port, "p", -1, "Listen port")
+	flag.IntVar(&securePort, "sp", -1, "HTTPS Listen port")
 	flag.IntVar(&mgmtPort, "mp", -1, "Management port (for health checks)")
 	flag.StringVar(&dbDir, "d", "", "Location of database files")
 	flag.StringVar(&pgURL, "u", "", "URL to connect to Postgres")
 	flag.StringVar(&pgSlot, "s", "", "Slot name for Postgres logical replication")
 	flag.StringVar(&maxAgeParam, "m", "", "Purge records older than this age.")
+	flag.StringVar(&cert, "cert", "", "TLS certificate PEM file")
+	flag.StringVar(&key, "key", "", "TLS key PEM file (must be unencrypted)")
 	flag.BoolVar(&debug, "D", false, "Turn on debugging")
 	flag.StringVar(&prefix, "P", "", "Optional prefix URL for all API calls")
 	flag.BoolVar(&help, "h", false, "Print help message")
@@ -62,6 +67,11 @@ func runMain() int {
 	}
 	if dbDir == "" || pgURL == "" || pgSlot == "" {
 		fmt.Fprintln(os.Stderr, "-d, -u, and -s parameters are all required")
+		printUsage()
+		return 3
+	}
+	if port < 0 && securePort < 0 {
+		fmt.Fprintln(os.Stderr, "Either -p or -sp must be specified")
 		printUsage()
 		return 3
 	}
@@ -98,9 +108,12 @@ func runMain() int {
 
 	scaf := goscaffold.CreateHTTPScaffold()
 	scaf.SetInsecurePort(port)
+	scaf.SetSecurePort(securePort)
 	if mgmtPort >= 0 {
 		scaf.SetManagementPort(mgmtPort)
 	}
+	scaf.SetCertFile(cert)
+	scaf.SetKeyFile(key)
 	scaf.CatchSignals()
 	scaf.SetHealthPath("/health")
 	scaf.SetReadyPath("/ready")

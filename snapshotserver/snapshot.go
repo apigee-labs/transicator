@@ -404,7 +404,9 @@ func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	scopes := r.URL.Query()["scope"]
 	if len(scopes) == 0 {
-		log.Errorf("'scope' missing or empty in Request")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("Must include at least one \"scope\" query parameter"))
 		return
 	}
 

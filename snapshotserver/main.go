@@ -40,12 +40,16 @@ func main() {
 		pgURL      string
 		debug      bool
 		help       bool
+		key        string
+		cert       string
 	)
 
 	flag.IntVar(&port, "p", -1, "Local Binding port")
 	flag.IntVar(&securePort, "sp", -1, "HTTP listen port")
 	flag.IntVar(&mgmtPort, "mp", -1, "Management port (for health checks)")
 	flag.StringVar(&pgURL, "u", "", "URL to connect to Postgres DB")
+	flag.StringVar(&key, "key", "", "TLS key file (must be unencrypted)")
+	flag.StringVar(&cert, "cert", "", "TLS certificate file")
 	flag.BoolVar(&debug, "D", false, "Turn on debugging")
 	flag.BoolVar(&help, "h", false, "Print help message")
 	flag.Parse()
@@ -55,7 +59,12 @@ func main() {
 		os.Exit(2)
 	}
 	if pgURL == "" {
-		fmt.Fprintln(os.Stderr, "-d and -u parameters are required")
+		fmt.Fprintln(os.Stderr, "-u parameters is required")
+		printUsage()
+		os.Exit(3)
+	}
+	if port < 0 && securePort < 0 {
+		fmt.Fprintln(os.Stderr, "Either -p or -sp is required")
 		printUsage()
 		os.Exit(3)
 	}
@@ -102,9 +111,12 @@ func main() {
 
 	scaf := goscaffold.CreateHTTPScaffold()
 	scaf.SetInsecurePort(port)
+	scaf.SetSecurePort(securePort)
 	if mgmtPort >= 0 {
 		scaf.SetManagementPort(mgmtPort)
 	}
+	scaf.SetKeyFile(key)
+	scaf.SetCertFile(cert)
 	scaf.CatchSignals()
 	scaf.SetHealthPath("/health")
 	scaf.SetReadyPath("/ready")
