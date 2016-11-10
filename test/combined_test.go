@@ -1,6 +1,7 @@
 package test
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -10,14 +11,22 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+var insecureClient = &http.Client{
+	Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	},
+}
+
 var _ = Describe("Combined tests", func() {
 	It("Check parameters", func() {
-		resp, err := http.Get(changeBase)
+		resp, err := insecureClient.Get(changeBase)
 		Expect(err).Should(Succeed())
 		resp.Body.Close()
 		Expect(resp.StatusCode).Should(Equal(404))
 
-		resp, err = http.Get(snapshotBase)
+		resp, err = insecureClient.Get(snapshotBase)
 		Expect(err).Should(Succeed())
 		resp.Body.Close()
 		Expect(resp.StatusCode).Should(Equal(404))
@@ -43,7 +52,7 @@ var _ = Describe("Combined tests", func() {
 		req, err := http.NewRequest("GET", url, nil)
 		Expect(err).Should(Succeed())
 		req.Header.Add("Accept", "application/transicator+protobuf")
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := insecureClient.Do(req)
 		Expect(err).Should(Succeed())
 		Expect(resp.StatusCode).Should(Equal(200))
 		fmt.Fprintf(GinkgoWriter, "Response: %s\n", resp.Header.Get("Content-Type"))
@@ -129,7 +138,7 @@ func getChanges(qs string, numExpected int) *common.ChangeList {
 	fmt.Fprintf(GinkgoWriter, "GET %s\n", url)
 	var ret *common.ChangeList
 
-	resp, err := http.Get(url)
+	resp, err := insecureClient.Get(url)
 	Expect(err).Should(Succeed())
 	Expect(resp.StatusCode).Should(Equal(200))
 

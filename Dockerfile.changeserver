@@ -22,9 +22,10 @@ COPY . /go/src/github.com/apigee-labs/transicator
 
 RUN \
     (cd /go/src/github.com/apigee-labs/transicator/changeserver; go build -o /changeserver) \
+ && mkdir /keys \
  && rm -r /go
 
-EXPOSE 9000 10000
-VOLUME [ "/data" ]
+EXPOSE 9000 9443 10000
+VOLUME [ "/data", "/keys" ]
 
-ENTRYPOINT [ "/changeserver", "-p", "9000", "-mp", "10000", "-d", "/data"]
+ENTRYPOINT [ "/changeserver", "-mp", "10000", "-d", "/data"]

@@ -14,8 +14,11 @@ COPY . /go/src/github.com/apigee-labs/transicator
 
 RUN \
     (cd /go/src/github.com/apigee-labs/transicator/snapshotserver; go build -o /snapshotserver) \
+ && mkdir /keys \
  && rm -r /go
 
-EXPOSE 9001 10001
+EXPOSE 9001 9444 10001
 
-ENTRYPOINT [ "/snapshotserver", "-p", "9001", "-mp", "10001"]
+VOLUME [ "/keys" ]
+
+ENTRYPOINT [ "/snapshotserver", "-mp", "10001"]

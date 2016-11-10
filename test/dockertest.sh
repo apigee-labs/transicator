@@ -51,13 +51,17 @@ docker build --tag ${csName} -f ./Dockerfile.changeserver .
 docker run -d \
   --name ${csName} \
   --link ${dbName}:postgres \
+  -v ${PWD}/test/keys:/keys \
   ${csName} \
+  -sp 9443 -key /keys/clearkey.pem -cert /keys/clearcert.pem \
   -s ${slotName} -u postgres://postgres:${TEST_PG_PW}@${dbName}/postgres
 
 docker run -d \
   --name ${ssName} \
   --link ${dbName}:postgres \
+  -v ${PWD}/test/keys:/keys \
   ${ssName} \
+  -sp 9444 -key /keys/clearkey.pem -cert /keys/clearcert.pem \
   -u postgres://postgres:${TEST_PG_PW}@${dbName}/postgres
 
 # Run tests of the combined servers and Postgres
@@ -70,8 +74,8 @@ docker run -i \
   -e DBHOST=postgres \
   -e CHANGE_HOST=changeserver \
   -e SNAPSHOT_HOST=snapshotserver \
-  -e CHANGE_PORT=9000 \
-  -e SNAPSHOT_PORT=9001 \
+  -e CHANGE_PORT=9443 \
+  -e SNAPSHOT_PORT=9444 \
   ${testName} \
   /go/src/github.com/apigee-labs/transicator/test/combined_test_script.sh
 

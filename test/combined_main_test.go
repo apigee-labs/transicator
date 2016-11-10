@@ -38,9 +38,9 @@ var _ = BeforeSuite(func() {
 	dbURL = os.Getenv("TEST_PG_URL")
 	Expect(dbURL).ShouldNot(BeEmpty())
 
-	changeBase = fmt.Sprintf("http://%s:%s", changeHost, changePortSpec)
+	changeBase = fmt.Sprintf("https://%s:%s", changeHost, changePortSpec)
 	fmt.Printf("Change server at %s\n", changeBase)
-	snapshotBase = fmt.Sprintf("http://%s:%s", snapshotHost, snapPortSpec)
+	snapshotBase = fmt.Sprintf("https://%s:%s", snapshotHost, snapPortSpec)
 	fmt.Printf("Snapshot server at %s\n", snapshotBase)
 
 	var err error
