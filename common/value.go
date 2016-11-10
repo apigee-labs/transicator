@@ -1,9 +1,9 @@
 package common
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
+	"time"
 )
 
 /*
@@ -19,6 +19,8 @@ Get places the value of the column into the specified interface if possible.
 */
 func (v ColumnVal) Get(d interface{}) error {
 	switch v.Value.(type) {
+	case nil:
+		return getNil(d)
 	case string:
 		return getString(d, v.Value.(string))
 	case int64:
@@ -31,8 +33,10 @@ func (v ColumnVal) Get(d interface{}) error {
 		return getBool(d, v.Value.(bool))
 	case []byte:
 		return getBytes(d, v.Value.([]byte))
+	case time.Time:
+		return getTime(d, v.Value.(time.Time))
 	default:
-		return errors.New("Value not of expected type")
+		return fmt.Errorf("Value %T not of expected type", v.Value)
 	}
 }
 
@@ -45,12 +49,17 @@ func (r Row) Get(name string, d interface{}) error {
 	if col != nil {
 		return col.Get(d)
 	}
+	return getNil(d)
+}
 
+func getNil(d interface{}) error {
 	switch d.(type) {
 	case *string:
 		*(d.(*string)) = ""
 	case *[]byte:
 		*(d.(*[]byte)) = nil
+	case *interface{}:
+		*(d.(*interface{})) = nil
 	default:
 		return getInt(d, 0)
 	}
@@ -298,8 +307,24 @@ func getBytes(d interface{}, b []byte) error {
 		*(d.(*string)) = string(b)
 	case *[]byte:
 		*(d.(*[]byte)) = b
+	case *interface{}:
+		*(d.(*interface{})) = b
 	default:
-		return fmt.Errorf("Invalid conversion: Can't convert bytes to %T", d)
+		return getString(d, string(b))
+	}
+	return nil
+}
+
+func getTime(d interface{}, t time.Time) error {
+	switch d.(type) {
+	case *string:
+		*(d.(*string)) = t.String()
+	case *time.Time:
+		*(d.(*time.Time)) = t
+	case *interface{}:
+		*(d.(*interface{})) = t
+	default:
+		return fmt.Errorf("Invalid conversion: Can't convert Time to %T", d)
 	}
 	return nil
 }
@@ -368,6 +393,10 @@ func convertParameter(v interface{}) isValuePb_Value {
 	case float64:
 		return &ValuePb_Double{
 			Double: v.(float64),
+		}
+	case time.Time:
+		return &ValuePb_String_{
+			String_: v.(time.Time).String(),
 		}
 	default:
 		panic(fmt.Sprintf("Can't convert value %v type %T for protobuf", v, v))

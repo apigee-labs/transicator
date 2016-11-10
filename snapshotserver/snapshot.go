@@ -152,7 +152,7 @@ func fillTable(rows *sql.Rows, snapData *common.Snapshot, table string) (err err
 		srvItem := common.Row{}
 		cols := make([]interface{}, len(columnNames))
 		for i := range cols {
-			cols[i] = new(string)
+			cols[i] = new(interface{})
 		}
 		err = rows.Scan(cols...)
 		if err != nil {
@@ -161,9 +161,9 @@ func fillTable(rows *sql.Rows, snapData *common.Snapshot, table string) (err err
 		}
 
 		for i, cv := range cols {
-			cvs := cv.(*string)
+			cvp := cv.(*interface{})
 			scv := &common.ColumnVal{
-				Value: *cvs,
+				Value: *cvp,
 				Type:  columnTypes[i],
 			}
 			srvItem[columnNames[i]] = scv
@@ -257,9 +257,9 @@ func writeJSONSnapshot(
 		}
 	}
 
-	enc := json.NewEncoder(w)
-	err := enc.Encode(snapData)
-	return err
+	json := snapData.Marshal()
+	w.Write(json)
+	return nil
 }
 
 func writeProtoSnapshot(

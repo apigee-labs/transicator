@@ -45,6 +45,7 @@ var _ = BeforeSuite(func() {
 				string varchar,
 				int bigint,
 				sint smallint,
+				iint int,
 				double float8,
 				timestamp timestamp with time zone,
 				yesno bool,

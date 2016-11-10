@@ -58,7 +58,7 @@ var _ = Describe("Data type tests", func() {
 		Expect(err).Should(Succeed())
 	})
 
-	It("POD type", func() {
+	It("OID type", func() {
 		ix := 0
 		err := quick.Check(func(val int) bool {
 			ix++
@@ -112,6 +112,102 @@ var _ = Describe("Data type tests", func() {
 			return testTimeType(ix, secs, ns)
 		}, timeCfg)
 		Expect(err).Should(Succeed())
+	})
+
+	It("String null", func() {
+		_, err := driverTypeDB.Exec("insert into client_test (id) values (1)")
+		Expect(err).Should(Succeed())
+
+		row := driverTypeDB.QueryRow("select string from client_test where id = 1")
+		var ir interface{}
+		err = row.Scan(&ir)
+		Expect(err).Should(Succeed())
+		Expect(ir).Should(BeNil())
+
+		// Seems to be a special property of database/sql that a null string
+		// can be scanned into an empty string
+		row = driverTypeDB.QueryRow("select string from client_test where id = 1")
+		var s string
+		err = row.Scan(&s)
+		Expect(err).Should(Succeed())
+		Expect(s).Should(BeEmpty())
+	})
+
+	It("Big Integer null", func() {
+		_, err := driverTypeDB.Exec("insert into client_test (id) values (1)")
+		Expect(err).Should(Succeed())
+
+		row := driverTypeDB.QueryRow("select int from client_test where id = 1")
+		var ir interface{}
+		err = row.Scan(&ir)
+		Expect(err).Should(Succeed())
+		Expect(ir).Should(BeNil())
+	})
+
+	It("Double null", func() {
+		_, err := driverTypeDB.Exec("insert into client_test (id) values (1)")
+		Expect(err).Should(Succeed())
+
+		row := driverTypeDB.QueryRow("select double from client_test where id = 1")
+		var ir interface{}
+		err = row.Scan(&ir)
+		Expect(err).Should(Succeed())
+		Expect(ir).Should(BeNil())
+	})
+
+	It("Boolean null", func() {
+		_, err := driverTypeDB.Exec("insert into client_test (id) values (1)")
+		Expect(err).Should(Succeed())
+
+		row := driverTypeDB.QueryRow("select yesno from client_test where id = 1")
+		var ir interface{}
+		err = row.Scan(&ir)
+		Expect(err).Should(Succeed())
+		Expect(ir).Should(BeNil())
+	})
+
+	It("Integer null", func() {
+		_, err := driverTypeDB.Exec("insert into client_test (id) values (1)")
+		Expect(err).Should(Succeed())
+
+		row := driverTypeDB.QueryRow("select iint from client_test where id = 1")
+		var ir interface{}
+		err = row.Scan(&ir)
+		Expect(err).Should(Succeed())
+		Expect(ir).Should(BeNil())
+	})
+
+	It("Small Integer null", func() {
+		_, err := driverTypeDB.Exec("insert into client_test (id) values (1)")
+		Expect(err).Should(Succeed())
+
+		row := driverTypeDB.QueryRow("select sint from client_test where id = 1")
+		var ir interface{}
+		err = row.Scan(&ir)
+		Expect(err).Should(Succeed())
+		Expect(ir).Should(BeNil())
+	})
+
+	It("Time null", func() {
+		_, err := driverTypeDB.Exec("insert into client_test (id) values (1)")
+		Expect(err).Should(Succeed())
+
+		row := driverTypeDB.QueryRow("select timestamp from client_test where id = 1")
+		var ir interface{}
+		err = row.Scan(&ir)
+		Expect(err).Should(Succeed())
+		Expect(ir).Should(BeNil())
+	})
+
+	It("Bytes null", func() {
+		_, err := driverTypeDB.Exec("insert into client_test (id) values (1)")
+		Expect(err).Should(Succeed())
+
+		row := driverTypeDB.QueryRow("select blob from client_test where id = 1")
+		var ir interface{}
+		err = row.Scan(&ir)
+		Expect(err).Should(Succeed())
+		Expect(ir).Should(BeNil())
 	})
 })
 

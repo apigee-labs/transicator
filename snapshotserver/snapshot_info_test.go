@@ -7,14 +7,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/apigee-labs/transicator/common"
 	"github.com/apigee-labs/transicator/pgclient"
-	"github.com/apigee-labs/transicator/replication"
-	"github.com/Sirupsen/logrus"
 
 	"strconv"
 	"strings"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
@@ -28,8 +26,7 @@ const (
 var (
 	dbURL string
 
-	repl *replication.Replicator
-	db   *sql.DB
+	db *sql.DB
 )
 
 func TestSnapshot(t *testing.T) {
@@ -65,26 +62,10 @@ var _ = BeforeSuite(func() {
 
 	_, err = db.Exec(testTableSQL)
 	Expect(err).Should(Succeed())
-
-	repl, err = replication.CreateReplicator(dbURL, "snapshot_test_slot")
-	Expect(err).Should(Succeed())
-	repl.Start()
-	// There may be duplicates, so always drain first
-	drainReplication(repl)
 })
 
 var _ = AfterSuite(func() {
-	fmt.Println(GinkgoWriter, "AfterSuite: stop replication")
-	if repl != nil {
-		repl.Stop()
-	}
-
 	if db != nil {
-		fmt.Println(GinkgoWriter, "AfterSuite: drop replication slot")
-		db.Exec("select * from pg_drop_replication_slot('snapshot_test_slot')")
-		for _, table := range allTables {
-			dropTable(table)
-		}
 		db.Close()
 	}
 })
@@ -230,36 +211,6 @@ func getCurrentTxid() int32 {
 	return int32(txid)
 }
 
-func drainReplication(repl *replication.Replicator) {
-	// Just pull stuff until we get a bit of a delay
-	var maxLSN uint64
-	timedOut := false
-	for !timedOut {
-		timeout := time.After(1 * time.Second)
-		select {
-		case <-timeout:
-			timedOut = true
-		case change := <-repl.Changes():
-			Expect(change.Error).Should(Succeed())
-			fmt.Fprintf(GinkgoWriter, "LSN %d\n", change.CommitSequence)
-			if change.CommitSequence > maxLSN {
-				maxLSN = change.CommitSequence
-			}
-		}
-	}
-
-	fmt.Fprintf(GinkgoWriter, "Acknowledging %d\n", maxLSN)
-	repl.Acknowledge(maxLSN)
-}
-
-func getReplChange(r *replication.Replicator) *common.Change {
-
-	var c *common.Change
-	Eventually(r.Changes()).Should(Receive(&c))
-	Consistently(r.Changes()).ShouldNot(Receive())
-	return c
-}
-
 var _ = Describe("Taking a snapshot", func() {
 
 	tables := map[string]bool{
@@ -271,13 +222,8 @@ var _ = Describe("Taking a snapshot", func() {
 		"transicator_tests.schema_table": true,
 	}
 
-	BeforeEach(func() {
-		// There may be records in the replication queue from deletes done in AfterEach
-		drainReplication(repl)
-	})
-
 	AfterEach(func() {
-		fmt.Println("AfterEach: truncate tables")
+		fmt.Fprintln(GinkgoWriter, "AfterEach: truncate tables")
 		for table := range tables {
 			err := truncateTable(table)
 			Expect(err).Should(Succeed())
@@ -465,7 +411,7 @@ var _ = Describe("Taking a snapshot", func() {
 
 			b, err := GetScopeData("aaa-bbb-ccc", db)
 			Expect(err).Should(Succeed())
-			os.Exit(0)
+
 			s, err := common.UnmarshalSnapshot(b)
 			Expect(err).Should(Succeed())
 
@@ -488,4 +434,102 @@ var _ = Describe("Taking a snapshot", func() {
 
 	})
 
+	Context("Test data formats", func() {
+		It("Insert NULLs", func() {
+			verifySnap := func(s *common.Snapshot) {
+				for _, table := range s.Tables {
+					if table.Name == "public.snapshot_test" {
+						for _, row := range table.Rows {
+							fmt.Fprintf(GinkgoWriter, "%v\n", row)
+							var id string
+							err := row.Get("id", &id)
+							Expect(err).Should(Succeed())
+							Expect(id).Should(Equal("one"))
+							var vc string
+							err = row.Get("varchars", &vc)
+							Expect(err).Should(Succeed())
+							Expect(vc).Should(BeEmpty())
+							var ts string
+							err = row.Get("timestamp", &ts)
+							Expect(err).Should(Succeed())
+							Expect(ts).Should(BeZero())
+						}
+					}
+				}
+			}
+
+			_, err := db.Exec("insert into snapshot_test (id, _apid_scope) values ('one', 'foo')")
+			Expect(err).Should(Succeed())
+
+			buf := &bytes.Buffer{}
+			err = GetTenantSnapshotData([]string{"foo"}, "json", db, buf)
+			Expect(err).Should(Succeed())
+
+			fmt.Fprintf(GinkgoWriter, "Snapshot: %s\n", buf.String())
+			s, err := common.UnmarshalSnapshot(buf.Bytes())
+			Expect(err).Should(Succeed())
+			verifySnap(s)
+
+			buf = &bytes.Buffer{}
+			err = GetTenantSnapshotData([]string{"foo"}, "proto", db, buf)
+			Expect(err).Should(Succeed())
+			s, err = common.UnmarshalSnapshotProto(buf)
+			Expect(err).Should(Succeed())
+			verifySnap(s)
+		})
+
+		It("Insert real values", func() {
+			verifySnap := func(s *common.Snapshot) {
+				for _, table := range s.Tables {
+					if table.Name == "public.snapshot_test" {
+						for _, row := range table.Rows {
+							fmt.Fprintf(GinkgoWriter, "%v\n", row)
+							var id string
+							err := row.Get("id", &id)
+							Expect(err).Should(Succeed())
+							Expect(id).Should(Equal("one"))
+							var b bool
+							err = row.Get("bool", &b)
+							Expect(err).Should(Succeed())
+							Expect(b).Should(BeTrue())
+							var i int
+							err = row.Get("int", &i)
+							Expect(err).Should(Succeed())
+							Expect(i).Should(BeEquivalentTo(123))
+							var d float64
+							err = row.Get("double", &d)
+							Expect(err).Should(Succeed())
+							Expect(d).Should(BeEquivalentTo(3.14))
+							var tsStr string
+							err = row.Get("timestamp", &tsStr)
+							Expect(err).Should(Succeed())
+							Expect(tsStr).ShouldNot(BeEmpty())
+						}
+					}
+				}
+			}
+
+			_, err := db.Exec(`
+				insert into snapshot_test (id, _apid_scope, bool, int, double, timestamp)
+				values ('one', 'foo', true, 123, 3.14, now())
+			`)
+			Expect(err).Should(Succeed())
+
+			buf := &bytes.Buffer{}
+			err = GetTenantSnapshotData([]string{"foo"}, "json", db, buf)
+			Expect(err).Should(Succeed())
+
+			fmt.Fprintf(GinkgoWriter, "Snapshot: %s\n", buf.String())
+			s, err := common.UnmarshalSnapshot(buf.Bytes())
+			Expect(err).Should(Succeed())
+			verifySnap(s)
+
+			buf = &bytes.Buffer{}
+			err = GetTenantSnapshotData([]string{"foo"}, "proto", db, buf)
+			Expect(err).Should(Succeed())
+			s, err = common.UnmarshalSnapshotProto(buf)
+			Expect(err).Should(Succeed())
+			verifySnap(s)
+		})
+	})
 })

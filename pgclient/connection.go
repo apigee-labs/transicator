@@ -382,7 +382,10 @@ func (c *PgConnection) readStandardMessage() (*InputMessage, error) {
 				log.Warnf("Notice from Postgres: \"%s\"", msg)
 			}
 		case ParameterStatus:
-			// We already logged that we got one of these. Keep on running.
+			ps, err := ParseParameterStatus(im)
+			if err == nil {
+				log.Debugf("Parameter status: \"%s\"", ps)
+			}
 		default:
 			// Anything else we return directly to the caller
 			return im, nil

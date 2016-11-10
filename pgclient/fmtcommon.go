@@ -237,6 +237,5 @@ func ParseParameterStatus(m *InputMessage) (string, error) {
 		return "", err
 	}
 
-	log.Debugf("ParameterStatus %s %s", s, s2)
 	return s + " " + s2, nil
 }

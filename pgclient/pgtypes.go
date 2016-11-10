@@ -170,21 +170,33 @@ func convertColumnValue(t PgType, b []byte) driver.Value {
 	// Integer types were returned in binary format, so we must read them
 	// as such.
 	case Int2:
+		if b == nil {
+			return nil
+		}
 		buf := bytes.NewBuffer(b)
 		var si2 int16
 		binary.Read(buf, networkByteOrder, &si2)
 		return int64(si2)
 	case Int4, OID:
+		if b == nil {
+			return nil
+		}
 		buf := bytes.NewBuffer(b)
 		var si4 int32
 		binary.Read(buf, networkByteOrder, &si4)
 		return int64(si4)
 	case Int8:
+		if b == nil {
+			return nil
+		}
 		buf := bytes.NewBuffer(b)
 		var si8 int64
 		binary.Read(buf, networkByteOrder, &si8)
 		return si8
 	case TimestampTZ:
+		if b == nil {
+			return nil
+		}
 		// Timestamps are returned as strings. Parse them into a Time value
 		// in case the user wants that instead of a string.
 		tm, err := time.Parse(pgTimeFormat, string(b))
@@ -194,7 +206,7 @@ func convertColumnValue(t PgType, b []byte) driver.Value {
 		return []byte(fmt.Sprintf("Invalid timestamp %s", string(b)))
 	default:
 		// This may have been a "bytea" column, in which case we must return the
-		// raw bytes. Otherwise, the database returned a string here, and
+		// raw bytes. Otherwise, the database returned a string or nil here, and
 		// the "sql" package will convert the raw bytes
 		// into whatever type the user asked for using string parsing.
 		return b

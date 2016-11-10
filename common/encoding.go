@@ -371,7 +371,11 @@ func (r Row) stringify() Row {
 	nr := make(map[string]*ColumnVal)
 	for k, v := range r {
 		nv := *v
-		nv.Value = nv.String()
+		if nv.Value == nil {
+			nv.Value = nil
+		} else {
+			nv.Value = nv.String()
+		}
 		nr[k] = &nv
 	}
 	return Row(nr)
