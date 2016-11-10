@@ -113,11 +113,11 @@ static void outputChange(
   } else {
     transicatorOutputChangeString(ctx, txn, relation, change, state);
   }
+  OutputPluginWrite(ctx, true);
 
   /* Switch back to original context and release everything we "palloc"ed */
   MemoryContextSwitchTo(oldMemCtx);
   MemoryContextReset(state->memCtx);
-  OutputPluginWrite(ctx, true);
 }
 
 void _PG_output_plugin_init(OutputPluginCallbacks *cb) {
