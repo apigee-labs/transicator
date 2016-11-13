@@ -1,17 +1,11 @@
 package storage
 
-/*
-#include <stdlib.h>
-#include "storage_native.h"
-*/
-import "C"
 
 import (
 	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"unsafe"
 )
 
 /* These have to match constants in leveldb_native.h */
@@ -47,134 +41,43 @@ var storageByteOrder = binary.LittleEndian
 /*
  * uint64 key, used for entries. Used in tests so not dead code.
  */
-func uintToKey(keyType int, v uint64) (unsafe.Pointer, C.size_t) {
+func uintToKey(keyType int, v uint64) ([]byte) {
 	buf := &bytes.Buffer{}
-	binary.Write(buf, storageByteOrder, keyPrefix(keyType)[0])
+	binary.Write(buf, storageByteOrder, keyPrefix(keyType))
 	binary.Write(buf, storageByteOrder, v)
-	return bytesToPtr(buf.Bytes())
+	return buf.Bytes()
 }
 
 /*
  * uint64 key, used for entries. Used in tests so not dead code.
  */
-func keyToUint(ptr unsafe.Pointer, len C.size_t) (int, uint64, error) {
-	if len < 1 {
+func keyToUint(key []byte) (vers int, intKey uint64, err error) {
+	if len(key) < 1 {
 		return 0, 0, errors.New("Invalid key")
 	}
-	bb := ptrToBytes(ptr, len)
-	buf := bytes.NewBuffer(bb)
+	buf := bytes.NewBuffer(key)
 
 	var ktb byte
 	binary.Read(buf, storageByteOrder, &ktb)
-	vers, kt := parseKeyPrefix(ktb)
+	vers, _ = parseKeyPrefix(ktb)
 	if vers != KeyVersion {
-		return 0, 0, fmt.Errorf("Invalid key version %d", vers)
+		err = fmt.Errorf("Invalid key version %d", vers)
+		return
 	}
-	var key uint64
-	binary.Read(buf, storageByteOrder, &key)
-
-	return kt, key, nil
+	binary.Read(buf, storageByteOrder, &intKey)
+	return
 }
 
 /*
  * String key, used for metadata.
  */
-func stringToKey(keyType int, k string) (unsafe.Pointer, C.size_t) {
+func stringToKey(keyType int, k string) (key []byte) {
 	buf := &bytes.Buffer{}
-	binary.Write(buf, storageByteOrder, keyPrefix(keyType)[0])
+	binary.Write(buf, storageByteOrder, keyPrefix(keyType))
 	buf.WriteString(k)
 	buf.WriteByte(0)
-	return bytesToPtr(buf.Bytes())
-}
-
-/*
-keyToString is unused in the code but it is used in the test. Since it uses
-cgo it cannot be in a test file, however.
-*/
-func keyToString(ptr unsafe.Pointer, l C.size_t) (int, string, error) {
-	if l < 1 {
-		return 0, "", errors.New("Invalid key")
-	}
-	bb := ptrToBytes(ptr, l)
-	buf := bytes.NewBuffer(bb)
-
-	var ktb byte
-	binary.Read(buf, storageByteOrder, &ktb)
-	vers, kt := parseKeyPrefix(ktb)
-	if vers != KeyVersion {
-		return 0, "", fmt.Errorf("Invalid key version %d", vers)
-	}
-
-	keyBytes, _ := buf.ReadBytes(0)
-	var key string
-	if len(keyBytes) > 0 {
-		key = string(keyBytes[:len(keyBytes)-1])
-	}
-	return kt, key, nil
-}
-
-/*
-Create an entry key.
-*/
-func indexToKey(keyType int, tag string, lsn uint64, index uint32) (unsafe.Pointer, C.size_t) {
-	buf := &bytes.Buffer{}
-	binary.Write(buf, storageByteOrder, keyPrefix(keyType)[0])
-	buf.WriteString(tag)
-	buf.WriteByte(0)
-	binary.Write(buf, storageByteOrder, lsn)
-	binary.Write(buf, storageByteOrder, index)
-	return bytesToPtr(buf.Bytes())
-}
-
-/*
-Parse an entry key. Again this uses cgo so we need it for tests even though
-it will be flagged as "dead code."
-*/
-func keyToIndex(ptr unsafe.Pointer, length C.size_t) (string, int64, int32, error) {
-	if length < 1 {
-		return "", 0, 0, errors.New("Invalid key")
-	}
-	bb := ptrToBytes(ptr, length)
-	buf := bytes.NewBuffer(bb)
-
-	tagBytes, _ := buf.ReadBytes(0)
-	var tag string
-	if len(tagBytes) > 0 {
-		tag = string(tagBytes[:len(tagBytes)-1])
-	}
-
-	var lsn int64
-	binary.Read(buf, storageByteOrder, &lsn)
-	var index int32
-	binary.Read(buf, storageByteOrder, &index)
-
-	return tag, lsn, index, nil
-}
-
-func freeString(c *C.char) {
-	C.free(unsafe.Pointer(c))
-}
-
-func freePtr(ptr unsafe.Pointer) {
-	C.free(ptr)
-}
-
-func stringToError(c *C.char) error {
-	es := C.GoString(c)
-	return errors.New(es)
-}
-
-func intToPtr(v int64) (unsafe.Pointer, C.size_t) {
-	bb := intToBytes(v)
-	return bytesToPtr(bb)
-}
-
-func bytesToPtr(bb []byte) (unsafe.Pointer, C.size_t) {
-	// TODO Replace with C.CBytes. However this causes an error from "go vet"
-	bsLen := C.size_t(len(bb))
-	buf := C.malloc(bsLen)
-	copy((*[1 << 30]byte)(buf)[:], bb)
-	return buf, bsLen
+	key = buf.Bytes()
+	return
 }
 
 func intToBytes(v int64) []byte {
@@ -183,21 +86,120 @@ func intToBytes(v int64) []byte {
 	return buf.Bytes()
 }
 
-func ptrToBytes(ptr unsafe.Pointer, len C.size_t) []byte {
-	return C.GoBytes(ptr, C.int(len))
-}
-
-func ptrToInt(ptr unsafe.Pointer, len C.size_t) int64 {
-	bb := ptrToBytes(ptr, len)
+func bytesToInt(bb []byte) (ret int64) {
 	buf := bytes.NewBuffer(bb)
-	var ret int64
 	binary.Read(buf, storageByteOrder, &ret)
-	return ret
+	return
 }
 
-func keyPrefix(keyType int) []byte {
+/*
+keyToString is unused in the code but it is used in the test. Since it uses
+cgo it cannot be in a test file, however.
+*/
+func keyToString(key []byte) (keyType int, keyString string, err error) {
+	if len(key) < 1 {
+		err = errors.New("Invalid key")
+		return
+	}
+	buf := bytes.NewBuffer(key)
+
+	var ktb byte
+	var vers int
+	binary.Read(buf, storageByteOrder, &ktb)
+	vers, keyType = parseKeyPrefix(ktb)
+	if vers != KeyVersion {
+		err = fmt.Errorf("Invalid key version %d", vers)
+		return
+	}
+
+	keyBytes, _ := buf.ReadBytes(0)
+	if len(keyBytes) > 0 {
+		keyString = string(keyBytes[:len(keyBytes)-1])
+	}
+	return
+}
+
+/*
+Create an entry key.
+*/
+func lsnAndOffsetToKey(keyType int, scope string, lsn uint64, index uint32) (key []byte) {
+	buf := &bytes.Buffer{}
+	binary.Write(buf, storageByteOrder, keyPrefix(keyType))
+	buf.WriteString(scope)
+	buf.WriteByte(0)
+	binary.Write(buf, storageByteOrder, lsn)
+	binary.Write(buf, storageByteOrder, index)
+	key = buf.Bytes()
+	return
+}
+
+func keyToLsnAndOffset(key []byte) (scope string, lsn uint64, index uint32, err error) {
+	buf := bytes.NewBuffer(key)
+	var version byte
+	err = binary.Read(buf, storageByteOrder, &version)
+	if err != nil {
+		fmt.Printf("Failed to read version byte %s\n", err)
+
+		return
+	}
+	var scopeBytes []byte
+	var currentByte byte
+	var cnt int
+	for cnt == 0 || (currentByte != 0x0) {
+		err = binary.Read(buf, storageByteOrder, &currentByte)
+		cnt++
+		if err != nil {
+			fmt.Printf("Failed to read string byte %s\n", err)
+			return
+		}
+		if currentByte != 0x0 {
+			scopeBytes = append(scopeBytes, currentByte)
+		}
+	}
+	if len(scopeBytes) > 0 {
+		scope = string(scopeBytes)
+	}
+
+	err = binary.Read(buf, storageByteOrder, &lsn)
+	if err != nil {
+		fmt.Printf("Failed to read lsn %s\n", err)
+
+		return
+	}
+	err = binary.Read(buf, storageByteOrder, &index)
+	if err != nil {
+		fmt.Printf("Failed to read index %s\n", err)
+
+		return
+	}
+	return
+}
+
+/*
+Parse an entry key. Again this uses cgo so we need it for tests even though
+it will be flagged as "dead code."
+*/
+func keyToIndex(key []byte) (tag string, lsn int64, index int32, err error) {
+	if len(key) < 1 {
+		err = errors.New("Invalid key")
+		return
+	}
+	buf := bytes.NewBuffer(key)
+
+	tagBytes, _ := buf.ReadBytes(0)
+	if len(tagBytes) > 0 {
+		tag = string(tagBytes[:len(tagBytes)-1])
+	}
+
+	binary.Read(buf, storageByteOrder, &lsn)
+	binary.Read(buf, storageByteOrder, &index)
+
+	return
+}
+
+func keyPrefix(keyType int) byte {
 	flag := (KeyVersion << 4) | (keyType & 0xf)
-	return []byte{byte(flag)}
+	return byte(flag)
 }
 
 func parseKeyPrefix(b byte) (int, int) {
@@ -207,11 +209,3 @@ func parseKeyPrefix(b byte) (int, int) {
 	return vers, kt
 }
 
-/*
-compareKeys is unused in the code but it is used by the tests. Since it uses
-cgo it cannot be in a test file, however.
-*/
-func compareKeys(ptra unsafe.Pointer, lena C.size_t, ptrb unsafe.Pointer, lenb C.size_t) int {
-	cmp := C.go_compare_bytes(nil, ptra, lena, ptrb, lenb)
-	return int(cmp)
-}

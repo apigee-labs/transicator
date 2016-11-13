@@ -8,6 +8,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"encoding/hex"
 )
 
 const (
@@ -21,6 +22,7 @@ var _ = Describe("Storage Main Test", func() {
 	BeforeEach(func() {
 		var err error
 		testDB, err = OpenDB(testDBDir, 1000)
+		fmt.Println(err)
 		Expect(err).Should(Succeed())
 	})
 
@@ -31,6 +33,7 @@ var _ = Describe("Storage Main Test", func() {
 	})
 
 	It("Open and reopen", func() {
+		fmt.Println("Open and re-open")
 		stor, err := OpenDB("./openleveldb", 1000)
 		Expect(err).Should(Succeed())
 		stor.Close()
@@ -39,12 +42,13 @@ var _ = Describe("Storage Main Test", func() {
 		stor.Close()
 		err = stor.Delete()
 		Expect(err).Should(Succeed())
+		fmt.Println("Open and re-open done")
 	})
 
-	It("String metadata", func() {
-		err := quick.Check(testStringMetadata, nil)
-		Expect(err).Should(Succeed())
-	})
+	//It("String metadata", func() {
+	//	err := quick.Check(testStringMetadata, nil)
+	//	Expect(err).Should(Succeed())
+	//})
 
 	It("String metadata negative", func() {
 		ret, err := testDB.GetMetadata("NOTFOUND")
@@ -52,10 +56,10 @@ var _ = Describe("Storage Main Test", func() {
 		Expect(ret).Should(BeNil())
 	})
 
-	It("Int metadata", func() {
-		err := quick.Check(testIntMetadata, nil)
-		Expect(err).Should(Succeed())
-	})
+	//It("Int metadata", func() {
+	//	err := quick.Check(testIntMetadata, nil)
+	//	Expect(err).Should(Succeed())
+	//})
 
 	It("Int metadata negative", func() {
 		ret, err := testDB.GetIntMetadata("REALLYNOTFOUND")
@@ -280,6 +284,9 @@ func testEntry(key string, lsn uint64, index uint32, val []byte) bool {
 	Expect(err).Should(Succeed())
 	ret, err := testDB.GetEntry(key, lsn, index)
 	Expect(err).Should(Succeed())
+	if !bytes.Equal(val, ret) {
+		fmt.Printf("Val is %d %s ret is %d %s, key is %s, lsn is %d index is %d\n", len(val), hex.Dump(val), len(ret), hex.Dump(ret), key, lsn, index)
+	}
 	Expect(bytes.Equal(val, ret)).Should(BeTrue())
 	return true
 }

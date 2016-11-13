@@ -1,33 +1,103 @@
 package storage
 
-/*
-#include <stdlib.h>
-#include "storage_native.h"
-#cgo CFLAGS: -g -O3 -I/usr/local/include
-#cgo LDFLAGS: -L/usr/local/lib -lleveldb
-*/
-import "C"
-
 import (
+	"github.com/tecbot/gorocksdb"
 	"math"
 	"sort"
-	"sync"
-	"unsafe"
-
 	log "github.com/Sirupsen/logrus"
+        "bytes"
+	"fmt"
+
+	"errors"
 )
 
-var defaultWriteOptions = C.leveldb_writeoptions_create()
-var defaultReadOptions = C.leveldb_readoptions_create()
-var dbInitOnce sync.Once
+
+var defaultWriteOptions = gorocksdb.NewDefaultWriteOptions()
+var defaultReadOptions = gorocksdb.NewDefaultReadOptions()
+
+const (
+	ComparatorName = "TRANSICATOR-V1"
+)
+
+type KeyComparator struct {
+}
+
+func (k KeyComparator) Compare(a, b []byte) int {
+	if len(a) < 1 || len(b) < 1 {
+		return 0
+	}
+
+	// Do something reasonable if the versions do not match
+	vers1 := (int)((a[0] >> 4) & 0xf)
+	vers2 := (int)((b[0] >> 4) & 0xf)
+	if (vers1 != KeyVersion) || (vers2 != KeyVersion) {
+		return vers1 + 100 /* WTF IS THIS */
+	}
+
+	// The types don't match, just compare the types
+	type1 := a[0] & 0xf
+	type2 := b[0] & 0xf
+
+	if type1 < type2 {
+		return -1
+	}
+
+	if type1 > type2 {
+		return 1
+	}
+
+	switch type1 {
+	case StringKey:
+		return bytes.Compare(a,b)
+	case IndexKey:
+		return k.CompareIndexKey(a, b)
+	default:
+		return 999
+	}
+
+}
+
+func (k KeyComparator) CompareIndexKey(a,b []byte) int {
+	aScope, aLsn, aIndex, err := keyToLsnAndOffset(a)
+	if err != nil {
+		return 999 // Might as well follow the above when things are berzerk
+	}
+	bScope, bLsn, bIndex, err := keyToLsnAndOffset(b)
+	if err != nil {
+		return 999
+	}
+
+	if aScope == bScope {
+		if aLsn < bLsn {
+			return -1
+		} else if aLsn > bLsn {
+			return 1
+		}
+
+		if aIndex < bIndex {
+			return -1
+		} else if aIndex > bIndex {
+			return 1
+		}
+		return 0
+	} else {
+		return bytes.Compare([]byte(aScope), []byte(bScope))
+	}
+
+
+
+}
+
+func (k KeyComparator) Name() string {
+	return ComparatorName
+}
 
 /*
-A DB is a handle to a LevelDB database.
+A DB is a handles to a LevelDB database.
 */
 type DB struct {
 	baseFile string
-	dbHandle *C.GoDb
-	db       *C.leveldb_t
+	db       *gorocksdb.DB
 }
 
 type readResult struct {
@@ -53,29 +123,19 @@ func OpenDB(baseFile string, cacheSize uint) (*DB, error) {
 		baseFile: baseFile,
 	}
 
-	// One-time init of comparator functions
-	dbInitOnce.Do(func() {
-		C.go_db_init()
-	})
+	var err error
 
-	var dbh *C.GoDb
-	e := C.go_db_open(
-		C.CString(baseFile),
-		C.size_t(cacheSize),
-		&dbh)
+	options := gorocksdb.NewDefaultOptions()
+	options.SetCreateIfMissing(true)
+	options.SetComparator(new(KeyComparator))
+	defer options.Destroy()
 
-	if e != nil {
-		defer freeString(e)
-		err := stringToError(e)
+	stor.db, err = gorocksdb.OpenDb(options, baseFile)
+	if err != nil {
 		return nil, err
 	}
 
 	log.Infof("Opened LevelDB file in %s", baseFile)
-	log.Infof("LevelDB version %d.%d",
-		C.leveldb_major_version(), C.leveldb_minor_version())
-
-	stor.dbHandle = dbh
-	stor.db = dbh.db
 
 	return stor, nil
 }
@@ -91,30 +151,17 @@ func (s *DB) GetDataPath() string {
 Close closes the database cleanly.
 */
 func (s *DB) Close() {
-	C.go_db_close(s.dbHandle)
-	freePtr(unsafe.Pointer(s.dbHandle))
+	log.Infof("Closed DB in %s", s.baseFile)
+	s.db.Close()
 }
 
 /*
 Delete deletes all the files used by the database.
 */
 func (s *DB) Delete() error {
-	var e *C.char
-	opts := C.leveldb_options_create()
-	defer C.leveldb_options_destroy(opts)
-
-	dbCName := C.CString(s.baseFile)
-	defer freeString(dbCName)
-	C.leveldb_destroy_db(opts, dbCName, &e)
-	if e == nil {
-		return nil
-	}
-	defer freeString(e)
-	err := stringToError(e)
-	if err != nil {
-		log.Warningf("Error destroying LevelDB database: %s", err)
-	}
-	return err
+	options := gorocksdb.NewDefaultOptions()
+	defer options.Destroy()
+        return gorocksdb.DestroyDb(s.baseFile, options)
 }
 
 /*
@@ -122,10 +169,9 @@ GetIntMetadata returns metadata with the specified key and converts it
 into a uint64. It returns 0 if the key cannot be found.
 */
 func (s *DB) GetIntMetadata(key string) (int64, error) {
-	keyBuf, keyLen := stringToKey(StringKey, key)
-	defer freePtr(keyBuf)
+	keyBuf := stringToKey(StringKey, key)
 
-	val, valLen, err := s.readEntry(keyBuf, keyLen, defaultReadOptions)
+        val, err := s.db.GetBytes(defaultReadOptions, keyBuf)
 	if err != nil {
 		return 0, err
 	}
@@ -133,8 +179,7 @@ func (s *DB) GetIntMetadata(key string) (int64, error) {
 		return 0, nil
 	}
 
-	defer C.leveldb_free(unsafe.Pointer(val))
-	return ptrToInt(val, valLen), nil
+        return bytesToInt(val), err
 }
 
 /*
@@ -145,20 +190,10 @@ func (s *DB) GetMetadata(key string) ([]byte, error) {
 	return s.readMetadataKey(key, defaultReadOptions)
 }
 
-func (s *DB) readMetadataKey(key string, ro *C.leveldb_readoptions_t) ([]byte, error) {
-	keyBuf, keyLen := stringToKey(StringKey, key)
-	defer freePtr(keyBuf)
+func (s *DB) readMetadataKey(key string, ro *gorocksdb.ReadOptions) ([]byte, error) {
+	keyBuf := stringToKey(StringKey, key)
 
-	val, valLen, err := s.readEntry(keyBuf, keyLen, ro)
-	if err != nil {
-		return nil, err
-	}
-	if val == nil {
-		return nil, nil
-	}
-
-	defer C.leveldb_free(unsafe.Pointer(val))
-	return ptrToBytes(val, valLen), nil
+	return s.readEntry(keyBuf, ro)
 }
 
 /*
@@ -166,36 +201,28 @@ SetIntMetadata sets the metadata with the specified key to
 the integer value.
 */
 func (s *DB) SetIntMetadata(key string, val int64) error {
-	keyBuf, keyLen := stringToKey(StringKey, key)
-	defer freePtr(keyBuf)
-	valBuf, valLen := intToPtr(val)
-	defer freePtr(valBuf)
+	keyBuf := stringToKey(StringKey, key)
+	valBuf := intToBytes(val)
 
-	return s.putEntry(keyBuf, keyLen, valBuf, valLen)
+	return s.putEntry(keyBuf, valBuf, defaultWriteOptions)
 }
 
 /*
 SetMetadata sets the metadata with the specified key.
 */
 func (s *DB) SetMetadata(key string, val []byte) error {
-	keyBuf, keyLen := stringToKey(StringKey, key)
-	defer freePtr(keyBuf)
-	valBuf, valLen := bytesToPtr(val)
-	defer freePtr(valBuf)
+	keyBuf := stringToKey(StringKey, key)
 
-	return s.putEntry(keyBuf, keyLen, valBuf, valLen)
+	return s.putEntry(keyBuf, val, defaultWriteOptions)
 }
 
 /*
 PutEntry writes an entry to the database indexed by scope, lsn, and index in order
 */
 func (s *DB) PutEntry(scope string, lsn uint64, index uint32, data []byte) error {
-	keyBuf, keyLen := indexToKey(IndexKey, scope, lsn, index)
-	defer freePtr(keyBuf)
-	valBuf, valLen := bytesToPtr(data)
-	defer freePtr(valBuf)
+	keyBuf := lsnAndOffsetToKey(IndexKey, scope, lsn, index)
 
-	return s.putEntry(keyBuf, keyLen, valBuf, valLen)
+	return s.putEntry(keyBuf, data, defaultWriteOptions)
 }
 
 /*
@@ -203,49 +230,30 @@ PutEntryAndMetadata writes an entry to the database in the same batch as
 a metadata write.
 */
 func (s *DB) PutEntryAndMetadata(scope string, lsn uint64, index uint32,
-	data []byte, metaKey string, metaVal []byte) error {
-
-	batch := C.leveldb_writebatch_create()
-	defer C.leveldb_writebatch_destroy(batch)
-
-	keyBuf, keyLen := indexToKey(IndexKey, scope, lsn, index)
-	defer freePtr(keyBuf)
-	valBuf, valLen := bytesToPtr(data)
-	defer freePtr(valBuf)
-	C.go_db_writebatch_put(batch, keyBuf, keyLen, valBuf, valLen)
-
-	mkeyBuf, mkeyLen := stringToKey(StringKey, metaKey)
-	defer freePtr(mkeyBuf)
-	mvalBuf, mvalLen := bytesToPtr(metaVal)
-	defer freePtr(mvalBuf)
-	C.go_db_writebatch_put(batch, mkeyBuf, mkeyLen, mvalBuf, mvalLen)
-
-	var e *C.char
-	C.leveldb_write(s.db, defaultWriteOptions, batch, &e)
-
-	if e == nil {
-		return nil
+	data []byte, metaKey string, metaVal []byte) (err error) {
+	if len(data) == 0 || len(metaVal) == 0{
+		err = errors.New("Data or metaval is empty")
+		return
 	}
-	defer C.leveldb_free(unsafe.Pointer(e))
-	return stringToError(e)
+
+	batch := gorocksdb.NewWriteBatch()
+	defer batch.Destroy()
+
+	keyBuf := lsnAndOffsetToKey(IndexKey, scope, lsn, index)
+	batch.Put(keyBuf, data)
+
+	mkeyBuf := stringToKey(StringKey, metaKey)
+	batch.Put(mkeyBuf, metaVal)
+	err = s.db.Write(defaultWriteOptions, batch)
+	return
 }
 
 /*
 GetEntry returns what was written by PutEntry.
 */
 func (s *DB) GetEntry(scope string, lsn uint64, index uint32) ([]byte, error) {
-	keyBuf, keyLen := indexToKey(IndexKey, scope, lsn, index)
-	defer freePtr(keyBuf)
-
-	valBuf, valLen, err := s.readEntry(keyBuf, keyLen, defaultReadOptions)
-	if err != nil {
-		return nil, err
-	}
-	if valBuf == nil {
-		return nil, nil
-	}
-	defer C.leveldb_free(unsafe.Pointer(valBuf))
-	return ptrToBytes(valBuf, valLen), nil
+	keyBuf := lsnAndOffsetToKey(IndexKey, scope, lsn, index)
+	return s.readEntry(keyBuf, defaultReadOptions)
 }
 
 /*
@@ -289,12 +297,12 @@ func (s *DB) GetMultiEntries(scopes []string, metadataKeys []string,
 	limit int, filter func([]byte) bool) ([][]byte, [][]byte, error) {
 
 	// Do this all inside a level DB snapshot so that we get a repeatable read
-	snap := C.leveldb_create_snapshot(s.db)
-	defer C.leveldb_release_snapshot(s.db, snap)
+	snap := s.db.NewSnapshot()
+	defer snap.Release()
 
-	ropts := C.leveldb_readoptions_create()
-	C.leveldb_readoptions_set_snapshot(ropts, snap)
-	defer C.leveldb_readoptions_destroy(ropts)
+	ropts := gorocksdb.NewDefaultReadOptions()
+	ropts.SetSnapshot(snap)
+	defer ropts.Destroy()
 
 	// Read range for each scope
 	var results readResults
@@ -335,64 +343,58 @@ true. It always returns the number of records that were actually deleted
 then a non-nil error will be returned. Be aware that this operation may
 take a long time, so it is important to run it in a separate goroutine.
 */
-func (s *DB) PurgeEntries(filter func([]byte) bool) (uint64, error) {
-	it := C.leveldb_create_iterator(s.db, defaultReadOptions)
-	defer C.leveldb_iter_destroy(it)
-	C.leveldb_iter_seek_to_first(it)
+func (s *DB) PurgeEntries(filter func([]byte) bool) (purgeCount uint64, err error) {
+	it := s.db.NewIterator(defaultReadOptions)
+	defer it.Close()
 
-	var purgeCount uint64
+	it.SeekToFirst()
 
-	for C.leveldb_iter_valid(it) != 0 {
-		var dataLen C.size_t
-		data := C.leveldb_iter_value(it, &dataLen)
-		dataBuf := ptrToBytes(unsafe.Pointer(data), dataLen)
-
+	var rowCount int
+	for it = it; it.Valid(); it.Next() {
+		dataBuf := it.Value().Data()
 		if filter(dataBuf) {
-			var keyLen C.size_t
-			key := C.leveldb_iter_key(it, &keyLen)
-			err := s.deleteEntry(unsafe.Pointer(key), keyLen)
+			err = s.deleteEntry(it.Key().Data())
 			if err != nil {
-				return purgeCount, err
+				return
 			}
 			purgeCount++
 		}
-		C.leveldb_iter_next(it)
+		rowCount++
 	}
-	return purgeCount, nil
+	fmt.Printf("Row count is %d\n", rowCount)
+	return
 }
 
 func (s *DB) readOneRange(scope string, startLSN uint64,
-	startIndex uint32, limit int, ro *C.leveldb_readoptions_t,
+	startIndex uint32, limit int, ro *gorocksdb.ReadOptions,
 	filter func([]byte) bool) (readResults, error) {
 
-	startKeyBuf, startKeyLen := indexToKey(IndexKey, scope, startLSN, startIndex)
-	defer freePtr(startKeyBuf)
-	endKeyBuf, endKeyLen := indexToKey(IndexKey, scope, math.MaxInt64, math.MaxInt32)
-	defer freePtr(endKeyBuf)
+	startKeyBuf := lsnAndOffsetToKey(IndexKey, scope, startLSN, startIndex)
+	endKeyBuf := lsnAndOffsetToKey(IndexKey, scope, math.MaxInt64, math.MaxInt32)
 
-	it := C.leveldb_create_iterator(s.db, ro)
-	defer C.leveldb_iter_destroy(it)
-	C.go_db_iter_seek(it, startKeyBuf, startKeyLen)
+
+	it := s.db.NewIterator(ro)
+	defer it.Close()
+
+	it.Seek(startKeyBuf)
 
 	var results readResults
+	c := new(KeyComparator)
 
-	for len(results) < limit && C.leveldb_iter_valid(it) != 0 {
-		var keyLen C.size_t
-		iterKey := C.leveldb_iter_key(it, &keyLen)
-
-		if compareKeys(unsafe.Pointer(iterKey), keyLen, endKeyBuf, endKeyLen) > 0 {
+	for it = it; it.Valid(); it.Next() {
+		iterKey := it.Key().Data()
+		if c.Compare(iterKey, endKeyBuf) > 0 {
 			// Reached the end of our range
+			//fmt.Printf("Stopped due to end of range, iterKey is %s, endKey is %s\n", hex.Dump(iterKey), hex.Dump(endKeyBuf))
 			break
 		}
 
-		_, iterLSN, iterIx, err := keyToIndex(unsafe.Pointer(iterKey), keyLen)
+		_, iterLSN, iterIx, err := keyToIndex(iterKey)
 		if err != nil {
 			return nil, err
 		}
 
-		var dataLen C.size_t
-		iterData := C.leveldb_iter_value(it, &dataLen)
-		newVal := ptrToBytes(unsafe.Pointer(iterData), dataLen)
+		newVal := it.Value().Data()
 
 		if filter == nil || filter(newVal) {
 			result := readResult{
@@ -402,59 +404,51 @@ func (s *DB) readOneRange(scope string, startLSN uint64,
 			}
 			results = append(results, result)
 		}
-		C.leveldb_iter_next(it)
 	}
 
 	return results, nil
 }
 
-func (s *DB) deleteEntry(keyPtr unsafe.Pointer, keyLen C.size_t) error {
-	var e *C.char
-	C.go_db_delete(s.db, defaultWriteOptions, keyPtr, keyLen, &e)
-	if e != nil {
-		defer C.leveldb_free(unsafe.Pointer(e))
-		return stringToError(e)
-	}
-	return nil
+func (s *DB) deleteEntry(key []byte) (err error) {
+	err = s.db.Delete(defaultWriteOptions, key)
+	return
 }
 
-func (s *DB) putEntry(
-	keyPtr unsafe.Pointer, keyLen C.size_t,
-	valPtr unsafe.Pointer, valLen C.size_t) error {
-
-	var e *C.char
-	C.go_db_put(
-		s.db, defaultWriteOptions,
-		keyPtr, keyLen, valPtr, valLen,
-		&e)
-	if e == nil {
-		return nil
-	}
-	defer C.leveldb_free(unsafe.Pointer(e))
-	return stringToError(e)
-}
-
-func (s *DB) readEntry(
-	keyPtr unsafe.Pointer, keyLen C.size_t,
-	ro *C.leveldb_readoptions_t) (unsafe.Pointer, C.size_t, error) {
-
-	var valLen C.size_t
-	var e *C.char
-
-	val := C.go_db_get(
-		s.db, ro,
-		keyPtr, keyLen,
-		&valLen, &e)
-
-	if val == nil {
-		if e == nil {
-			return nil, 0, nil
+func zeroByteSlice(slice []byte) (allZeros bool) {
+	allZeros = true
+	for s, _ := range(slice) {
+		if s != 0x0 {
+			allZeros = false
+			return
 		}
-		defer C.leveldb_free(unsafe.Pointer(e))
-		return nil, 0, stringToError(e)
+	}
+	return
+}
+
+func (s *DB) putEntry(key, value []byte, wo *gorocksdb.WriteOptions) (err error) {
+	if zeroByteSlice(key) || zeroByteSlice(value) {
+		return errors.New("Invalid zero-length key or value")
+	}
+	if wo == nil {
+		wo = gorocksdb.NewDefaultWriteOptions()
+		defer wo.Destroy()
+	}
+	err = s.db.Put(wo,key,value)
+	return
+}
+
+func (s *DB) readEntry(key []byte, ro *gorocksdb.ReadOptions) (val []byte, err error) {
+	if zeroByteSlice(key)  {
+		err = errors.New("Invalid zero-length key or value")
+		return
+	}
+	if ro == nil {
+		ro = gorocksdb.NewDefaultReadOptions()
+		defer ro.Destroy()
 	}
 
-	return unsafe.Pointer(val), valLen, nil
+	val, err = s.db.GetBytes(ro, key)
+	return
 }
 
 // Needed to sort read results by LSN and index
