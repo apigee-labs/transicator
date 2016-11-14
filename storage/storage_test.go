@@ -44,10 +44,10 @@ var _ = Describe("Storage Main Test", func() {
 		fmt.Println("Open and re-open done")
 	})
 
-	//It("String metadata", func() {
-	//	err := quick.Check(testStringMetadata, nil)
-	//	Expect(err).Should(Succeed())
-	//})
+	It("String metadata", func() {
+		err := quick.Check(testStringMetadata, nil)
+		Expect(err).Should(Succeed())
+	})
 
 	It("String metadata negative", func() {
 		ret, err := testDB.GetMetadata("NOTFOUND")
@@ -55,10 +55,10 @@ var _ = Describe("Storage Main Test", func() {
 		Expect(ret).Should(BeNil())
 	})
 
-	//It("Int metadata", func() {
-	//	err := quick.Check(testIntMetadata, nil)
-	//	Expect(err).Should(Succeed())
-	//})
+	It("Int metadata", func() {
+		err := quick.Check(testIntMetadata, nil)
+		Expect(err).Should(Succeed())
+	})
 
 	It("Int metadata negative", func() {
 		ret, err := testDB.GetIntMetadata("REALLYNOTFOUND")
