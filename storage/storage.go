@@ -6,8 +6,6 @@ import (
 	"sort"
 	log "github.com/Sirupsen/logrus"
         "bytes"
-	"fmt"
-
 	"errors"
 )
 
@@ -98,6 +96,7 @@ A DB is a handles to a LevelDB database.
 type DB struct {
 	baseFile string
 	db       *gorocksdb.DB
+	options  *gorocksdb.Options
 }
 
 type readResult struct {
@@ -125,12 +124,11 @@ func OpenDB(baseFile string, cacheSize uint) (*DB, error) {
 
 	var err error
 
-	options := gorocksdb.NewDefaultOptions()
-	options.SetCreateIfMissing(true)
-	options.SetComparator(new(KeyComparator))
-	defer options.Destroy()
+	stor.options = gorocksdb.NewDefaultOptions()
+	stor.options.SetCreateIfMissing(true)
+	stor.options.SetComparator(new(KeyComparator))
 
-	stor.db, err = gorocksdb.OpenDb(options, baseFile)
+	stor.db, err = gorocksdb.OpenDb(stor.options, baseFile)
 	if err != nil {
 		return nil, err
 	}
@@ -153,6 +151,7 @@ Close closes the database cleanly.
 func (s *DB) Close() {
 	log.Infof("Closed DB in %s", s.baseFile)
 	s.db.Close()
+	s.options.Destroy()
 }
 
 /*
@@ -361,7 +360,6 @@ func (s *DB) PurgeEntries(filter func([]byte) bool) (purgeCount uint64, err erro
 		}
 		rowCount++
 	}
-	fmt.Printf("Row count is %d\n", rowCount)
 	return
 }
 
@@ -381,7 +379,7 @@ func (s *DB) readOneRange(scope string, startLSN uint64,
 	var results readResults
 	c := new(KeyComparator)
 
-	for it = it; it.Valid(); it.Next() {
+	for it = it; it.Valid() && len(results) < limit; it.Next() {
 		iterKey := it.Key().Data()
 		if c.Compare(iterKey, endKeyBuf) > 0 {
 			// Reached the end of our range
@@ -426,27 +424,11 @@ func zeroByteSlice(slice []byte) (allZeros bool) {
 }
 
 func (s *DB) putEntry(key, value []byte, wo *gorocksdb.WriteOptions) (err error) {
-	if zeroByteSlice(key) || zeroByteSlice(value) {
-		return errors.New("Invalid zero-length key or value")
-	}
-	if wo == nil {
-		wo = gorocksdb.NewDefaultWriteOptions()
-		defer wo.Destroy()
-	}
 	err = s.db.Put(wo,key,value)
 	return
 }
 
 func (s *DB) readEntry(key []byte, ro *gorocksdb.ReadOptions) (val []byte, err error) {
-	if zeroByteSlice(key)  {
-		err = errors.New("Invalid zero-length key or value")
-		return
-	}
-	if ro == nil {
-		ro = gorocksdb.NewDefaultReadOptions()
-		defer ro.Destroy()
-	}
-
 	val, err = s.db.GetBytes(ro, key)
 	return
 }

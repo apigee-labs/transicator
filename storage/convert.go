@@ -138,8 +138,6 @@ func keyToLsnAndOffset(key []byte) (scope string, lsn uint64, index uint32, err 
 	var version byte
 	err = binary.Read(buf, storageByteOrder, &version)
 	if err != nil {
-		fmt.Printf("Failed to read version byte %s\n", err)
-
 		return
 	}
 	var scopeBytes []byte
@@ -149,7 +147,6 @@ func keyToLsnAndOffset(key []byte) (scope string, lsn uint64, index uint32, err 
 		err = binary.Read(buf, storageByteOrder, &currentByte)
 		cnt++
 		if err != nil {
-			fmt.Printf("Failed to read string byte %s\n", err)
 			return
 		}
 		if currentByte != 0x0 {
@@ -162,14 +159,10 @@ func keyToLsnAndOffset(key []byte) (scope string, lsn uint64, index uint32, err 
 
 	err = binary.Read(buf, storageByteOrder, &lsn)
 	if err != nil {
-		fmt.Printf("Failed to read lsn %s\n", err)
-
 		return
 	}
 	err = binary.Read(buf, storageByteOrder, &index)
 	if err != nil {
-		fmt.Printf("Failed to read index %s\n", err)
-
 		return
 	}
 	return

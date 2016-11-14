@@ -22,7 +22,6 @@ var _ = Describe("Storage Main Test", func() {
 	BeforeEach(func() {
 		var err error
 		testDB, err = OpenDB(testDBDir, 1000)
-		fmt.Println(err)
 		Expect(err).Should(Succeed())
 	})
 
