@@ -91,7 +91,7 @@ func (k KeyComparator) Name() string {
 }
 
 /*
-A DB is a handles to a LevelDB database.
+A DB is a handle to a RocksDB database.
 */
 type DB struct {
 	baseFile string
@@ -107,7 +107,7 @@ type readResult struct {
 type readResults []readResult
 
 /*
-OpenDB opens a LevelDB database and makes it available for reads and writes.
+OpenDB opens a RocksDB database and makes it available for reads and writes.
 Opened databases should be closed when done.
 
 The "baseFile" parameter refers to the name of a directory where RocksDB can
@@ -133,7 +133,7 @@ func OpenDB(baseFile string, cacheSize uint) (*DB, error) {
 		return nil, err
 	}
 
-	log.Infof("Opened LevelDB file in %s", baseFile)
+	log.Infof("Opened RocksDB file in %s", baseFile)
 
 	return stor, nil
 }
