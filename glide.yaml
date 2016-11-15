@@ -12,8 +12,11 @@ import:
   version: master
 - package: github.com/tecbot/gorocksdb
   version: master
-- package: gopkg.in/gemnasium/logrus-airbrake-hook.v2
-  version: master
-- package: github.com/onsi/ginkgo
 testImport:
 - package: github.com/onsi/gomega
+- package: github.com/onsi/ginkgo
+ignore:
+- github.com/cockroachdb/c-jemalloc
+- github.com/cockroachdb/c-lz4
+- github.com/cockroachdb/c-rocksdb
+- github.com/cockroachdb/c-snappy

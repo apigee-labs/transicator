@@ -1,22 +1,23 @@
-hash: 6a1bfc86a822fecdc217316401d4a276ae0cc53738b71df58ae5f13edd50f481
-updated: 2016-11-11T18:53:46.622450619-08:00
+hash: 0cf9187cfbaa1eacb7ac67e0be4998605ff15e9eec51781724526153acd5df1e
+updated: 2016-11-15T15:27:20.771223505-08:00
 imports:
 - name: github.com/30x/goscaffold
   version: 584cecee6ca8118c7dd7916844df88db6f9fc13b
-- name: github.com/cockroachdb/c-jemalloc
-  version: 42e6a32cd7a4dff9c70d80323681d46d046181ef
-- name: github.com/cockroachdb/c-lz4
-  version: 834d3303c9e84b1045bc57c3eb3723ee8cb4d33b
-- name: github.com/cockroachdb/c-rocksdb
-  version: 894d369c4ea259b65f75563feeb06bea322a8450
-- name: github.com/cockroachdb/c-snappy
-  version: d4e7b428fe7fc09e93573df3448567a62df8c9fa
 - name: github.com/golang/protobuf
   version: df1d3ca07d2d07bba352d5b73c4313b4e2a6203e
   subpackages:
   - proto
 - name: github.com/julienschmidt/httprouter
   version: 8c199fb6259ffc1af525cc3ad52ee60ba8359669
+- name: github.com/Sirupsen/logrus
+  version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
+- name: github.com/tecbot/gorocksdb
+  version: f2a0b10f7228cff360e2d9efa081a15a8cbd68b7
+- name: golang.org/x/sys
+  version: 9bb9f0998d48b31547d975974935ae9b48c7a03c
+  subpackages:
+  - unix
+testImports:
 - name: github.com/onsi/ginkgo
   version: 45a5f6ffb2a14e4f29698c16ae4c0a34018a8951
   subpackages:
@@ -34,17 +35,6 @@ imports:
   - reporters
   - reporters/stenographer
   - types
-- name: github.com/Sirupsen/logrus
-  version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
-- name: github.com/tecbot/gorocksdb
-  version: f2a0b10f7228cff360e2d9efa081a15a8cbd68b7
-- name: golang.org/x/sys
-  version: 9bb9f0998d48b31547d975974935ae9b48c7a03c
-  subpackages:
-  - unix
-- name: gopkg.in/gemnasium/logrus-airbrake-hook.v2
-  version: bfee1239d796830ca346767650cce5ba90d58c57
-testImports:
 - name: github.com/onsi/gomega
   version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
   subpackages:

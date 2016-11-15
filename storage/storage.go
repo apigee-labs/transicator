@@ -1,14 +1,14 @@
 package storage
 
 import (
-	"github.com/tecbot/gorocksdb"
+	"bytes"
+	"errors"
 	"math"
 	"sort"
-	log "github.com/Sirupsen/logrus"
-        "bytes"
-	"errors"
-)
 
+	log "github.com/Sirupsen/logrus"
+	"github.com/tecbot/gorocksdb"
+)
 
 var defaultWriteOptions = gorocksdb.NewDefaultWriteOptions()
 var defaultReadOptions = gorocksdb.NewDefaultReadOptions()
@@ -46,7 +46,7 @@ func (k KeyComparator) Compare(a, b []byte) int {
 
 	switch type1 {
 	case StringKey:
-		return bytes.Compare(a,b)
+		return bytes.Compare(a, b)
 	case IndexKey:
 		return k.CompareIndexKey(a, b)
 	default:
@@ -55,7 +55,7 @@ func (k KeyComparator) Compare(a, b []byte) int {
 
 }
 
-func (k KeyComparator) CompareIndexKey(a,b []byte) int {
+func (k KeyComparator) CompareIndexKey(a, b []byte) int {
 	aScope, aLsn, aIndex, err := keyToLsnAndOffset(a)
 	if err != nil {
 		return 999 // Might as well follow the above when things are berzerk
@@ -81,8 +81,6 @@ func (k KeyComparator) CompareIndexKey(a,b []byte) int {
 	} else {
 		return bytes.Compare([]byte(aScope), []byte(bScope))
 	}
-
-
 
 }
 
@@ -160,7 +158,7 @@ Delete deletes all the files used by the database.
 func (s *DB) Delete() error {
 	options := gorocksdb.NewDefaultOptions()
 	defer options.Destroy()
-        return gorocksdb.DestroyDb(s.baseFile, options)
+	return gorocksdb.DestroyDb(s.baseFile, options)
 }
 
 /*
@@ -170,7 +168,7 @@ into a uint64. It returns 0 if the key cannot be found.
 func (s *DB) GetIntMetadata(key string) (int64, error) {
 	keyBuf := stringToKey(StringKey, key)
 
-        val, err := s.db.GetBytes(defaultReadOptions, keyBuf)
+	val, err := s.db.GetBytes(defaultReadOptions, keyBuf)
 	if err != nil {
 		return 0, err
 	}
@@ -178,7 +176,7 @@ func (s *DB) GetIntMetadata(key string) (int64, error) {
 		return 0, nil
 	}
 
-        return bytesToInt(val), err
+	return bytesToInt(val), err
 }
 
 /*
@@ -230,7 +228,7 @@ a metadata write.
 */
 func (s *DB) PutEntryAndMetadata(scope string, lsn uint64, index uint32,
 	data []byte, metaKey string, metaVal []byte) (err error) {
-	if len(data) == 0 || len(metaVal) == 0{
+	if len(data) == 0 || len(metaVal) == 0 {
 		err = errors.New("Data or metaval is empty")
 		return
 	}
@@ -370,7 +368,6 @@ func (s *DB) readOneRange(scope string, startLSN uint64,
 	startKeyBuf := lsnAndOffsetToKey(IndexKey, scope, startLSN, startIndex)
 	endKeyBuf := lsnAndOffsetToKey(IndexKey, scope, math.MaxInt64, math.MaxInt32)
 
-
 	it := s.db.NewIterator(ro)
 	defer it.Close()
 
@@ -414,7 +411,7 @@ func (s *DB) deleteEntry(key []byte) (err error) {
 
 func zeroByteSlice(slice []byte) (allZeros bool) {
 	allZeros = true
-	for s, _ := range(slice) {
+	for s, _ := range slice {
 		if s != 0x0 {
 			allZeros = false
 			return
@@ -424,7 +421,7 @@ func zeroByteSlice(slice []byte) (allZeros bool) {
 }
 
 func (s *DB) putEntry(key, value []byte, wo *gorocksdb.WriteOptions) (err error) {
-	err = s.db.Put(wo,key,value)
+	err = s.db.Put(wo, key, value)
 	return
 }
 
