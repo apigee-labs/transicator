@@ -20,10 +20,18 @@ import (
 	"database/sql/driver"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"math"
 	"strconv"
 	"time"
+)
+
+const (
+	/*
+		postgresEpoch represents January 1, 2000, UTC, in nanoseconds
+		from the Unix epoch (which is January 1, 1970).
+	*/
+	postgresEpochNanos = 946684800000000000
+	nanosPerMicro      = 1000
 )
 
 /*
@@ -46,13 +54,14 @@ const (
 )
 
 /*
-isBinary returns true if the type should be represented as a []byte,
+isBinaryValue returns true if the type should be represented as a []byte
+when returned from the driver,
 and not converted into a string. Anything that returns "true" here
 needs special handling in the other conversion functions below.
 */
-func (t PgType) isBinary() bool {
+func (t PgType) isBinaryValue() bool {
 	switch t {
-	case Bytea, Int2, Int4, Int8, OID:
+	case Bytea, Int2, Int4, Int8, OID, TimestampTZ:
 		return true
 	default:
 		return false
@@ -60,7 +69,27 @@ func (t PgType) isBinary() bool {
 }
 
 /*
-convertParameterValue is used to convert input values to a string so
+isBinaryParameter returns true if the type should be represented in a binary format
+when we send it as a parameter to Postgres, as opposed to a string.
+*/
+func (t PgType) isBinaryParameter(a driver.Value) bool {
+	switch t {
+	case Bytea, Int2, Int4, Int8, OID:
+		return true
+	case TimestampTZ:
+		switch a.(type) {
+		case time.Time:
+			return true
+		default:
+			return false
+		}
+	default:
+		return false
+	}
+}
+
+/*
+convertParameterValue is used to convert input values to a byte array so
 that they may be passed on to SQL.
 */
 func convertParameterValue(t PgType, v driver.Value) ([]byte, error) {
@@ -73,6 +102,8 @@ func convertParameterValue(t PgType, v driver.Value) ([]byte, error) {
 		return convertInt4Param(convertIntParam(v))
 	case Int8:
 		return convertInt8Param(convertIntParam(v))
+	case TimestampTZ:
+		return convertTimestampParam(v)
 	default:
 		return convertStringParam(v)
 	}
@@ -99,6 +130,19 @@ func convertStringParam(v driver.Value) ([]byte, error) {
 		return v.([]byte), nil
 	default:
 		return nil, errors.New("Invalid value type")
+	}
+}
+
+/*
+convertTimestamp will produce a binary-format timestamp if the input is a
+time.Time, and otherwise will produce a string.
+*/
+func convertTimestampParam(v driver.Value) ([]byte, error) {
+	switch v.(type) {
+	case time.Time:
+		return convertInt8Param(TimeToPgTimestamp(v.(time.Time)), nil)
+	default:
+		return convertStringParam(v)
 	}
 }
 
@@ -212,13 +256,10 @@ func convertColumnValue(t PgType, b []byte) driver.Value {
 		if b == nil {
 			return nil
 		}
-		// Timestamps are returned as strings. Parse them into a Time value
-		// in case the user wants that instead of a string.
-		tm, err := time.Parse(pgTimeFormat, string(b))
-		if err == nil {
-			return tm
-		}
-		return []byte(fmt.Sprintf("Invalid timestamp %s", string(b)))
+		buf := bytes.NewBuffer(b)
+		var ts8 int64
+		binary.Read(buf, networkByteOrder, &ts8)
+		return PgTimestampToTime(ts8)
 	default:
 		// This may have been a "bytea" column, in which case we must return the
 		// raw bytes. Otherwise, the database returned a string or nil here, and
@@ -226,4 +267,20 @@ func convertColumnValue(t PgType, b []byte) driver.Value {
 		// into whatever type the user asked for using string parsing.
 		return b
 	}
+}
+
+/*
+PgTimestampToTime converts a Postgres timestamp, expressed in microseconds
+since midnight, January 1, 2001, into a Go Time.
+*/
+func PgTimestampToTime(pts int64) time.Time {
+	utx := (pts * nanosPerMicro) + postgresEpochNanos
+	return time.Unix(0, utx)
+}
+
+/*
+TimeToPgTimestamp converts a Go Time into a Postgres timestamp.
+*/
+func TimeToPgTimestamp(t time.Time) int64 {
+	return (t.UnixNano() - postgresEpochNanos) / nanosPerMicro
 }

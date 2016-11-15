@@ -129,6 +129,51 @@ var _ = Describe("Data type tests", func() {
 		Expect(err).Should(Succeed())
 	})
 
+	It("Timestamps as string", func() {
+		testTime, err := time.Parse(pgTimeFormat, "2007-03-28 14:30:00-05")
+		Expect(err).Should(Succeed())
+		_, err =
+			driverTypeDB.Exec("insert into client_test (id, timestamp) values(1, $1)",
+				"2007-03-28 14:30:00 -5:00")
+		Expect(err).Should(Succeed())
+
+		row := driverTypeDB.QueryRow("select timestamp from client_test where id = 1")
+		var tss string
+		err = row.Scan(&tss)
+		Expect(err).Should(Succeed())
+		tsst, err := time.Parse(time.RFC3339, tss)
+		Expect(err).Should(Succeed())
+		Expect(tsst.UnixNano()).Should(Equal(testTime.UnixNano()))
+
+		row = driverTypeDB.QueryRow("select timestamp from client_test where id = 1")
+		var ts time.Time
+		err = row.Scan(&ts)
+		Expect(err).Should(Succeed())
+		Expect(ts.UnixNano()).Should(Equal(testTime.UnixNano()))
+	})
+
+	It("Timestamps as Time", func() {
+		testTime, err := time.Parse(pgTimeFormat, "2007-03-28 14:30:00-05")
+		Expect(err).Should(Succeed())
+		_, err =
+			driverTypeDB.Exec("insert into client_test (id, timestamp) values(1, $1)", testTime)
+		Expect(err).Should(Succeed())
+
+		row := driverTypeDB.QueryRow("select timestamp from client_test where id = 1")
+		var tss string
+		err = row.Scan(&tss)
+		Expect(err).Should(Succeed())
+		tsst, err := time.Parse(time.RFC3339, tss)
+		Expect(err).Should(Succeed())
+		Expect(tsst.UnixNano()).Should(Equal(testTime.UnixNano()))
+
+		row = driverTypeDB.QueryRow("select timestamp from client_test where id = 1")
+		var ts time.Time
+		err = row.Scan(&ts)
+		Expect(err).Should(Succeed())
+		Expect(ts.UnixNano()).Should(Equal(testTime.UnixNano()))
+	})
+
 	It("String null", func() {
 		_, err := driverTypeDB.Exec("insert into client_test (id) values (1)")
 		Expect(err).Should(Succeed())
