@@ -2,13 +2,16 @@ package storage
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math"
 	"testing/quick"
 
+	"encoding/binary"
+	"encoding/hex"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"encoding/hex"
 )
 
 const (
@@ -326,4 +329,58 @@ func testEntryAndData(key string, lsn uint64, index uint32, val []byte,
 	Expect(len(entries)).Should(Equal(1))
 	Expect(len(datas)).Should(Equal(1))
 	return true
+}
+
+func uintToKey(keyType int, v uint64) []byte {
+	buf := &bytes.Buffer{}
+	binary.Write(buf, storageByteOrder, keyPrefix(keyType))
+	binary.Write(buf, storageByteOrder, v)
+	return buf.Bytes()
+}
+
+func keyToUint(key []byte) (vers int, intKey uint64, err error) {
+	if len(key) < 1 {
+		return 0, 0, errors.New("Invalid key")
+	}
+	buf := bytes.NewBuffer(key)
+
+	var ktb byte
+	binary.Read(buf, storageByteOrder, &ktb)
+	vers, _ = parseKeyPrefix(ktb)
+	if vers != KeyVersion {
+		err = fmt.Errorf("Invalid key version %d", vers)
+		return
+	}
+	binary.Read(buf, storageByteOrder, &intKey)
+	return
+}
+
+func keyToString(key []byte) (keyType int, keyString string, err error) {
+	if len(key) < 1 {
+		err = errors.New("Invalid key")
+		return
+	}
+	buf := bytes.NewBuffer(key)
+
+	var ktb byte
+	var vers int
+	binary.Read(buf, storageByteOrder, &ktb)
+	vers, keyType = parseKeyPrefix(ktb)
+	if vers != KeyVersion {
+		err = fmt.Errorf("Invalid key version %d", vers)
+		return
+	}
+
+	keyBytes, _ := buf.ReadBytes(0)
+	if len(keyBytes) > 0 {
+		keyString = string(keyBytes[:len(keyBytes)-1])
+	}
+	return
+}
+
+func parseKeyPrefix(b byte) (int, int) {
+	bi := int(b)
+	vers := (bi >> 4) & 0xf
+	kt := bi & 0xf
+	return vers, kt
 }

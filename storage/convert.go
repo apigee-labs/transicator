@@ -1,11 +1,9 @@
 package storage
 
-
 import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 )
 
 /* These have to match constants in leveldb_native.h */
@@ -39,36 +37,6 @@ const (
 var storageByteOrder = binary.LittleEndian
 
 /*
- * uint64 key, used for entries. Used in tests so not dead code.
- */
-func uintToKey(keyType int, v uint64) ([]byte) {
-	buf := &bytes.Buffer{}
-	binary.Write(buf, storageByteOrder, keyPrefix(keyType))
-	binary.Write(buf, storageByteOrder, v)
-	return buf.Bytes()
-}
-
-/*
- * uint64 key, used for entries. Used in tests so not dead code.
- */
-func keyToUint(key []byte) (vers int, intKey uint64, err error) {
-	if len(key) < 1 {
-		return 0, 0, errors.New("Invalid key")
-	}
-	buf := bytes.NewBuffer(key)
-
-	var ktb byte
-	binary.Read(buf, storageByteOrder, &ktb)
-	vers, _ = parseKeyPrefix(ktb)
-	if vers != KeyVersion {
-		err = fmt.Errorf("Invalid key version %d", vers)
-		return
-	}
-	binary.Read(buf, storageByteOrder, &intKey)
-	return
-}
-
-/*
  * String key, used for metadata.
  */
 func stringToKey(keyType int, k string) (key []byte) {
@@ -89,33 +57,6 @@ func intToBytes(v int64) []byte {
 func bytesToInt(bb []byte) (ret int64) {
 	buf := bytes.NewBuffer(bb)
 	binary.Read(buf, storageByteOrder, &ret)
-	return
-}
-
-/*
-keyToString is unused in the code but it is used in the test. Since it uses
-cgo it cannot be in a test file, however.
-*/
-func keyToString(key []byte) (keyType int, keyString string, err error) {
-	if len(key) < 1 {
-		err = errors.New("Invalid key")
-		return
-	}
-	buf := bytes.NewBuffer(key)
-
-	var ktb byte
-	var vers int
-	binary.Read(buf, storageByteOrder, &ktb)
-	vers, keyType = parseKeyPrefix(ktb)
-	if vers != KeyVersion {
-		err = fmt.Errorf("Invalid key version %d", vers)
-		return
-	}
-
-	keyBytes, _ := buf.ReadBytes(0)
-	if len(keyBytes) > 0 {
-		keyString = string(keyBytes[:len(keyBytes)-1])
-	}
 	return
 }
 
@@ -194,11 +135,3 @@ func keyPrefix(keyType int) byte {
 	flag := (KeyVersion << 4) | (keyType & 0xf)
 	return byte(flag)
 }
-
-func parseKeyPrefix(b byte) (int, int) {
-	bi := int(b)
-	vers := (bi >> 4) & 0xf
-	kt := bi & 0xf
-	return vers, kt
-}
-

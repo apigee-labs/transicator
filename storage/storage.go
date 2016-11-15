@@ -14,12 +14,19 @@ var defaultWriteOptions = gorocksdb.NewDefaultWriteOptions()
 var defaultReadOptions = gorocksdb.NewDefaultReadOptions()
 
 const (
+	// ComparatorName gets persisted in the DB and must be handled if changed
 	ComparatorName = "TRANSICATOR-V1"
 )
 
+/*
+A KeyComparator is the main comparator for the database.
+*/
 type KeyComparator struct {
 }
 
+/*
+Compare works for all key types in the database.
+*/
 func (k KeyComparator) Compare(a, b []byte) int {
 	if len(a) < 1 || len(b) < 1 {
 		return 0
@@ -48,14 +55,14 @@ func (k KeyComparator) Compare(a, b []byte) int {
 	case StringKey:
 		return bytes.Compare(a, b)
 	case IndexKey:
-		return k.CompareIndexKey(a, b)
+		return k.compareIndexKey(a, b)
 	default:
 		return 999
 	}
 
 }
 
-func (k KeyComparator) CompareIndexKey(a, b []byte) int {
+func (k KeyComparator) compareIndexKey(a, b []byte) int {
 	aScope, aLsn, aIndex, err := keyToLsnAndOffset(a)
 	if err != nil {
 		return 999 // Might as well follow the above when things are berzerk
@@ -78,12 +85,14 @@ func (k KeyComparator) CompareIndexKey(a, b []byte) int {
 			return 1
 		}
 		return 0
-	} else {
-		return bytes.Compare([]byte(aScope), []byte(bScope))
 	}
 
+	return bytes.Compare([]byte(aScope), []byte(bScope))
 }
 
+/*
+Name is part of the comparator interface.
+*/
 func (k KeyComparator) Name() string {
 	return ComparatorName
 }
@@ -347,7 +356,7 @@ func (s *DB) PurgeEntries(filter func([]byte) bool) (purgeCount uint64, err erro
 	it.SeekToFirst()
 
 	var rowCount int
-	for it = it; it.Valid(); it.Next() {
+	for ; it.Valid(); it.Next() {
 		dataBuf := it.Value().Data()
 		if filter(dataBuf) {
 			err = s.deleteEntry(it.Key().Data())
@@ -376,7 +385,7 @@ func (s *DB) readOneRange(scope string, startLSN uint64,
 	var results readResults
 	c := new(KeyComparator)
 
-	for it = it; it.Valid() && len(results) < limit; it.Next() {
+	for ; it.Valid() && len(results) < limit; it.Next() {
 		iterKey := it.Key().Data()
 		if c.Compare(iterKey, endKeyBuf) > 0 {
 			// Reached the end of our range
@@ -406,17 +415,6 @@ func (s *DB) readOneRange(scope string, startLSN uint64,
 
 func (s *DB) deleteEntry(key []byte) (err error) {
 	err = s.db.Delete(defaultWriteOptions, key)
-	return
-}
-
-func zeroByteSlice(slice []byte) (allZeros bool) {
-	allZeros = true
-	for s, _ := range slice {
-		if s != 0x0 {
-			allZeros = false
-			return
-		}
-	}
 	return
 }
 
