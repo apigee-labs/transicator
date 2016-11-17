@@ -13,6 +13,7 @@ import (
 
 var defaultWriteOptions = gorocksdb.NewDefaultWriteOptions()
 var defaultReadOptions = gorocksdb.NewDefaultReadOptions()
+var entryComparator = new(entryCmp)
 
 const (
 	// ComparatorName gets persisted in the DB and must be handled if changed
@@ -25,7 +26,7 @@ const (
 	metadataCFName = "metadata"
 )
 
-type entryComparator struct {
+type entryCmp struct {
 }
 
 /*
@@ -33,7 +34,7 @@ Compare tests the order of two keys in the "entries" collection. Keys are sorted
 primarily in scope order, then by LSN, then by index within the LSN. This
 allows searches to be linear for a given scope.
 */
-func (c entryComparator) Compare(a, b []byte) int {
+func (c entryCmp) Compare(a, b []byte) int {
 	aScope, aLsn, aIndex, err := keyToLsnAndOffset(a)
 	if err != nil {
 		panic(fmt.Sprintf("Error parsing database key: %s", err))
@@ -64,7 +65,7 @@ func (c entryComparator) Compare(a, b []byte) int {
 /*
 Name is part of the comparator interface.
 */
-func (c entryComparator) Name() string {
+func (c entryCmp) Name() string {
 	return ComparatorName
 }
 
@@ -112,7 +113,7 @@ func OpenDB(baseFile string) (*DB, error) {
 	stor.dfltOpts = gorocksdb.NewDefaultOptions()
 
 	stor.entriesOpts = gorocksdb.NewDefaultOptions()
-	stor.entriesOpts.SetComparator(new(entryComparator))
+	stor.entriesOpts.SetComparator(entryComparator)
 
 	var cfs []*gorocksdb.ColumnFamilyHandle
 	stor.db, cfs, err = gorocksdb.OpenDbColumnFamilies(
@@ -371,11 +372,10 @@ func (s *DB) readOneRange(scope string, startLSN uint64,
 	it.Seek(startKeyBuf)
 
 	var results readResults
-	c := new(entryComparator)
 
 	for ; it.Valid() && len(results) < limit; it.Next() {
 		iterKey := it.Key().Data()
-		if c.Compare(iterKey, endKeyBuf) > 0 {
+		if entryComparator.Compare(iterKey, endKeyBuf) > 0 {
 			// Reached the end of our range
 			//fmt.Printf("Stopped due to end of range, iterKey is %s, endKey is %s\n", hex.Dump(iterKey), hex.Dump(endKeyBuf))
 			break

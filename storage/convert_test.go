@@ -46,8 +46,7 @@ func testIndexKeyCompare(tag1, tag2 string, lsn1, lsn2 uint64, seq1, seq2 uint32
 	Expect(s2).Should(Equal(tag2))
 	Expect(l2).Should(Equal(lsn2))
 	Expect(i2).Should(Equal(seq2))
-	c := new(entryComparator)
-	cmp := c.Compare(kb1, kb2)
+	cmp := entryComparator.Compare(kb1, kb2)
 
 	if tag1 < tag2 {
 		return cmp < 0
