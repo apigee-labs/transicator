@@ -12,9 +12,12 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/apigee-labs/transicator/pgclient"
 	"github.com/julienschmidt/httprouter"
+	"github.com/spf13/viper"
 )
 
 const (
+	packageName string = "transicator"
+	appName     string = "snapshotserver"
 	// Default timeout for individual Postgres transactions
 	defaultPGTimeout = 30 * time.Second
 )
@@ -33,26 +36,36 @@ func printUsage() {
  */
 func main() {
 
-	var (
-		port       int
-		securePort int
-		mgmtPort   int
-		pgURL      string
-		debug      bool
-		help       bool
-		key        string
-		cert       string
-	)
-
-	flag.IntVar(&port, "p", -1, "Local Binding port")
-	flag.IntVar(&securePort, "sp", -1, "HTTP listen port")
-	flag.IntVar(&mgmtPort, "mp", -1, "Management port (for health checks)")
-	flag.StringVar(&pgURL, "u", "", "URL to connect to Postgres DB")
-	flag.StringVar(&key, "key", "", "TLS key file (must be unencrypted)")
-	flag.StringVar(&cert, "cert", "", "TLS certificate file")
-	flag.BoolVar(&debug, "D", false, "Turn on debugging")
-	flag.BoolVar(&help, "h", false, "Print help message")
+	// Define legacy GO Flags
+	flag.Int("p", -1, "Local Binding port")
+	flag.Int("sp", -1, "HTTP listen port")
+	flag.Int("mp", -1, "Management port (for health checks)")
+	flag.String("u", "", "URL to connect to Postgres DB")
+	flag.String("key", "", "TLS key file (must be unencrypted)")
+	flag.String("cert", "", "TLS certificate file")
+	flag.Bool("C", false, fmt.Sprintf("Use a config file named '%s' located in either /etc/%s/, ~/.%s or ./)", appName, packageName, packageName))
+	flag.Bool("D", false, "Turn on debugging")
+	flag.Bool("h", false, "Print help message")
 	flag.Parse()
+
+	// Viper
+	err := GetConfig(flag.CommandLine)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
+
+	// Fetch config values from Viper
+	port := viper.GetInt("port")
+	securePort := viper.GetInt("securePort")
+	mgmtPort := viper.GetInt("mgmtPort")
+
+	pgURL := viper.GetString("pgURL")
+	key := viper.GetString("key")
+	cert := viper.GetString("cert")
+
+	debug := viper.GetBool("debug")
+	help := viper.GetBool("help")
 
 	if help || !flag.Parsed() {
 		printUsage()
