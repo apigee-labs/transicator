@@ -52,6 +52,7 @@ func runMain() int {
 	flag.Bool("C", false, fmt.Sprintf("Use a config file named '%s' located in either /etc/%s/, ~/.%s or ./)", appName, packageName, packageName))
 	flag.Bool("D", false, "Turn on debugging")
 	flag.Bool("h", false, "Print help message")
+	flag.String("S", "", "Set the scopeField database column")
 	flag.Parse()
 
 	err := GetConfig(flag.CommandLine)
@@ -59,6 +60,8 @@ func runMain() int {
 		fmt.Fprintln(os.Stderr, err.Error())
 		return 1
 	}
+
+	viper.RegisterAlias("p","port")
 
 	// Fetch config values from Viper
 	port := viper.GetInt("port")
@@ -72,6 +75,7 @@ func runMain() int {
 	cert := viper.GetString("cert")
 	key := viper.GetString("key")
 	prefix := viper.GetString("prefix")
+	scopeFieldParam := viper.GetString("scopeField")
 
 	debug := viper.GetBool("debug")
 	help := viper.GetBool("help")
@@ -101,6 +105,9 @@ func runMain() int {
 			return 4
 		}
 	}
+
+	// Set the global scopeField from server.go to the user supplied value
+	scopeField = scopeFieldParam
 
 	if debug {
 		logrus.SetLevel(logrus.DebugLevel)

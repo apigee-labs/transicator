@@ -22,7 +22,7 @@ func SetConfigDefaults() {
 	viper.SetDefault("key", "")
 	viper.SetDefault("cert", "")
 
-	viper.SetDefault("degub", false)
+	viper.SetDefault("debug", false)
 	viper.SetDefault("help", false)
 }
 
@@ -47,6 +47,7 @@ func GetConfig(goflags *flag.FlagSet) error {
 	viper.BindPFlag("configFile", pflag.Lookup("C"))
 	viper.BindPFlag("debug", pflag.Lookup("D"))
 	viper.BindPFlag("help", pflag.Lookup("h"))
+	viper.BindPFlag("scopeField",pflag.Lookup("S"))
 
 	// Load config values from file
 	if viper.GetBool("configFile") {
@@ -62,18 +63,7 @@ func GetConfig(goflags *flag.FlagSet) error {
 
 	// Load any config values from Environment variables who's name is prefixed TSS_ (Transicator Snaphot Server)
 	viper.SetEnvPrefix("tss") // will be uppercased automatically
-
-	viper.BindEnv("port")
-	viper.BindEnv("securePort")
-	viper.BindEnv("mgmtPort")
-
-	viper.BindEnv("pgURL")
-	viper.BindEnv("key")
-	viper.BindEnv("cert")
-
-	viper.BindEnv("configFile")
-	viper.BindEnv("debug")
-	viper.BindEnv("help")
+	viper.AutomaticEnv()
 
 	return nil
 

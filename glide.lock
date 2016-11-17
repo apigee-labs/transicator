@@ -1,5 +1,5 @@
-hash: 6a1bfc86a822fecdc217316401d4a276ae0cc53738b71df58ae5f13edd50f481
-updated: 2016-11-11T18:53:46.622450619-08:00
+hash: 07a4ed5696ea0f9d804cbfc773674af878741ea2f236d1b379e363612bd1f217
+updated: 2016-11-17T14:53:34.24088376-08:00
 imports:
 - name: github.com/30x/goscaffold
   version: 584cecee6ca8118c7dd7916844df88db6f9fc13b
@@ -11,12 +11,29 @@ imports:
   version: 894d369c4ea259b65f75563feeb06bea322a8450
 - name: github.com/cockroachdb/c-snappy
   version: d4e7b428fe7fc09e93573df3448567a62df8c9fa
+- name: github.com/fsnotify/fsnotify
+  version: fd9ec7deca8bf46ecd2a795baaacf2b3a9be1197
 - name: github.com/golang/protobuf
   version: df1d3ca07d2d07bba352d5b73c4313b4e2a6203e
   subpackages:
   - proto
+- name: github.com/hashicorp/hcl
+  version: c3e054bfd4dcf77b9965ed2b79b22afa2f41d4eb
+  subpackages:
+  - hcl/ast
+  - hcl/parser
+  - hcl/scanner
+  - hcl/strconv
+  - hcl/token
+  - json/parser
+  - json/scanner
+  - json/token
 - name: github.com/julienschmidt/httprouter
   version: 8c199fb6259ffc1af525cc3ad52ee60ba8359669
+- name: github.com/magiconair/properties
+  version: 0723e352fa358f9322c938cc2dadda874e9151a9
+- name: github.com/mitchellh/mapstructure
+  version: f3009df150dadf309fdee4a54ed65c124afad715
 - name: github.com/onsi/ginkgo
   version: 45a5f6ffb2a14e4f29698c16ae4c0a34018a8951
   subpackages:
@@ -34,16 +51,39 @@ imports:
   - reporters
   - reporters/stenographer
   - types
+- name: github.com/pelletier/go-buffruneio
+  version: df1e16fde7fc330a0ca68167c23bf7ed6ac31d6d
+- name: github.com/pelletier/go-toml
+  version: 45932ad32dfdd20826f5671da37a5f3ce9f26a8d
 - name: github.com/Sirupsen/logrus
   version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
+- name: github.com/spf13/afero
+  version: 06b7e5f50606ecd49148a01a6008942d9b669217
+  subpackages:
+  - mem
+- name: github.com/spf13/cast
+  version: 24b6558033ffe202bf42f0f3b870dcc798dd2ba8
+- name: github.com/spf13/jwalterweatherman
+  version: 33c24e77fb80341fe7130ee7c594256ff08ccc46
+- name: github.com/spf13/pflag
+  version: 5ccb023bc27df288a957c5e994cd44fd19619465
+- name: github.com/spf13/viper
+  version: 651d9d916abc3c3d6a91a12549495caba5edffd2
 - name: github.com/tecbot/gorocksdb
   version: f2a0b10f7228cff360e2d9efa081a15a8cbd68b7
 - name: golang.org/x/sys
   version: 9bb9f0998d48b31547d975974935ae9b48c7a03c
   subpackages:
   - unix
+- name: golang.org/x/text
+  version: a263ba8db058568bb9beba166777d9c9dbe75d68
+  subpackages:
+  - transform
+  - unicode/norm
 - name: gopkg.in/gemnasium/logrus-airbrake-hook.v2
   version: bfee1239d796830ca346767650cce5ba90d58c57
+- name: gopkg.in/yaml.v2
+  version: a5b47d31c556af34a302ce5d659e6fea44d90de0
 testImports:
 - name: github.com/onsi/gomega
   version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
@@ -59,5 +99,3 @@ testImports:
   - matchers/support/goraph/node
   - matchers/support/goraph/util
   - types
-- name: gopkg.in/yaml.v2
-  version: a5b47d31c556af34a302ce5d659e6fea44d90de0

@@ -22,6 +22,8 @@ const (
 	defaultPGTimeout = 30 * time.Second
 )
 
+var scopeField string
+
 func printUsage() {
 	fmt.Fprintln(os.Stderr, "Usage:")
 	flag.PrintDefaults()
@@ -46,6 +48,7 @@ func main() {
 	flag.Bool("C", false, fmt.Sprintf("Use a config file named '%s' located in either /etc/%s/, ~/.%s or ./)", appName, packageName, packageName))
 	flag.Bool("D", false, "Turn on debugging")
 	flag.Bool("h", false, "Print help message")
+	flag.String("S", "", "Set scope field")
 	flag.Parse()
 
 	// Viper
@@ -66,6 +69,7 @@ func main() {
 
 	debug := viper.GetBool("debug")
 	help := viper.GetBool("help")
+	scopeFieldParam := viper.GetString("scopeField")
 
 	if help || !flag.Parsed() {
 		printUsage()
@@ -85,6 +89,8 @@ func main() {
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
+
+	scopeField = scopeFieldParam
 
 	log.Infof("Connecting to Postgres DB %s\n", pgURL)
 	db, err := sql.Open("transicator", pgURL)

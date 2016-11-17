@@ -20,8 +20,13 @@ const (
 	protoContent    = "application/transicator+protobuf"
 	textContent     = "text/plain"
 	lastSequenceKey = "_ls"
-	scopeField      = "_apid_scope"
 )
+
+var scopeField string
+
+func init() {
+	scopeField = "_apid_scope"
+}
 
 type server struct {
 	db          *storage.DB

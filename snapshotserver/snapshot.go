@@ -239,12 +239,12 @@ func writeJSONSnapshot(
 	for _, tn := range tables {
 		// Postgres won't let us parameterize the table name here, and we don't
 		// know how to parameterize the list in the "in" parameter
-		q := fmt.Sprintf("select * from %s where _apid_scope in %s",
-			tn, GetTenants(tenantID))
+		q := fmt.Sprintf("select * from %s where %s in %s",
+			tn, scopeField, GetTenants(tenantID))
 		rows, err := db.Query(q)
 		if err != nil {
 			if strings.Contains(err.Error(), "errorMissingColumn") {
-				log.Warnf("Skipping table %s: no _apid_scope column", tn)
+				log.Warnf("Skipping table %s: no %s column", tn, scopeField)
 				continue
 			}
 			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, tn, err)
@@ -274,11 +274,11 @@ func writeProtoSnapshot(
 	}
 
 	for _, t := range tables {
-		q := fmt.Sprintf("select * from %s where _apid_scope in %s", t, GetTenants(tenantID))
+		q := fmt.Sprintf("select * from %s where %s in %s", t, scopeField, GetTenants(tenantID))
 		rows, err := db.Query(q)
 		if err != nil {
 			if strings.Contains(err.Error(), "errorMissingColumn") {
-				log.Warnf("Skipping table %s: no _apid_scope column", t)
+				log.Warnf("Skipping table %s: no %s column", scopeField, t)
 				continue
 			}
 			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)

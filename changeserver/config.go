@@ -25,6 +25,7 @@ func SetConfigDefaults() {
 	viper.SetDefault("cert", "")
 	viper.SetDefault("key", "")
 	viper.SetDefault("prefix", "")
+	viper.SetDefault("scopeField","_apid_scope")
 
 	viper.SetDefault("degub", false)
 	viper.SetDefault("help", false)
@@ -55,6 +56,7 @@ func GetConfig(goflags *flag.FlagSet) error {
 	viper.BindPFlag("configFile", pflag.Lookup("C"))
 	viper.BindPFlag("debug", pflag.Lookup("D"))
 	viper.BindPFlag("help", pflag.Lookup("h"))
+	viper.BindPFlag("scopeField",pflag.Lookup("S"))
 
 	// Load config values from file
 	if viper.GetBool("configFile") {
@@ -70,21 +72,7 @@ func GetConfig(goflags *flag.FlagSet) error {
 
 	// Load any config values from Environment variables who's name is prefixed TCS_ (Transicator Change Server)
 	viper.SetEnvPrefix("tcs") // will be uppercased automatically
-
-	viper.BindEnv("port")
-	viper.BindEnv("securePort")
-	viper.BindEnv("mgmtPort")
-
-	viper.BindEnv("dbDir")
-	viper.BindEnv("pgURL")
-	viper.BindEnv("pgSlot")
-	viper.BindEnv("maxAgeParam")
-	viper.BindEnv("cert")
-	viper.BindEnv("key")
-	viper.BindEnv("prefix")
-
-	viper.BindEnv("degub")
-	viper.BindEnv("help")
+	viper.AutomaticEnv()
 
 	return nil
 
