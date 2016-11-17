@@ -68,6 +68,10 @@ func GetConfig(goflags *flag.FlagSet) error {
 		}
 	}
 
+	// Load any config values from Environment variables who's name is prefixed TCS_ (Transicator Change Server)
+	viper.SetEnvPrefix("tcs") // will be uppercased automatically
+	viper.BindEnv("port")
+
 	return nil
 
 }
