@@ -15,5 +15,7 @@ import:
 - package: gopkg.in/gemnasium/logrus-airbrake-hook.v2
   version: master
 - package: github.com/onsi/ginkgo
+- package: github.com/spf13/viper
+  version: master
 testImport:
 - package: github.com/onsi/gomega

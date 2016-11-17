@@ -10,10 +10,13 @@ import (
 
 	"github.com/30x/goscaffold"
 	"github.com/Sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 const (
-	defaultCacheSize = 65536
+	packageName      string = "transicator"
+	appName          string = "changeserver"
+	defaultCacheSize        = 65536
 )
 
 func main() {
@@ -26,40 +29,52 @@ func printUsage() {
 	flag.PrintDefaults()
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintln(os.Stderr,
-		"changeserver -p 9000 -d ./data -u postgres://admin:secret@localhost/postgres -s replication1 -m 24h")
+	fmt.Fprintf(os.Stderr,
+		"%s -p 9000 -d ./data -u postgres://admin:secret@localhost/postgres -s replication1 -m 24h", appName)
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "  The value of the \"-m\" parameter for maximum age is a Golang")
 	fmt.Fprintln(os.Stderr, "\"duration\": use \"m\", \"s\", and \"h\" for minutes, seconds, and hours")
 }
 
 func runMain() int {
-	var port int
-	var securePort int
-	var mgmtPort int
-	var dbDir string
-	var pgURL string
-	var pgSlot string
-	var prefix string
-	var maxAgeParam string
-	var cert string
-	var key string
-	var debug bool
-	var help bool
 
-	flag.IntVar(&port, "p", -1, "Listen port")
-	flag.IntVar(&securePort, "sp", -1, "HTTPS Listen port")
-	flag.IntVar(&mgmtPort, "mp", -1, "Management port (for health checks)")
-	flag.StringVar(&dbDir, "d", "", "Location of database files")
-	flag.StringVar(&pgURL, "u", "", "URL to connect to Postgres")
-	flag.StringVar(&pgSlot, "s", "", "Slot name for Postgres logical replication")
-	flag.StringVar(&maxAgeParam, "m", "", "Purge records older than this age.")
-	flag.StringVar(&cert, "cert", "", "TLS certificate PEM file")
-	flag.StringVar(&key, "key", "", "TLS key PEM file (must be unencrypted)")
-	flag.BoolVar(&debug, "D", false, "Turn on debugging")
-	flag.StringVar(&prefix, "P", "", "Optional prefix URL for all API calls")
-	flag.BoolVar(&help, "h", false, "Print help message")
+	// Define legacy GO Flags
+	flag.Int("p", -1, "Listen port")
+	flag.Int("sp", -1, "HTTPS Listen port")
+	flag.Int("mp", -1, "Management port (for health checks)")
+	flag.String("d", "", "Location of database files")
+	flag.String("u", "", "URL to connect to Postgres")
+	flag.String("s", "", "Slot name for Postgres logical replication")
+	flag.String("m", "", "Purge records older than this age.")
+	flag.String("cert", "", "TLS certificate PEM file")
+	flag.String("key", "", "TLS key PEM file (must be unencrypted)")
+	flag.String("P", "", "Optional prefix URL for all API calls")
+	flag.Bool("C", false, fmt.Sprintf("Use a config file named '%s' located in either /etc/%s/, ~/.%s or ./)", appName, packageName, packageName))
+	flag.Bool("D", false, "Turn on debugging")
+	flag.Bool("h", false, "Print help message")
 	flag.Parse()
+
+	err := GetConfig(flag.CommandLine)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		return 1
+	}
+
+	// Fetch config values from Viper
+	port := viper.GetInt("port")
+	securePort := viper.GetInt("securePort")
+	mgmtPort := viper.GetInt("mgmtPort")
+
+	dbDir := viper.GetString("dbDir")
+	pgURL := viper.GetString("pgURL")
+	pgSlot := viper.GetString("pgSlot")
+	maxAgeParam := viper.GetString("maxAgeParam")
+	cert := viper.GetString("cert")
+	key := viper.GetString("key")
+	prefix := viper.GetString("prefix")
+
+	debug := viper.GetBool("debug")
+	help := viper.GetBool("help")
 
 	if help || !flag.Parsed() {
 		printUsage()
@@ -77,7 +92,6 @@ func runMain() int {
 	}
 
 	var maxAge time.Duration
-	var err error
 	if maxAgeParam != "" {
 		maxAge, err = time.ParseDuration(maxAgeParam)
 		if err != nil {
