@@ -1,10 +1,11 @@
 package storage
 
 import (
-	"bytes"
 	"errors"
+	"fmt"
 	"math"
 	"sort"
+	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/tecbot/gorocksdb"
@@ -15,64 +16,35 @@ var defaultReadOptions = gorocksdb.NewDefaultReadOptions()
 
 const (
 	// ComparatorName gets persisted in the DB and must be handled if changed
-	ComparatorName = "TRANSICATOR-V1"
+	ComparatorName = "transicator-entries-v1"
+	// defaultCFName is the name of the default column family where we keep metadata
+	defaultCFName = "default"
+	// entriesCFName is the name of the column family for indexed entries.
+	entriesCFName = "entries"
+	// metadataCFName is the name of the column family for metadata entries
+	metadataCFName = "metadata"
 )
 
-/*
-A KeyComparator is the main comparator for the database.
-*/
-type KeyComparator struct {
+type entryComparator struct {
 }
 
 /*
-Compare works for all key types in the database.
+Compare tests the order of two keys in the "entries" collection. Keys are sorted
+primarily in scope order, then by LSN, then by index within the LSN. This
+allows searches to be linear for a given scope.
 */
-func (k KeyComparator) Compare(a, b []byte) int {
-	if len(a) < 1 || len(b) < 1 {
-		return 0
-	}
-
-	// Do something reasonable if the versions do not match
-	vers1 := (int)((a[0] >> 4) & 0xf)
-	vers2 := (int)((b[0] >> 4) & 0xf)
-	if (vers1 != KeyVersion) || (vers2 != KeyVersion) {
-		return vers1 + 100 /* WTF IS THIS */
-	}
-
-	// The types don't match, just compare the types
-	type1 := a[0] & 0xf
-	type2 := b[0] & 0xf
-
-	if type1 < type2 {
-		return -1
-	}
-
-	if type1 > type2 {
-		return 1
-	}
-
-	switch type1 {
-	case StringKey:
-		return bytes.Compare(a, b)
-	case IndexKey:
-		return k.compareIndexKey(a, b)
-	default:
-		return 999
-	}
-
-}
-
-func (k KeyComparator) compareIndexKey(a, b []byte) int {
+func (c entryComparator) Compare(a, b []byte) int {
 	aScope, aLsn, aIndex, err := keyToLsnAndOffset(a)
 	if err != nil {
-		return 999 // Might as well follow the above when things are berzerk
+		panic(fmt.Sprintf("Error parsing database key: %s", err))
 	}
 	bScope, bLsn, bIndex, err := keyToLsnAndOffset(b)
 	if err != nil {
-		return 999
+		panic(fmt.Sprintf("Error parsing database key: %s", err))
 	}
 
-	if aScope == bScope {
+	scopeCmp := strings.Compare(aScope, bScope)
+	if scopeCmp == 0 {
 		if aLsn < bLsn {
 			return -1
 		} else if aLsn > bLsn {
@@ -86,14 +58,13 @@ func (k KeyComparator) compareIndexKey(a, b []byte) int {
 		}
 		return 0
 	}
-
-	return bytes.Compare([]byte(aScope), []byte(bScope))
+	return scopeCmp
 }
 
 /*
 Name is part of the comparator interface.
 */
-func (k KeyComparator) Name() string {
+func (c entryComparator) Name() string {
 	return ComparatorName
 }
 
@@ -101,14 +72,18 @@ func (k KeyComparator) Name() string {
 A DB is a handle to a RocksDB database.
 */
 type DB struct {
-	baseFile string
-	db       *gorocksdb.DB
-	options  *gorocksdb.Options
+	baseFile    string
+	db          *gorocksdb.DB
+	metadataCF  *gorocksdb.ColumnFamilyHandle
+	entriesCF   *gorocksdb.ColumnFamilyHandle
+	dbOpts      *gorocksdb.Options
+	dfltOpts    *gorocksdb.Options
+	entriesOpts *gorocksdb.Options
 }
 
 type readResult struct {
-	lsn   int64
-	index int32
+	lsn   uint64
+	index uint32
 	data  []byte
 }
 type readResults []readResult
@@ -120,25 +95,37 @@ Opened databases should be closed when done.
 The "baseFile" parameter refers to the name of a directory where RocksDB can
 store its data. RocksDB will create many files inside this directory. To create
 an empty database, make sure that it is empty.
-
-The "cacheSize" parameter specifies the maximum number of bytes to use in memory
-for an LRU cache of database contents. How this cache is used is up to RocksDB.
 */
-func OpenDB(baseFile string, cacheSize uint) (*DB, error) {
+func OpenDB(baseFile string) (*DB, error) {
 	stor := &DB{
 		baseFile: baseFile,
 	}
 
 	var err error
 
-	stor.options = gorocksdb.NewDefaultOptions()
-	stor.options.SetCreateIfMissing(true)
-	stor.options.SetComparator(new(KeyComparator))
+	dbOpts := gorocksdb.NewDefaultOptions()
+	defer dbOpts.Destroy()
+	dbOpts.SetCreateIfMissing(true)
+	dbOpts.SetCreateIfMissingColumnFamilies(true)
+	stor.dbOpts = dbOpts
 
-	stor.db, err = gorocksdb.OpenDb(stor.options, baseFile)
+	stor.dfltOpts = gorocksdb.NewDefaultOptions()
+
+	stor.entriesOpts = gorocksdb.NewDefaultOptions()
+	stor.entriesOpts.SetComparator(new(entryComparator))
+
+	var cfs []*gorocksdb.ColumnFamilyHandle
+	stor.db, cfs, err = gorocksdb.OpenDbColumnFamilies(
+		dbOpts,
+		baseFile,
+		[]string{defaultCFName, entriesCFName, metadataCFName},
+		[]*gorocksdb.Options{stor.dfltOpts, stor.entriesOpts, stor.dfltOpts},
+	)
 	if err != nil {
 		return nil, err
 	}
+	stor.entriesCF = cfs[1]
+	stor.metadataCF = cfs[2]
 
 	log.Infof("Opened RocksDB file in %s", baseFile)
 
@@ -158,7 +145,9 @@ Close closes the database cleanly.
 func (s *DB) Close() {
 	log.Infof("Closed DB in %s", s.baseFile)
 	s.db.Close()
-	s.options.Destroy()
+	s.dfltOpts.Destroy()
+	s.entriesOpts.Destroy()
+	s.dbOpts.Destroy()
 }
 
 /*
@@ -175,9 +164,9 @@ GetIntMetadata returns metadata with the specified key and converts it
 into a uint64. It returns 0 if the key cannot be found.
 */
 func (s *DB) GetIntMetadata(key string) (int64, error) {
-	keyBuf := stringToKey(StringKey, key)
+	keyBuf := []byte(key)
 
-	val, err := s.db.GetBytes(defaultReadOptions, keyBuf)
+	val, err := s.db.GetCF(defaultReadOptions, s.metadataCF, keyBuf)
 	if err != nil {
 		return 0, err
 	}
@@ -185,7 +174,8 @@ func (s *DB) GetIntMetadata(key string) (int64, error) {
 		return 0, nil
 	}
 
-	return bytesToInt(val), err
+	defer val.Free()
+	return bytesToInt(val.Data()), err
 }
 
 /*
@@ -197,9 +187,8 @@ func (s *DB) GetMetadata(key string) ([]byte, error) {
 }
 
 func (s *DB) readMetadataKey(key string, ro *gorocksdb.ReadOptions) ([]byte, error) {
-	keyBuf := stringToKey(StringKey, key)
-
-	return s.readEntry(keyBuf, ro)
+	keyBuf := []byte(key)
+	return s.readEntry(keyBuf, s.metadataCF, ro)
 }
 
 /*
@@ -207,28 +196,27 @@ SetIntMetadata sets the metadata with the specified key to
 the integer value.
 */
 func (s *DB) SetIntMetadata(key string, val int64) error {
-	keyBuf := stringToKey(StringKey, key)
+	keyBuf := []byte(key)
 	valBuf := intToBytes(val)
 
-	return s.putEntry(keyBuf, valBuf, defaultWriteOptions)
+	return s.db.PutCF(defaultWriteOptions, s.metadataCF, keyBuf, valBuf)
 }
 
 /*
 SetMetadata sets the metadata with the specified key.
 */
 func (s *DB) SetMetadata(key string, val []byte) error {
-	keyBuf := stringToKey(StringKey, key)
-
-	return s.putEntry(keyBuf, val, defaultWriteOptions)
+	keyBuf := []byte(key)
+	return s.db.PutCF(defaultWriteOptions, s.metadataCF, keyBuf, val)
 }
 
 /*
 PutEntry writes an entry to the database indexed by scope, lsn, and index in order
 */
-func (s *DB) PutEntry(scope string, lsn uint64, index uint32, data []byte) error {
-	keyBuf := lsnAndOffsetToKey(IndexKey, scope, lsn, index)
-
-	return s.putEntry(keyBuf, data, defaultWriteOptions)
+func (s *DB) PutEntry(scope string, lsn uint64, index uint32, data []byte) (err error) {
+	keyBuf := lsnAndOffsetToKey(scope, lsn, index)
+	err = s.db.PutCF(defaultWriteOptions, s.entriesCF, keyBuf, data)
+	return
 }
 
 /*
@@ -245,11 +233,11 @@ func (s *DB) PutEntryAndMetadata(scope string, lsn uint64, index uint32,
 	batch := gorocksdb.NewWriteBatch()
 	defer batch.Destroy()
 
-	keyBuf := lsnAndOffsetToKey(IndexKey, scope, lsn, index)
-	batch.Put(keyBuf, data)
+	keyBuf := lsnAndOffsetToKey(scope, lsn, index)
+	batch.PutCF(s.entriesCF, keyBuf, data)
 
-	mkeyBuf := stringToKey(StringKey, metaKey)
-	batch.Put(mkeyBuf, metaVal)
+	mkeyBuf := []byte(metaKey)
+	batch.PutCF(s.metadataCF, mkeyBuf, metaVal)
 	err = s.db.Write(defaultWriteOptions, batch)
 	return
 }
@@ -258,8 +246,8 @@ func (s *DB) PutEntryAndMetadata(scope string, lsn uint64, index uint32,
 GetEntry returns what was written by PutEntry.
 */
 func (s *DB) GetEntry(scope string, lsn uint64, index uint32) ([]byte, error) {
-	keyBuf := lsnAndOffsetToKey(IndexKey, scope, lsn, index)
-	return s.readEntry(keyBuf, defaultReadOptions)
+	keyBuf := lsnAndOffsetToKey(scope, lsn, index)
+	return s.readEntry(keyBuf, s.entriesCF, defaultReadOptions)
 }
 
 /*
@@ -350,7 +338,7 @@ then a non-nil error will be returned. Be aware that this operation may
 take a long time, so it is important to run it in a separate goroutine.
 */
 func (s *DB) PurgeEntries(filter func([]byte) bool) (purgeCount uint64, err error) {
-	it := s.db.NewIterator(defaultReadOptions)
+	it := s.db.NewIteratorCF(defaultReadOptions, s.entriesCF)
 	defer it.Close()
 
 	it.SeekToFirst()
@@ -359,7 +347,7 @@ func (s *DB) PurgeEntries(filter func([]byte) bool) (purgeCount uint64, err erro
 	for ; it.Valid(); it.Next() {
 		dataBuf := it.Value().Data()
 		if filter(dataBuf) {
-			err = s.deleteEntry(it.Key().Data())
+			err = s.db.DeleteCF(defaultWriteOptions, s.entriesCF, it.Key().Data())
 			if err != nil {
 				return
 			}
@@ -374,16 +362,16 @@ func (s *DB) readOneRange(scope string, startLSN uint64,
 	startIndex uint32, limit int, ro *gorocksdb.ReadOptions,
 	filter func([]byte) bool) (readResults, error) {
 
-	startKeyBuf := lsnAndOffsetToKey(IndexKey, scope, startLSN, startIndex)
-	endKeyBuf := lsnAndOffsetToKey(IndexKey, scope, math.MaxInt64, math.MaxInt32)
+	startKeyBuf := lsnAndOffsetToKey(scope, startLSN, startIndex)
+	endKeyBuf := lsnAndOffsetToKey(scope, math.MaxInt64, math.MaxInt32)
 
-	it := s.db.NewIterator(ro)
+	it := s.db.NewIteratorCF(ro, s.entriesCF)
 	defer it.Close()
 
 	it.Seek(startKeyBuf)
 
 	var results readResults
-	c := new(KeyComparator)
+	c := new(entryComparator)
 
 	for ; it.Valid() && len(results) < limit; it.Next() {
 		iterKey := it.Key().Data()
@@ -393,7 +381,7 @@ func (s *DB) readOneRange(scope string, startLSN uint64,
 			break
 		}
 
-		_, iterLSN, iterIx, err := keyToIndex(iterKey)
+		_, iterLSN, iterIx, err := keyToLsnAndOffset(iterKey)
 		if err != nil {
 			return nil, err
 		}
@@ -413,18 +401,20 @@ func (s *DB) readOneRange(scope string, startLSN uint64,
 	return results, nil
 }
 
-func (s *DB) deleteEntry(key []byte) (err error) {
-	err = s.db.Delete(defaultWriteOptions, key)
-	return
-}
-
-func (s *DB) putEntry(key, value []byte, wo *gorocksdb.WriteOptions) (err error) {
-	err = s.db.Put(wo, key, value)
-	return
-}
-
-func (s *DB) readEntry(key []byte, ro *gorocksdb.ReadOptions) (val []byte, err error) {
-	val, err = s.db.GetBytes(ro, key)
+func (s *DB) readEntry(key []byte, cf *gorocksdb.ColumnFamilyHandle, ro *gorocksdb.ReadOptions) (val []byte, err error) {
+	d, err := s.db.GetCF(ro, cf, key)
+	if err == nil {
+		if d == nil {
+			return
+		}
+		if d.Data() == nil {
+			return
+		}
+		val = make([]byte, d.Size())
+		copy(val, d.Data())
+		d.Free()
+		return
+	}
 	return
 }
 

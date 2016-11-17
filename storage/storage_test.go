@@ -2,12 +2,10 @@ package storage
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"math"
 	"testing/quick"
 
-	"encoding/binary"
 	"encoding/hex"
 
 	. "github.com/onsi/ginkgo"
@@ -24,7 +22,7 @@ var _ = Describe("Storage Main Test", func() {
 
 	BeforeEach(func() {
 		var err error
-		testDB, err = OpenDB(testDBDir, 1000)
+		testDB, err = OpenDB(testDBDir)
 		Expect(err).Should(Succeed())
 	})
 
@@ -36,10 +34,10 @@ var _ = Describe("Storage Main Test", func() {
 
 	It("Open and reopen", func() {
 		fmt.Println("Open and re-open")
-		stor, err := OpenDB("./openleveldb", 1000)
+		stor, err := OpenDB("./openleveldb")
 		Expect(err).Should(Succeed())
 		stor.Close()
-		stor, err = OpenDB("./openleveldb", 1000)
+		stor, err = OpenDB("./openleveldb")
 		Expect(err).Should(Succeed())
 		stor.Close()
 		err = stor.Delete()
@@ -91,6 +89,13 @@ var _ = Describe("Storage Main Test", func() {
 	It("Entries same LSN", func() {
 		err := quick.Check(func(index uint32, data []byte) bool {
 			return testEntry("tag", 8675309, index, data)
+		}, nil)
+		Expect(err).Should(Succeed())
+	})
+
+	It("Entries all same", func() {
+		err := quick.Check(func(data []byte) bool {
+			return testEntry("tag", 8675309, 123, data)
 		}, nil)
 		Expect(err).Should(Succeed())
 	})
@@ -259,6 +264,7 @@ func testGetSequences(tags []string, lsn uint64,
 	Expect(err).Should(Succeed())
 	Expect(len(ret)).Should(Equal(len(expected)))
 	for i := range expected {
+		fmt.Fprintf(GinkgoWriter, "%d: %s = %s\n", i, expected[i], ret[i])
 		Expect(bytes.Equal(expected[i], ret[i])).Should(BeTrue())
 	}
 }
@@ -282,12 +288,15 @@ func testIntMetadata(key string, val int64) bool {
 }
 
 func testEntry(key string, lsn uint64, index uint32, val []byte) bool {
+	fmt.Fprintf(GinkgoWriter, "key = %s lsn = %d ix = %d\n",
+		key, lsn, index)
 	err := testDB.PutEntry(key, lsn, index, val)
 	Expect(err).Should(Succeed())
 	ret, err := testDB.GetEntry(key, lsn, index)
 	Expect(err).Should(Succeed())
 	if !bytes.Equal(val, ret) {
-		fmt.Printf("Val is %d %s ret is %d %s, key is %s, lsn is %d index is %d\n", len(val), hex.Dump(val), len(ret), hex.Dump(ret), key, lsn, index)
+		fmt.Fprintf(GinkgoWriter, "Val is %d %s ret is %d %s, key is %s, lsn is %d index is %d\n",
+			len(val), hex.Dump(val), len(ret), hex.Dump(ret), key, lsn, index)
 	}
 	Expect(bytes.Equal(val, ret)).Should(BeTrue())
 	return true
@@ -329,58 +338,4 @@ func testEntryAndData(key string, lsn uint64, index uint32, val []byte,
 	Expect(len(entries)).Should(Equal(1))
 	Expect(len(datas)).Should(Equal(1))
 	return true
-}
-
-func uintToKey(keyType int, v uint64) []byte {
-	buf := &bytes.Buffer{}
-	binary.Write(buf, storageByteOrder, keyPrefix(keyType))
-	binary.Write(buf, storageByteOrder, v)
-	return buf.Bytes()
-}
-
-func keyToUint(key []byte) (vers int, intKey uint64, err error) {
-	if len(key) < 1 {
-		return 0, 0, errors.New("Invalid key")
-	}
-	buf := bytes.NewBuffer(key)
-
-	var ktb byte
-	binary.Read(buf, storageByteOrder, &ktb)
-	vers, _ = parseKeyPrefix(ktb)
-	if vers != KeyVersion {
-		err = fmt.Errorf("Invalid key version %d", vers)
-		return
-	}
-	binary.Read(buf, storageByteOrder, &intKey)
-	return
-}
-
-func keyToString(key []byte) (keyType int, keyString string, err error) {
-	if len(key) < 1 {
-		err = errors.New("Invalid key")
-		return
-	}
-	buf := bytes.NewBuffer(key)
-
-	var ktb byte
-	var vers int
-	binary.Read(buf, storageByteOrder, &ktb)
-	vers, keyType = parseKeyPrefix(ktb)
-	if vers != KeyVersion {
-		err = fmt.Errorf("Invalid key version %d", vers)
-		return
-	}
-
-	keyBytes, _ := buf.ReadBytes(0)
-	if len(keyBytes) > 0 {
-		keyString = string(keyBytes[:len(keyBytes)-1])
-	}
-	return
-}
-
-func parseKeyPrefix(b byte) (int, int) {
-	bi := int(b)
-	vers := (bi >> 4) & 0xf
-	kt := bi & 0xf
-	return vers, kt
 }
