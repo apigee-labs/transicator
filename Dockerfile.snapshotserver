@@ -21,4 +21,4 @@ EXPOSE 9001 9444 10001
 
 VOLUME [ "/keys" ]
 
-ENTRYPOINT [ "/snapshotserver", "-mp", "10001"]
+ENTRYPOINT [ "/snapshotserver", "--mp", "10001"]

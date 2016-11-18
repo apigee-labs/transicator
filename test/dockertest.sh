@@ -47,22 +47,28 @@ docker rm ${testName}
 docker build --tag ${ssName} -f ./Dockerfile.snapshotserver .
 docker build --tag ${csName} -f ./Dockerfile.changeserver .
 
+if [[ -z "$TEST_PG_PW" ]]; then
+    POSTGRES_URL=postgres://postgres@${dbName}/postgres
+else
+    POSTGRES_URL=postgres://postgres:${TEST_PG_PW}@${dbName}/postgres
+fi
+
 # Launch them
 docker run -d \
   --name ${csName} \
   --link ${dbName}:postgres \
   -v ${PWD}/test/keys:/keys \
   ${csName} \
-  -sp 9443 -key /keys/clearkey.pem -cert /keys/clearcert.pem \
-  -s ${slotName} -u postgres://postgres:${TEST_PG_PW}@${dbName}/postgres
+  --sp 9443 --key /keys/clearkey.pem --cert /keys/clearcert.pem \
+  -s ${slotName} -u $POSTGRES_URL
 
 docker run -d \
   --name ${ssName} \
   --link ${dbName}:postgres \
   -v ${PWD}/test/keys:/keys \
   ${ssName} \
-  -sp 9444 -key /keys/clearkey.pem -cert /keys/clearcert.pem \
-  -u postgres://postgres:${TEST_PG_PW}@${dbName}/postgres
+  --sp 9444 --key /keys/clearkey.pem --cert /keys/clearcert.pem \
+  -u $POSTGRES_URL
 
 # Run tests of the combined servers and Postgres
 docker run -i \

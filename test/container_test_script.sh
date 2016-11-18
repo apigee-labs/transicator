@@ -2,7 +2,11 @@
 
 # This is the test script that runs on the actual container
 
-TEST_PG_URL=postgres://postgres:${PGPASSWORD}@${DBHOST}/postgres
+if [[ -z "${PGPASSWORD}" ]]; then
+    TEST_PG_URL=postgres://postgres@${DBHOST}/postgres
+else
+    TEST_PG_URL=postgres://postgres:${PGPASSWORD}@${DBHOST}/postgres
+fi
 export TEST_PG_URL
 
 if [ ! -d test-reports ]
