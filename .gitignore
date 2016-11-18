@@ -5,6 +5,7 @@ bin/
 .idea/
 changeserver/changeserver
 changeserver/data/
+snapshotserver/snapshotserver
 .vscode
 test-reports/
 docker-test-reports/
