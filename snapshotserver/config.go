@@ -22,7 +22,7 @@ func SetConfigDefaults() {
 	viper.SetDefault("key", "")
 	viper.SetDefault("cert", "")
 
-	viper.SetDefault("degub", false)
+	viper.SetDefault("debug", false)
 	viper.SetDefault("help", false)
 }
 

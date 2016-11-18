@@ -26,7 +26,7 @@ func SetConfigDefaults() {
 	viper.SetDefault("key", "")
 	viper.SetDefault("prefix", "")
 
-	viper.SetDefault("degub", false)
+	viper.SetDefault("debug", false)
 	viper.SetDefault("help", false)
 }
 
@@ -83,7 +83,7 @@ func GetConfig(goflags *flag.FlagSet) error {
 	viper.BindEnv("key")
 	viper.BindEnv("prefix")
 
-	viper.BindEnv("degub")
+	viper.BindEnv("debug")
 	viper.BindEnv("help")
 
 	return nil
