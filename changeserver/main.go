@@ -61,8 +61,6 @@ func runMain() int {
 		return 1
 	}
 
-	viper.RegisterAlias("p","port")
-
 	// Fetch config values from Viper
 	port := viper.GetInt("port")
 	securePort := viper.GetInt("securePort")

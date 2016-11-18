@@ -6,9 +6,10 @@ import (
 	"math"
 	"testing/quick"
 
+	"encoding/hex"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"encoding/hex"
 )
 
 const (
@@ -21,7 +22,7 @@ var _ = Describe("Storage Main Test", func() {
 
 	BeforeEach(func() {
 		var err error
-		testDB, err = OpenDB(testDBDir, 1000)
+		testDB, err = OpenDB(testDBDir)
 		Expect(err).Should(Succeed())
 	})
 
@@ -33,10 +34,10 @@ var _ = Describe("Storage Main Test", func() {
 
 	It("Open and reopen", func() {
 		fmt.Println("Open and re-open")
-		stor, err := OpenDB("./openleveldb", 1000)
+		stor, err := OpenDB("./openleveldb")
 		Expect(err).Should(Succeed())
 		stor.Close()
-		stor, err = OpenDB("./openleveldb", 1000)
+		stor, err = OpenDB("./openleveldb")
 		Expect(err).Should(Succeed())
 		stor.Close()
 		err = stor.Delete()
@@ -88,6 +89,13 @@ var _ = Describe("Storage Main Test", func() {
 	It("Entries same LSN", func() {
 		err := quick.Check(func(index uint32, data []byte) bool {
 			return testEntry("tag", 8675309, index, data)
+		}, nil)
+		Expect(err).Should(Succeed())
+	})
+
+	It("Entries all same", func() {
+		err := quick.Check(func(data []byte) bool {
+			return testEntry("tag", 8675309, 123, data)
 		}, nil)
 		Expect(err).Should(Succeed())
 	})
@@ -256,6 +264,7 @@ func testGetSequences(tags []string, lsn uint64,
 	Expect(err).Should(Succeed())
 	Expect(len(ret)).Should(Equal(len(expected)))
 	for i := range expected {
+		fmt.Fprintf(GinkgoWriter, "%d: %s = %s\n", i, expected[i], ret[i])
 		Expect(bytes.Equal(expected[i], ret[i])).Should(BeTrue())
 	}
 }
@@ -279,12 +288,15 @@ func testIntMetadata(key string, val int64) bool {
 }
 
 func testEntry(key string, lsn uint64, index uint32, val []byte) bool {
+	fmt.Fprintf(GinkgoWriter, "key = %s lsn = %d ix = %d\n",
+		key, lsn, index)
 	err := testDB.PutEntry(key, lsn, index, val)
 	Expect(err).Should(Succeed())
 	ret, err := testDB.GetEntry(key, lsn, index)
 	Expect(err).Should(Succeed())
 	if !bytes.Equal(val, ret) {
-		fmt.Printf("Val is %d %s ret is %d %s, key is %s, lsn is %d index is %d\n", len(val), hex.Dump(val), len(ret), hex.Dump(ret), key, lsn, index)
+		fmt.Fprintf(GinkgoWriter, "Val is %d %s ret is %d %s, key is %s, lsn is %d index is %d\n",
+			len(val), hex.Dump(val), len(ret), hex.Dump(ret), key, lsn, index)
 	}
 	Expect(bytes.Equal(val, ret)).Should(BeTrue())
 	return true

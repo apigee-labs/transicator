@@ -482,7 +482,7 @@ will cause the server to attempt an SSL connection.
 You can build and test transicator on OS X or Linux. You can also build
 and test Docker containers.
 
-Since the changeserver uses LevelDB as a native C library, Go's cross-compilation
+Since the changeserver uses RocksDB as a native C library, Go's cross-compilation
 does not work for this project. To build for Linux, you have to build on Linux
 (or inside a Docker container).
 
@@ -495,9 +495,9 @@ brew info postgresql
 ```
 
 ```
-### Install leveldb and other dependencies
+### Install rocksdb and other dependencies
 
-    brew install leveldb
+    brew install rocksdb
     brew install protobuf
     brew install protobuf-c
 
@@ -522,6 +522,13 @@ brew info postgresql
 This will run the tests in all the modules.
 The environment variable TEST_PG_URL must be set in order to point the tests
 to the right Postgres setup.
+
+## Build and Test on Linux
+
+Instructions are the same. However, you will need a recent build of RocksDB.
+Some Linux distributions have RocksDB. If not, then you will need to to build.
+"Dockerfile.changeserver" has one set of instructions that could be used to
+install a local copy of RocksDB.
 
 ## Test on Docker
 

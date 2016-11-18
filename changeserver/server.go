@@ -8,10 +8,10 @@ import (
 	"strings"
 
 	"github.com/30x/goscaffold"
+	log "github.com/Sirupsen/logrus"
 	"github.com/apigee-labs/transicator/common"
 	"github.com/apigee-labs/transicator/replication"
 	"github.com/apigee-labs/transicator/storage"
-	log "github.com/Sirupsen/logrus"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -47,7 +47,7 @@ func createChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix stri
 	success := false
 	slotName := sanitizeSlotName(pgSlot)
 
-	db, err := storage.OpenDB(dbDir, defaultCacheSize)
+	db, err := storage.OpenDB(dbDir)
 	if err != nil {
 		return nil, err
 	}

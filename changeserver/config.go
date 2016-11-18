@@ -26,8 +26,7 @@ func SetConfigDefaults() {
 	viper.SetDefault("key", "")
 	viper.SetDefault("prefix", "")
 	viper.SetDefault("scopeField","_apid_scope")
-
-	viper.SetDefault("degub", false)
+	viper.SetDefault("debug", false)
 	viper.SetDefault("help", false)
 }
 
