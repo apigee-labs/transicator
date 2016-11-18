@@ -1,181 +1,26 @@
 package storage
 
-/*
-#include <stdlib.h>
-#include "storage_native.h"
-*/
-import "C"
-
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
-	"fmt"
-	"unsafe"
-)
-
-/* These have to match constants in leveldb_native.h */
-const (
-	KeyVersion = 1
-	StringKey  = 1
-	IndexKey   = 10
 )
 
 /*
- * Key format: There are three. The comparator in storage_native.c will
- * keep all three of them in order.
- *
- * All keys start with a single byte that is divided into two parts: version and type:
- *   High 4 bits: version (currently 1)
- *   Low 4 bits: type
- *
- * Format 1: String
- *   Key is a null-terminated string, sorted as per "strcmp".
+ * Records in the "entries" column family have a composite key.
+ * The ordering is first by scope, next by LSN, and finally by index
+ * within the LSN.
  *
  * Format 10: Indexed Entry Record
- *   Consists of three parts: tag, transaction id, and index
- *   Tenant name is null-terminated ASCII
- *   Transaction is is an int64
- *   Index is an int32
+ *   Consists of three parts: scope name, sequence, and index
+ *   Length of scope name (uint16, can be nil)
+ *   Scope (string, UTF-8)
+ *   Sequeuence (int64)
+ *   Index (int32)
  */
 
-// Byte order needs to match the native byte order of the host,
-// or the C code to compare keys doesn't work.
-// So this code will fail on a non-Intel CPU...
+// Byte order does not matter since all comparisons are done in Go, but
+// for portability we'll pick the native Intel order
 var storageByteOrder = binary.LittleEndian
-
-/*
- * uint64 key, used for entries. Used in tests so not dead code.
- */
-func uintToKey(keyType int, v uint64) (unsafe.Pointer, C.size_t) {
-	buf := &bytes.Buffer{}
-	binary.Write(buf, storageByteOrder, keyPrefix(keyType)[0])
-	binary.Write(buf, storageByteOrder, v)
-	return bytesToPtr(buf.Bytes())
-}
-
-/*
- * uint64 key, used for entries. Used in tests so not dead code.
- */
-func keyToUint(ptr unsafe.Pointer, len C.size_t) (int, uint64, error) {
-	if len < 1 {
-		return 0, 0, errors.New("Invalid key")
-	}
-	bb := ptrToBytes(ptr, len)
-	buf := bytes.NewBuffer(bb)
-
-	var ktb byte
-	binary.Read(buf, storageByteOrder, &ktb)
-	vers, kt := parseKeyPrefix(ktb)
-	if vers != KeyVersion {
-		return 0, 0, fmt.Errorf("Invalid key version %d", vers)
-	}
-	var key uint64
-	binary.Read(buf, storageByteOrder, &key)
-
-	return kt, key, nil
-}
-
-/*
- * String key, used for metadata.
- */
-func stringToKey(keyType int, k string) (unsafe.Pointer, C.size_t) {
-	buf := &bytes.Buffer{}
-	binary.Write(buf, storageByteOrder, keyPrefix(keyType)[0])
-	buf.WriteString(k)
-	buf.WriteByte(0)
-	return bytesToPtr(buf.Bytes())
-}
-
-/*
-keyToString is unused in the code but it is used in the test. Since it uses
-cgo it cannot be in a test file, however.
-*/
-func keyToString(ptr unsafe.Pointer, l C.size_t) (int, string, error) {
-	if l < 1 {
-		return 0, "", errors.New("Invalid key")
-	}
-	bb := ptrToBytes(ptr, l)
-	buf := bytes.NewBuffer(bb)
-
-	var ktb byte
-	binary.Read(buf, storageByteOrder, &ktb)
-	vers, kt := parseKeyPrefix(ktb)
-	if vers != KeyVersion {
-		return 0, "", fmt.Errorf("Invalid key version %d", vers)
-	}
-
-	keyBytes, _ := buf.ReadBytes(0)
-	var key string
-	if len(keyBytes) > 0 {
-		key = string(keyBytes[:len(keyBytes)-1])
-	}
-	return kt, key, nil
-}
-
-/*
-Create an entry key.
-*/
-func indexToKey(keyType int, tag string, lsn uint64, index uint32) (unsafe.Pointer, C.size_t) {
-	buf := &bytes.Buffer{}
-	binary.Write(buf, storageByteOrder, keyPrefix(keyType)[0])
-	buf.WriteString(tag)
-	buf.WriteByte(0)
-	binary.Write(buf, storageByteOrder, lsn)
-	binary.Write(buf, storageByteOrder, index)
-	return bytesToPtr(buf.Bytes())
-}
-
-/*
-Parse an entry key. Again this uses cgo so we need it for tests even though
-it will be flagged as "dead code."
-*/
-func keyToIndex(ptr unsafe.Pointer, length C.size_t) (string, int64, int32, error) {
-	if length < 1 {
-		return "", 0, 0, errors.New("Invalid key")
-	}
-	bb := ptrToBytes(ptr, length)
-	buf := bytes.NewBuffer(bb)
-
-	tagBytes, _ := buf.ReadBytes(0)
-	var tag string
-	if len(tagBytes) > 0 {
-		tag = string(tagBytes[:len(tagBytes)-1])
-	}
-
-	var lsn int64
-	binary.Read(buf, storageByteOrder, &lsn)
-	var index int32
-	binary.Read(buf, storageByteOrder, &index)
-
-	return tag, lsn, index, nil
-}
-
-func freeString(c *C.char) {
-	C.free(unsafe.Pointer(c))
-}
-
-func freePtr(ptr unsafe.Pointer) {
-	C.free(ptr)
-}
-
-func stringToError(c *C.char) error {
-	es := C.GoString(c)
-	return errors.New(es)
-}
-
-func intToPtr(v int64) (unsafe.Pointer, C.size_t) {
-	bb := intToBytes(v)
-	return bytesToPtr(bb)
-}
-
-func bytesToPtr(bb []byte) (unsafe.Pointer, C.size_t) {
-	// TODO Replace with C.CBytes. However this causes an error from "go vet"
-	bsLen := C.size_t(len(bb))
-	buf := C.malloc(bsLen)
-	copy((*[1 << 30]byte)(buf)[:], bb)
-	return buf, bsLen
-}
 
 func intToBytes(v int64) []byte {
 	buf := &bytes.Buffer{}
@@ -183,35 +28,57 @@ func intToBytes(v int64) []byte {
 	return buf.Bytes()
 }
 
-func ptrToBytes(ptr unsafe.Pointer, len C.size_t) []byte {
-	return C.GoBytes(ptr, C.int(len))
-}
-
-func ptrToInt(ptr unsafe.Pointer, len C.size_t) int64 {
-	bb := ptrToBytes(ptr, len)
+func bytesToInt(bb []byte) (ret int64) {
 	buf := bytes.NewBuffer(bb)
-	var ret int64
 	binary.Read(buf, storageByteOrder, &ret)
-	return ret
-}
-
-func keyPrefix(keyType int) []byte {
-	flag := (KeyVersion << 4) | (keyType & 0xf)
-	return []byte{byte(flag)}
-}
-
-func parseKeyPrefix(b byte) (int, int) {
-	bi := int(b)
-	vers := (bi >> 4) & 0xf
-	kt := bi & 0xf
-	return vers, kt
+	return
 }
 
 /*
-compareKeys is unused in the code but it is used by the tests. Since it uses
-cgo it cannot be in a test file, however.
+Create an entry key.
 */
-func compareKeys(ptra unsafe.Pointer, lena C.size_t, ptrb unsafe.Pointer, lenb C.size_t) int {
-	cmp := C.go_compare_bytes(nil, ptra, lena, ptrb, lenb)
-	return int(cmp)
+func lsnAndOffsetToKey(scope string, lsn uint64, index uint32) []byte {
+	buf := &bytes.Buffer{}
+	ib := make([]byte, binary.MaxVarintLen64)
+
+	scopeBytes := []byte(scope)
+	c := binary.PutUvarint(ib, uint64(len(scopeBytes)))
+	buf.Write(ib[:c])
+	buf.Write(scopeBytes)
+
+	c = binary.PutUvarint(ib, lsn)
+	buf.Write(ib[:c])
+
+	c = binary.PutUvarint(ib, uint64(index))
+	buf.Write(ib[:c])
+
+	return buf.Bytes()
+}
+
+func keyToLsnAndOffset(key []byte) (scope string, lsn uint64, index uint32, err error) {
+	buf := bytes.NewBuffer(key)
+
+	iv, err := binary.ReadUvarint(buf)
+	if err != nil {
+		return
+	}
+	scopeBytes := make([]byte, int(iv))
+	_, err = buf.Read(scopeBytes)
+	if err != nil {
+		return
+	}
+	scope = string(scopeBytes)
+
+	iv, err = binary.ReadUvarint(buf)
+	if err != nil {
+		return
+	}
+	lsn = iv
+
+	iv, err = binary.ReadUvarint(buf)
+	if err != nil {
+		return
+	}
+	index = uint32(iv)
+	return
 }

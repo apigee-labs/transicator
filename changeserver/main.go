@@ -12,10 +12,6 @@ import (
 	"github.com/Sirupsen/logrus"
 )
 
-const (
-	defaultCacheSize = 65536
-)
-
 func main() {
 	exitCode := runMain()
 	os.Exit(exitCode)

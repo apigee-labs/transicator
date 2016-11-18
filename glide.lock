@@ -1,5 +1,5 @@
-hash: ef9505096a1ad7661121d047088c7c53f5b8affeb33b91f5288c234b4fa97be7
-updated: 2016-11-10T14:04:19.875713331-08:00
+hash: 0cf9187cfbaa1eacb7ac67e0be4998605ff15e9eec51781724526153acd5df1e
+updated: 2016-11-15T15:27:20.771223505-08:00
 imports:
 - name: github.com/30x/goscaffold
   version: 584cecee6ca8118c7dd7916844df88db6f9fc13b
@@ -11,6 +11,8 @@ imports:
   version: 8c199fb6259ffc1af525cc3ad52ee60ba8359669
 - name: github.com/Sirupsen/logrus
   version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
+- name: github.com/tecbot/gorocksdb
+  version: f2a0b10f7228cff360e2d9efa081a15a8cbd68b7
 - name: golang.org/x/sys
   version: 9bb9f0998d48b31547d975974935ae9b48c7a03c
   subpackages:

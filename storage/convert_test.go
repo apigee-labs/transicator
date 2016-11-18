@@ -8,32 +8,21 @@ import (
 )
 
 var _ = Describe("Conversion", func() {
-	It("Int Key", func() {
-		s := testIntKey(1, 1234)
-		Expect(s).Should(BeTrue())
-		err := quick.Check(testIntKey, nil)
+	It("Identity Key Conversion", func() {
+		key := lsnAndOffsetToKey("foo", 3, 5)
+		scope, lsn, offset, err := keyToLsnAndOffset(key)
 		Expect(err).Should(Succeed())
+		Expect(scope).Should(BeEquivalentTo("foo"))
+		Expect(lsn).Should(BeEquivalentTo(3))
+		Expect(offset).Should(BeEquivalentTo(5))
 	})
-
-	It("String Key", func() {
-		s := testStringKey(1, "foo")
-		Expect(s).Should(BeTrue())
-		err := quick.Check(testStringKey, nil)
+	It("Empty key conversion", func() {
+		key := lsnAndOffsetToKey("", 3, 5)
+		scope, lsn, offset, err := keyToLsnAndOffset(key)
 		Expect(err).Should(Succeed())
-	})
-
-	It("String Key Compare", func() {
-		s := testMetadataIndexCompare("foo", "foo")
-		Expect(s).Should(BeTrue())
-		s = testMetadataIndexCompare("foo", "bar")
-		Expect(s).Should(BeTrue())
-		s = testMetadataIndexCompare("foo", "")
-		Expect(s).Should(BeTrue())
-		s = testMetadataIndexCompare("", "foo")
-		Expect(s).Should(BeTrue())
-
-		err := quick.Check(testMetadataIndexCompare, nil)
-		Expect(err).Should(Succeed())
+		Expect(scope).Should(BeEquivalentTo(""))
+		Expect(lsn).Should(BeEquivalentTo(3))
+		Expect(offset).Should(BeEquivalentTo(5))
 	})
 
 	It("Index Key Compare", func() {
@@ -44,43 +33,20 @@ var _ = Describe("Conversion", func() {
 	})
 })
 
-func testIntKey(kt int, key uint64) bool {
-	if kt < 0 || kt > (1<<8) {
-		return true
-	}
-	keyBytes, keyLen := uintToKey(kt, key)
-	Expect(keyLen).Should(BeEquivalentTo(9))
-	defer freePtr(keyBytes)
-
-	newType, newKey, err := keyToUint(keyBytes, keyLen)
-	Expect(err).Should(Succeed())
-	Expect(newType).Should(Equal(kt))
-	Expect(newKey).Should(Equal(key))
-	return true
-}
-
-func testStringKey(kt int, key string) bool {
-	if kt < 0 || kt > (1<<8) {
-		return true
-	}
-	keyBytes, keyLen := stringToKey(kt, key)
-	Expect(keyLen > 0).Should(BeTrue())
-	defer freePtr(keyBytes)
-
-	newType, newKey, err := keyToString(keyBytes, keyLen)
-	Expect(err).Should(Succeed())
-	Expect(newType).Should(Equal(kt))
-	Expect(newKey).Should(Equal(key))
-	return true
-}
-
 func testIndexKeyCompare(tag1, tag2 string, lsn1, lsn2 uint64, seq1, seq2 uint32) bool {
-	kb1, kl1 := indexToKey(IndexKey, tag1, lsn1, seq1)
-	defer freePtr(kb1)
-	kb2, kl2 := indexToKey(IndexKey, tag2, lsn2, seq2)
-	defer freePtr(kb2)
-
-	cmp := compareKeys(kb1, kl1, kb2, kl2)
+	kb1 := lsnAndOffsetToKey(tag1, lsn1, seq1)
+	kb2 := lsnAndOffsetToKey(tag2, lsn2, seq2)
+	s1, l1, i1, err := keyToLsnAndOffset(kb1)
+	Expect(err).Should(Succeed())
+	Expect(s1).Should(Equal(tag1))
+	Expect(l1).Should(Equal(lsn1))
+	Expect(i1).Should(Equal(seq1))
+	s2, l2, i2, err := keyToLsnAndOffset(kb2)
+	Expect(err).Should(Succeed())
+	Expect(s2).Should(Equal(tag2))
+	Expect(l2).Should(Equal(lsn2))
+	Expect(i2).Should(Equal(seq2))
+	cmp := entryComparator.Compare(kb1, kb2)
 
 	if tag1 < tag2 {
 		return cmp < 0
@@ -98,23 +64,6 @@ func testIndexKeyCompare(tag1, tag2 string, lsn1, lsn2 uint64, seq1, seq2 uint32
 		return cmp < 0
 	}
 	if seq1 > seq2 {
-		return cmp > 0
-	}
-	return cmp == 0
-}
-
-func testMetadataIndexCompare(k1, k2 string) bool {
-	keyBytes1, keyLen1 := stringToKey(StringKey, k1)
-	defer freePtr(keyBytes1)
-	keyBytes2, keyLen2 := stringToKey(StringKey, k2)
-	defer freePtr(keyBytes2)
-
-	cmp := compareKeys(keyBytes1, keyLen1, keyBytes2, keyLen2)
-
-	if k1 < k2 {
-		return cmp < 0
-	}
-	if k1 > k2 {
 		return cmp > 0
 	}
 	return cmp == 0

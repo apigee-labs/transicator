@@ -1,4 +1,4 @@
-FROM thirtyx/go-leveldb:1.7.1
+FROM thirtyx/go-rocksdb:v1.7.1
 
 COPY . /go/src/github.com/apigee-labs/transicator
 
