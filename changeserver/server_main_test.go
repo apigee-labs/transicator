@@ -31,6 +31,7 @@ var listener net.Listener
 var testServer *server
 var db *sql.DB
 var insertStmt *sql.Stmt
+var insertAlterativeScopeStmt *sql.Stmt
 
 func TestServer(t *testing.T) {
 	if debugTests {
@@ -57,8 +58,12 @@ var _ = BeforeSuite(func() {
 
 	// Connect to the database and create our test table
 	executeSQL(testTableSQL)
+	executeSQL(testAlternateScopeTableSQL)
 	insertStmt, err = db.Prepare(
 		"insert into changeserver_test (sequence, _apid_scope) values ($1, $2)")
+	Expect(err).Should(Succeed())
+
+	insertAlterativeScopeStmt, err = db.Prepare("insert into changeserver_scope_test(sequence, _different_scope) values ($1, $2)")
 	Expect(err).Should(Succeed())
 
 	// Start the server, which will be ready to respond to API calls
@@ -87,7 +92,7 @@ var _ = BeforeSuite(func() {
 	// Poll until we are connected to PG and replication has begun
 	Eventually(func() replication.State {
 		return testServer.repl.State()
-	}).Should(Equal(replication.Running))
+	},30,10).Should(Equal(replication.Running))
 
 	// Start listening for HTTP calls
 	go func() {
@@ -109,6 +114,7 @@ var _ = AfterSuite(func() {
 	}
 	// Drop the test data table
 	executeSQL(dropTableSQL)
+	executeSQL(dropAlternativeScopeTableSQL)
 	// And delete the storage
 	testServer.delete()
 	if db != nil {
@@ -138,4 +144,12 @@ const testTableSQL = `
   _apid_scope varchar
 )`
 
+const testAlternateScopeTableSQL = `
+  create table changeserver_scope_test (
+    sequence integer primary key,
+    _different_scope varchar
+  )
+`
+
 const dropTableSQL = "drop table changeserver_test"
+const dropAlternativeScopeTableSQL = "drop table changeserver_scope_test"

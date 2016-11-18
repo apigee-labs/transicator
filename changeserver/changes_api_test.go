@@ -26,6 +26,37 @@ var _ = Describe("Changes API Tests", func() {
 		Expect(cl.Changes).Should(BeEmpty())
 	})
 
+	It("Different scope", func() {
+		scopeField = "_different_scope"
+		defer func() { scopeField = "_apid_scope" }()
+		lastTestSequence++
+		fmt.Fprintf(GinkgoWriter, "Insert alternative scope sequence %d\n", lastTestSequence)
+		_, err := insertAlterativeScopeStmt.Exec(lastTestSequence,"boop")
+		Expect(err).Should(Succeed())
+
+		Eventually(func() bool {
+			bod := executeGet(fmt.Sprintf(
+				"%s/changes?since=%s&scope=boop", baseURL, lastChangeSequence))
+			cl, err := common.UnmarshalChangeList(bod)
+			Expect(err).Should(Succeed())
+			if len(cl.Changes) == 0 {
+				return false
+			}
+			for _, c := range cl.Changes {
+				var tableName string
+				err = c.NewRow.Get("table", &tableName)
+				Expect(err).Should(Succeed())
+				if tableName == "public.changeserver_scope_test" {
+					return true
+				}
+			}
+			fmt.Fprintf(GinkgoWriter, "Received %d changes last sequence = %s\n",
+				len(cl.Changes), cl.Changes[len(cl.Changes)-1].NewRow["sequence"].Value)
+			return false
+		})
+
+	})
+
 	It("First Change", func() {
 		lastTestSequence++
 		fmt.Fprintf(GinkgoWriter, "Inserting sequence %d\n", lastTestSequence)
