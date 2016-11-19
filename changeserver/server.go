@@ -16,17 +16,14 @@ import (
 )
 
 const (
-	jsonContent     = "application/json"
-	protoContent    = "application/transicator+protobuf"
-	textContent     = "text/plain"
-	lastSequenceKey = "_ls"
+	jsonContent       = "application/json"
+	protoContent      = "application/transicator+protobuf"
+	textContent       = "text/plain"
+	lastSequenceKey   = "_ls"
+	defaultScopeField = "_apid_scope"
 )
 
-var scopeField string
-
-func init() {
-	scopeField = "_apid_scope"
-}
+var scopeField = defaultScopeField
 
 type server struct {
 	db          *storage.DB

@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-func SetConfigDefaults() {
+func setConfigDefaults() {
 
 	// These defaults are already set in main.go for the 'flag' packages
 	// However, we will set them again here to retain them if/when the
@@ -21,15 +21,16 @@ func SetConfigDefaults() {
 	viper.SetDefault("pgURL", "")
 	viper.SetDefault("key", "")
 	viper.SetDefault("cert", "")
+	viper.SetDefault("scopeField", defaultScopeField)
 
 	viper.SetDefault("debug", false)
 	viper.SetDefault("help", false)
 }
 
-func GetConfig(goflags *flag.FlagSet) error {
+func getConfig(goflags *flag.FlagSet) error {
 
 	// Set some, hopefully sane, defaults
-	SetConfigDefaults()
+	setConfigDefaults()
 
 	// Parse legacy GO Flags in to pflags ready for Viper
 	pflag.CommandLine.AddGoFlagSet(goflags)
@@ -47,7 +48,7 @@ func GetConfig(goflags *flag.FlagSet) error {
 	viper.BindPFlag("configFile", pflag.Lookup("C"))
 	viper.BindPFlag("debug", pflag.Lookup("D"))
 	viper.BindPFlag("help", pflag.Lookup("h"))
-	viper.BindPFlag("scopeField",pflag.Lookup("S"))
+	viper.BindPFlag("scopeField", pflag.Lookup("S"))
 
 	// Load config values from file
 	if viper.GetBool("configFile") {

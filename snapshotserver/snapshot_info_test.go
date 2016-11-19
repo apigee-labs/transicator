@@ -408,6 +408,7 @@ var _ = Describe("Taking a snapshot", func() {
 			_, err = tx.Exec("insert into APID_CONFIG_SCOPE (id, apid_config_id, scope) values ('222-333-666','aaa-bbb-ddd', 'pespsiscope2');")
 			Expect(err).Should(Succeed())
 			err = tx.Commit()
+			Expect(err).Should(Succeed())
 
 			b, err := GetScopeData("aaa-bbb-ccc", db)
 			Expect(err).Should(Succeed())

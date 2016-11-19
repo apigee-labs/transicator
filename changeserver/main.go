@@ -55,7 +55,7 @@ func runMain() int {
 	flag.String("S", "", "Set the scopeField database column")
 	flag.Parse()
 
-	err := GetConfig(flag.CommandLine)
+	err := getConfig(flag.CommandLine)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		return 1

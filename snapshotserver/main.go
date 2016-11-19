@@ -19,10 +19,11 @@ const (
 	packageName string = "transicator"
 	appName     string = "snapshotserver"
 	// Default timeout for individual Postgres transactions
-	defaultPGTimeout = 30 * time.Second
+	defaultPGTimeout  = 30 * time.Second
+	defaultScopeField = "_apid_scope"
 )
 
-var scopeField string
+var scopeField = defaultScopeField
 
 func printUsage() {
 	fmt.Fprintln(os.Stderr, "Usage:")
@@ -52,7 +53,7 @@ func main() {
 	flag.Parse()
 
 	// Viper
-	err := GetConfig(flag.CommandLine)
+	err := getConfig(flag.CommandLine)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)

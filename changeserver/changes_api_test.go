@@ -31,7 +31,7 @@ var _ = Describe("Changes API Tests", func() {
 		defer func() { scopeField = "_apid_scope" }()
 		lastTestSequence++
 		fmt.Fprintf(GinkgoWriter, "Insert alternative scope sequence %d\n", lastTestSequence)
-		_, err := insertAlterativeScopeStmt.Exec(lastTestSequence,"boop")
+		_, err := insertAlterativeScopeStmt.Exec(lastTestSequence, "boop")
 		Expect(err).Should(Succeed())
 
 		Eventually(func() bool {
@@ -74,6 +74,7 @@ var _ = Describe("Changes API Tests", func() {
 			for _, c := range cl.Changes {
 				var newSeq int64
 				err = c.NewRow.Get("sequence", &newSeq)
+				Expect(err).Should(Succeed())
 				if newSeq == lastTestSequence {
 					Expect(c.Sequence).Should(Equal(c.GetSequence().String()))
 					lastChangeSequence = c.GetSequence()
