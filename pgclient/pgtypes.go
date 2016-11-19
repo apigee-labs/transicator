@@ -25,15 +25,6 @@ import (
 	"time"
 )
 
-const (
-	/*
-		postgresEpoch represents January 1, 2000, UTC, in nanoseconds
-		from the Unix epoch (which is January 1, 1970).
-	*/
-	postgresEpochNanos = 946684800000000000
-	nanosPerMicro      = 1000
-)
-
 /*
 PgType represents a Postgres type OID.
 */
@@ -267,20 +258,4 @@ func convertColumnValue(t PgType, b []byte) driver.Value {
 		// into whatever type the user asked for using string parsing.
 		return b
 	}
-}
-
-/*
-PgTimestampToTime converts a Postgres timestamp, expressed in microseconds
-since midnight, January 1, 2001, into a Go Time.
-*/
-func PgTimestampToTime(pts int64) time.Time {
-	utx := (pts * nanosPerMicro) + postgresEpochNanos
-	return time.Unix(0, utx)
-}
-
-/*
-TimeToPgTimestamp converts a Go Time into a Postgres timestamp.
-*/
-func TimeToPgTimestamp(t time.Time) int64 {
-	return (t.UnixNano() - postgresEpochNanos) / nanosPerMicro
 }

@@ -53,6 +53,7 @@ typedef enum {
   COMMON__VALUE_PB__VALUE_DOUBLE = 4,
   COMMON__VALUE_PB__VALUE_BYTES = 5,
   COMMON__VALUE_PB__VALUE_BOOL = 6,
+  COMMON__VALUE_PB__VALUE_TIMESTAMP = 7,
 } Common__ValuePb__ValueCase;
 
 struct  _Common__ValuePb
@@ -66,6 +67,7 @@ struct  _Common__ValuePb
     double double_;
     ProtobufCBinaryData bytes;
     protobuf_c_boolean bool_;
+    int64_t timestamp;
   };
 };
 #define COMMON__VALUE_PB__INIT \

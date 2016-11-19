@@ -21,6 +21,15 @@ import (
 	"time"
 )
 
+const (
+	/*
+		postgresEpoch represents January 1, 2000, UTC, in nanoseconds
+		from the Unix epoch (which is January 1, 1970).
+	*/
+	postgresEpochNanos = 946684800000000000
+	nanosPerMicro      = 1000
+)
+
 /*
 Get places the value of the column into the specified interface if possible.
 "d" must be set to one of:
@@ -410,10 +419,26 @@ func convertParameter(v interface{}) isValuePb_Value {
 			Double: v.(float64),
 		}
 	case time.Time:
-		return &ValuePb_String_{
-			String_: v.(time.Time).String(),
+		return &ValuePb_Timestamp{
+			Timestamp: TimeToPgTimestamp(v.(time.Time)),
 		}
 	default:
 		panic(fmt.Sprintf("Can't convert value %v type %T for protobuf", v, v))
 	}
+}
+
+/*
+PgTimestampToTime converts a Postgres timestamp, expressed in microseconds
+since midnight, January 1, 2000, into a Go Time.
+*/
+func PgTimestampToTime(pts int64) time.Time {
+	utx := (pts * nanosPerMicro) + postgresEpochNanos
+	return time.Unix(0, utx)
+}
+
+/*
+TimeToPgTimestamp converts a Go Time into a Postgres timestamp.
+*/
+func TimeToPgTimestamp(t time.Time) int64 {
+	return (t.UnixNano() - postgresEpochNanos) / nanosPerMicro
 }

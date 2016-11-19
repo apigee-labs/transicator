@@ -366,7 +366,7 @@ void   common__stream_message_pb__free_unpacked
   assert(message->base.descriptor == &common__stream_message_pb__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor common__value_pb__field_descriptors[6] =
+static const ProtobufCFieldDescriptor common__value_pb__field_descriptors[7] =
 {
   {
     "string",
@@ -440,6 +440,18 @@ static const ProtobufCFieldDescriptor common__value_pb__field_descriptors[6] =
     0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "timestamp",
+    7,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_INT64,
+    offsetof(Common__ValuePb, value_case),
+    offsetof(Common__ValuePb, timestamp),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned common__value_pb__field_indices_by_name[] = {
   5,   /* field[5] = bool */
@@ -447,12 +459,13 @@ static const unsigned common__value_pb__field_indices_by_name[] = {
   3,   /* field[3] = double */
   1,   /* field[1] = int */
   0,   /* field[0] = string */
+  6,   /* field[6] = timestamp */
   2,   /* field[2] = uint */
 };
 static const ProtobufCIntRange common__value_pb__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 6 }
+  { 0, 7 }
 };
 const ProtobufCMessageDescriptor common__value_pb__descriptor =
 {
@@ -462,7 +475,7 @@ const ProtobufCMessageDescriptor common__value_pb__descriptor =
   "Common__ValuePb",
   "common",
   sizeof(Common__ValuePb),
-  6,
+  7,
   common__value_pb__field_descriptors,
   common__value_pb__field_indices_by_name,
   1,  common__value_pb__number_ranges,

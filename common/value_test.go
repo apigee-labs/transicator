@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"strconv"
 	"testing/quick"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -151,6 +152,29 @@ var _ = Describe("Value conversion tests", func() {
 
 	It("bytes", func() {
 		Expect(quick.Check(testBytes, nil)).Should(Succeed())
+	})
+
+	It("timestamp", func() {
+		now := time.Now()
+		c := &Change{
+			NewRow: Row{
+				"val": &ColumnVal{
+					Value: now,
+				},
+			},
+		}
+
+		nv := marshUnmarsh(c)
+
+		var rts time.Time
+		err := nv.Get(&rts)
+		Expect(err).Should(Succeed())
+		Expect(rts.UnixNano()).Should(Equal(now.UnixNano()))
+
+		var tss string
+		err = nv.Get(&tss)
+		Expect(err).Should(Succeed())
+		Expect(tss).Should(Equal(now.String()))
 	})
 
 	It("Get", func() {
