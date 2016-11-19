@@ -28,4 +28,4 @@ RUN \
 EXPOSE 9000 9443 10000
 VOLUME [ "/data", "/keys" ]
 
-ENTRYPOINT [ "/changeserver", "--mp", "10000", "-d", "/data"]
+ENTRYPOINT [ "/changeserver", "--mgmtport", "10000", "-d", "/data"]

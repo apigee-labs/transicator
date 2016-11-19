@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,6 +11,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/apigee-labs/transicator/pgclient"
 	"github.com/julienschmidt/httprouter"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -27,7 +27,10 @@ var scopeField = defaultScopeField
 
 func printUsage() {
 	fmt.Fprintln(os.Stderr, "Usage:")
-	flag.PrintDefaults()
+	pflag.PrintDefaults()
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Postgres URL must be specified.")
+	fmt.Fprintln(os.Stderr, "Either one of the \"port\" or \"secureport\" must be specified")
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
 	fmt.Fprintln(os.Stderr,
@@ -38,22 +41,18 @@ func printUsage() {
  * Main entry point
  */
 func main() {
+	help := false
 
-	// Define legacy GO Flags
-	flag.Int("p", -1, "Local Binding port")
-	flag.Int("sp", -1, "HTTP listen port")
-	flag.Int("mp", -1, "Management port (for health checks)")
-	flag.String("u", "", "URL to connect to Postgres DB")
-	flag.String("key", "", "TLS key file (must be unencrypted)")
-	flag.String("cert", "", "TLS certificate file")
-	flag.Bool("C", false, fmt.Sprintf("Use a config file named '%s' located in either /etc/%s/, ~/.%s or ./)", appName, packageName, packageName))
-	flag.Bool("D", false, "Turn on debugging")
-	flag.Bool("h", false, "Print help message")
-	flag.String("S", "", "Set scope field")
-	flag.Parse()
+	setConfigDefaults()
+	pflag.BoolVarP(&help, "help", "h", false, "Print help message")
 
-	// Viper
-	err := getConfig(flag.CommandLine)
+	pflag.Parse()
+	if !pflag.Parsed() || help {
+		printUsage()
+		os.Exit(2)
+	}
+
+	err := getConfig()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
@@ -69,20 +68,13 @@ func main() {
 	cert := viper.GetString("cert")
 
 	debug := viper.GetBool("debug")
-	help := viper.GetBool("help")
 	scopeFieldParam := viper.GetString("scopeField")
 
-	if help || !flag.Parsed() {
-		printUsage()
-		os.Exit(2)
-	}
 	if pgURL == "" {
-		fmt.Fprintln(os.Stderr, "-u parameters is required")
 		printUsage()
 		os.Exit(3)
 	}
 	if port < 0 && securePort < 0 {
-		fmt.Fprintln(os.Stderr, "Either -p or -sp is required")
 		printUsage()
 		os.Exit(3)
 	}

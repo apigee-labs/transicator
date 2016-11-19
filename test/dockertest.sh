@@ -59,7 +59,7 @@ docker run -d \
   --link ${dbName}:postgres \
   -v ${PWD}/test/keys:/keys \
   ${csName} \
-  --sp 9443 --key /keys/clearkey.pem --cert /keys/clearcert.pem \
+  -t 9443 --key /keys/clearkey.pem --cert /keys/clearcert.pem \
   -s ${slotName} -u $POSTGRES_URL
 
 docker run -d \
@@ -67,7 +67,7 @@ docker run -d \
   --link ${dbName}:postgres \
   -v ${PWD}/test/keys:/keys \
   ${ssName} \
-  --sp 9444 --key /keys/clearkey.pem --cert /keys/clearcert.pem \
+  -t 9444 --key /keys/clearkey.pem --cert /keys/clearcert.pem \
   -u $POSTGRES_URL
 
 # Run tests of the combined servers and Postgres

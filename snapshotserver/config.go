@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 
@@ -10,45 +9,42 @@ import (
 )
 
 func setConfigDefaults() {
-
-	// These defaults are already set in main.go for the 'flag' packages
-	// However, we will set them again here to retain them if/when the
-	// old CLI flags are removed.
+	pflag.IntP("port", "p", -1, "HTTP Binding port")
 	viper.SetDefault("port", -1)
+	pflag.IntP("secureport", "t", -1, "HTTPS listen port")
 	viper.SetDefault("securePort", -1)
+	pflag.Int("mgmtport", -1, "Management port (for health checks)")
 	viper.SetDefault("mgmtPort", -1)
 
+	pflag.StringP("pgurl", "u", "", "URL to connect to Postgres DB")
 	viper.SetDefault("pgURL", "")
+
+	pflag.String("key", "", "TLS key file (must be unencrypted)")
 	viper.SetDefault("key", "")
+	pflag.String("cert", "", "TLS certificate file")
 	viper.SetDefault("cert", "")
+
+	pflag.StringP("scopefield", "S", "", "Set scope field")
 	viper.SetDefault("scopeField", defaultScopeField)
 
+	pflag.BoolP("config", "C", false, fmt.Sprintf("Use a config file named '%s' located in either /etc/%s/, ~/.%s or ./)", appName, packageName, packageName))
+	pflag.BoolP("debug", "D", false, "Turn on debugging")
 	viper.SetDefault("debug", false)
-	viper.SetDefault("help", false)
 }
 
-func getConfig(goflags *flag.FlagSet) error {
+func getConfig() error {
+	viper.BindPFlag("port", pflag.Lookup("port"))
+	viper.BindPFlag("securePort", pflag.Lookup("secureport"))
+	viper.BindPFlag("mgmtPort", pflag.Lookup("mgmtport"))
 
-	// Set some, hopefully sane, defaults
-	setConfigDefaults()
-
-	// Parse legacy GO Flags in to pflags ready for Viper
-	pflag.CommandLine.AddGoFlagSet(goflags)
-	pflag.Parse()
-
-	// Bind legacy GO Flags to viper to maintain backwards compatibility
-	viper.BindPFlag("port", pflag.Lookup("p"))
-	viper.BindPFlag("securePort", pflag.Lookup("sp"))
-	viper.BindPFlag("mgmtPort", pflag.Lookup("mp"))
-
-	viper.BindPFlag("pgURL", pflag.Lookup("u"))
+	viper.BindPFlag("pgURL", pflag.Lookup("pgurl"))
 	viper.BindPFlag("key", pflag.Lookup("key"))
 	viper.BindPFlag("cert", pflag.Lookup("cert"))
 
-	viper.BindPFlag("configFile", pflag.Lookup("C"))
-	viper.BindPFlag("debug", pflag.Lookup("D"))
-	viper.BindPFlag("help", pflag.Lookup("h"))
-	viper.BindPFlag("scopeField", pflag.Lookup("S"))
+	viper.BindPFlag("configFile", pflag.Lookup("config"))
+	viper.BindPFlag("debug", pflag.Lookup("debug"))
+	viper.BindPFlag("help", pflag.Lookup("help"))
+	viper.BindPFlag("scopeField", pflag.Lookup("scopefield"))
 
 	// Load config values from file
 	if viper.GetBool("configFile") {

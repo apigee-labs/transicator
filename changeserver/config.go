@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 
@@ -11,51 +10,52 @@ import (
 
 func setConfigDefaults() {
 
-	// These defaults are already set in main.go for the 'flag' packages
-	// However, we will set them again here to retain them if/when the
-	// old CLI flags are removed.
+	pflag.IntP("port", "p", -1, "HTTP Listen port")
 	viper.SetDefault("port", -1)
+	pflag.IntP("secureport", "t", -1, "HTTPS Listen port")
 	viper.SetDefault("securePort", -1)
+	pflag.Int("mgmtport", -1, "Management port (for health checks)")
 	viper.SetDefault("mgmtPort", -1)
 
+	pflag.StringP("dbdir", "d", "", "Location of database files")
 	viper.SetDefault("dbDir", "")
+	pflag.StringP("url", "u", "", "URL to connect to Postgres")
 	viper.SetDefault("pgURL", "")
+	pflag.StringP("pgslot", "s", "", "Slot name for Postgres logical replication")
 	viper.SetDefault("pgSlot", "")
+	pflag.StringP("maxage", "m", "", "Purge records older than this age.")
 	viper.SetDefault("maxAgeParam", "")
+	pflag.String("cert", "", "TLS certificate PEM file")
 	viper.SetDefault("cert", "")
+	pflag.String("key", "", "TLS key PEM file (must be unencrypted)")
 	viper.SetDefault("key", "")
+	pflag.StringP("prefix", "P", "", "Optional prefix URL for all API calls")
+	pflag.StringP("scopefield", "S", "", "Set the scopeField database column")
 	viper.SetDefault("prefix", "")
 	viper.SetDefault("scopeField", defaultScopeField)
+
+	pflag.BoolP("config", "C", false, fmt.Sprintf("Use a config file named '%s' located in either /etc/%s/, ~/.%s or ./)", appName, packageName, packageName))
+	pflag.BoolP("debug", "D", false, "Turn on debugging")
 	viper.SetDefault("debug", false)
-	viper.SetDefault("help", false)
 }
 
-func getConfig(goflags *flag.FlagSet) error {
+func getConfig() error {
 
-	// Set some, hopefully sane, defaults
-	setConfigDefaults()
+	viper.BindPFlag("port", pflag.Lookup("port"))
+	viper.BindPFlag("securePort", pflag.Lookup("secureport"))
+	viper.BindPFlag("mgmtPort", pflag.Lookup("mgmtport"))
 
-	// Parse legacy GO Flags in to pflags ready for Viper
-	pflag.CommandLine.AddGoFlagSet(goflags)
-	pflag.Parse()
-
-	// Bind legacy GO Flags to viper to maintain backwards compatibility
-	viper.BindPFlag("port", pflag.Lookup("p"))
-	viper.BindPFlag("securePort", pflag.Lookup("sp"))
-	viper.BindPFlag("mgmtPort", pflag.Lookup("mp"))
-
-	viper.BindPFlag("dbDir", pflag.Lookup("d"))
-	viper.BindPFlag("pgURL", pflag.Lookup("u"))
-	viper.BindPFlag("pgSlot", pflag.Lookup("s"))
-	viper.BindPFlag("maxAgeParam", pflag.Lookup("m"))
+	viper.BindPFlag("dbDir", pflag.Lookup("dbdir"))
+	viper.BindPFlag("pgURL", pflag.Lookup("url"))
+	viper.BindPFlag("pgSlot", pflag.Lookup("pgslot"))
+	viper.BindPFlag("maxAgeParam", pflag.Lookup("maxage"))
 	viper.BindPFlag("cert", pflag.Lookup("cert"))
 	viper.BindPFlag("key", pflag.Lookup("key"))
-	viper.BindPFlag("prefix", pflag.Lookup("P"))
+	viper.BindPFlag("prefix", pflag.Lookup("prefix"))
 
-	viper.BindPFlag("configFile", pflag.Lookup("C"))
-	viper.BindPFlag("debug", pflag.Lookup("D"))
-	viper.BindPFlag("help", pflag.Lookup("h"))
-	viper.BindPFlag("scopeField", pflag.Lookup("S"))
+	viper.BindPFlag("configFile", pflag.Lookup("config"))
+	viper.BindPFlag("debug", pflag.Lookup("debug"))
+	viper.BindPFlag("scopeField", pflag.Lookup("scopefield"))
 
 	// Load config values from file
 	if viper.GetBool("configFile") {

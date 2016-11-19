@@ -94,7 +94,7 @@ Looks great -- control-D to quit, BTW.
 Now, start a snapshot server running on port 9001:
 
     docker run -d -p 9001:9001 apigeelabs/transicator-snapshot \
-    -u postgres://postgres:changeme@localhost/postgres
+    -u postgres://postgres:changeme@localhost/postgres -p 9001
 
 You can test quickly -- this API call should return "303 See Other":
 
@@ -103,7 +103,7 @@ You can test quickly -- this API call should return "303 See Other":
 Finally, start a change server running on port 9000:
 
     docker run -d -p 9000:9000 apigeelabs/transicator-changeserver \
-    -u postgres://postgres:changeme@localhost/postgres -s testslot
+    -p 9000 -u postgres://postgres:changeme@localhost/postgres -s testslot
 
 This API call will tell you that the database is empty:
 
