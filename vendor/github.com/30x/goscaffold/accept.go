@@ -32,8 +32,8 @@ is returned.
 Only the first "Accept" header on the request is considered.
 */
 func SelectMediaType(req *http.Request, choices []string) string {
-	hdr := req.Header.Get("Accept")
-	if hdr == "" {
+	hdr := strings.TrimSpace(req.Header.Get("Accept"))
+	if hdr == "" || hdr == "*" || hdr == "*/*" {
 		if len(choices) >= 1 {
 			return choices[0]
 		}
