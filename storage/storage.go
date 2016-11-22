@@ -98,9 +98,16 @@ store its data. RocksDB will create many files inside this directory. To create
 an empty database, make sure that it is empty.
 */
 func OpenDB(baseFile string) (*DB, error) {
+
+	success := false
 	stor := &DB{
 		baseFile: baseFile,
 	}
+	defer func() {
+		if !success {
+			cleanup(stor)
+		}
+	}()
 
 	var err error
 
@@ -128,6 +135,7 @@ func OpenDB(baseFile string) (*DB, error) {
 	stor.metadataCF = cfs[2]
 
 	log.Infof("Opened RocksDB file in %s", baseFile)
+	success = true
 
 	return stor, nil
 }
@@ -145,9 +153,19 @@ Close closes the database cleanly.
 func (s *DB) Close() {
 	log.Infof("Closed DB in %s", s.baseFile)
 	s.db.Close()
-	s.dfltOpts.Destroy()
-	s.entriesOpts.Destroy()
-	s.dbOpts.Destroy()
+	cleanup(s)
+}
+
+func cleanup(s *DB) {
+	if s.dfltOpts != nil {
+		s.dfltOpts.Destroy()
+	}
+	if s.entriesOpts != nil {
+		s.entriesOpts.Destroy()
+	}
+	if s.dbOpts != nil {
+		s.dbOpts.Destroy()
+	}
 }
 
 /*

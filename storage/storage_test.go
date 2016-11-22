@@ -33,7 +33,7 @@ var _ = Describe("Storage Main Test", func() {
 	})
 
 	It("Open and reopen", func() {
-		fmt.Println("Open and re-open")
+		fmt.Fprintln(GinkgoWriter, "Open and re-open")
 		stor, err := OpenDB("./openleveldb")
 		Expect(err).Should(Succeed())
 		stor.Close()
@@ -42,7 +42,12 @@ var _ = Describe("Storage Main Test", func() {
 		stor.Close()
 		err = stor.Delete()
 		Expect(err).Should(Succeed())
-		fmt.Println("Open and re-open done")
+		fmt.Fprintln(GinkgoWriter, "Open and re-open done")
+	})
+
+	It("Bad path", func() {
+		_, err := OpenDB("./does/not/exist")
+		Expect(err).ShouldNot(Succeed())
 	})
 
 	It("String metadata", func() {
