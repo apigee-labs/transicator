@@ -105,7 +105,6 @@ func OpenDB(baseFile string) (*DB, error) {
 	var err error
 
 	dbOpts := gorocksdb.NewDefaultOptions()
-	defer dbOpts.Destroy()
 	dbOpts.SetCreateIfMissing(true)
 	dbOpts.SetCreateIfMissingColumnFamilies(true)
 	stor.dbOpts = dbOpts
