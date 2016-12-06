@@ -26,6 +26,15 @@ const (
 	metadataCFName = "metadata"
 )
 
+/*
+TODO Storage improvements.
+
+* Remove metadata CF.
+* Replace with a "sequence" CF.
+* Insert sequence numbers in there.
+* Use sequence CF when cleaning up old entries.
+*/
+
 type entryCmp struct {
 }
 

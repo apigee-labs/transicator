@@ -10,19 +10,22 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/tecbot/gorocksdb"
 )
 
 const (
 	benchDBDir = "./benchdata"
 	largeDBDir = "./benchlargedata"
+	cleanDBDir = "./cleanlargedata"
 	firstKey   = "firstlsn"
 	lastKey    = "lasttlsn"
 )
 
 var largeInit = &sync.Once{}
-var largeDB *DB
-var largeScopes []string
-var largeScopeNames []string
+var cleanInit = &sync.Once{}
+var largeDB, cleanDB *DB
+var largeScopes, cleanScopes []string
+var largeScopeNames, cleanScopeNames []string
 
 func BenchmarkInserts(b *testing.B) {
 	db, err := OpenDB(benchDBDir)
@@ -73,7 +76,7 @@ func BenchmarkSequence0To100(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		scope := largeScopes[rand.Intn(len(largeScopeNames))]
+		scope := largeScopeNames[rand.Intn(len(largeScopeNames))]
 		entries, err := largeDB.GetEntries(scope, 0, 0, 100, nil)
 		if err != nil {
 			b.Fatalf("Error on read: %s\n", err)
@@ -96,7 +99,7 @@ func BenchmarkSequence0To100WithMetadata(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		scope := largeScopes[rand.Intn(len(largeScopeNames))]
+		scope := largeScopeNames[rand.Intn(len(largeScopeNames))]
 		entries, meta, err := largeDB.GetMultiEntries(
 			[]string{scope}, []string{firstKey, lastKey}, 0, 0, 100, nil)
 		if err != nil {
@@ -126,7 +129,7 @@ func BenchmarkSequenceAfterEnd(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		scope := largeScopes[rand.Intn(len(largeScopeNames))]
+		scope := largeScopeNames[rand.Intn(len(largeScopeNames))]
 		entries, err := largeDB.GetEntries(scope, uint64(len(largeScopes)+1), 0, 100, nil)
 		if err != nil {
 			b.Fatalf("Error on read: %s\n", err)
@@ -137,20 +140,88 @@ func BenchmarkSequenceAfterEnd(b *testing.B) {
 	}
 }
 
+func BenchmarkSequence0To100WithMetadataAfterClean(b *testing.B) {
+	largeInit.Do(func() {
+		initLargeDB(b)
+	})
+
+	cleanInit.Do(func() {
+		purgeNRecords(b, cleanDB, len(cleanScopes) / 2)
+	})
+
+	b.Logf("Reading %d sequences\n", b.N)
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		scope := cleanScopeNames[rand.Intn(len(cleanScopeNames))]
+		_, _, err := cleanDB.GetMultiEntries(
+			[]string{scope}, []string{firstKey, lastKey}, 0, 0, 100, nil)
+		if err != nil {
+			b.Fatalf("Error on read: %s\n", err)
+		}
+	}
+}
+
+func BenchmarkSequence0To100WithMetadataAfterCleanCompact(b *testing.B) {
+	largeInit.Do(func() {
+		initLargeDB(b)
+	})
+
+	cleanInit.Do(func() {
+		purgeNRecords(b, cleanDB, len(cleanScopes) / 2)
+	})
+
+	b.Logf("Compacting database\n")
+	cleanDB.db.CompactRangeCF(cleanDB.entriesCF, gorocksdb.Range{})
+	b.Logf("Reading %d sequences\n", b.N)
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		scope := cleanScopeNames[rand.Intn(len(cleanScopeNames))]
+		_, _, err := cleanDB.GetMultiEntries(
+			[]string{scope}, []string{firstKey, lastKey}, 0, 0, 100, nil)
+		if err != nil {
+			b.Fatalf("Error on read: %s\n", err)
+		}
+	}
+}
+
+func purgeNRecords(b *testing.B, db *DB, toPurge int) {
+	b.Logf("Cleaning the up to %d records\n", toPurge)
+	pc := 0
+	purged, err := db.PurgeEntries(func (b []byte) bool {
+		if pc < toPurge {
+			pc++
+			return true
+		}
+		return false
+	})
+	if err != nil {
+		b.Fatalf("Error on purge: %s\n", err)
+	}
+	b.Logf("Cleaned %d.\n", purged)
+}
+
 func initLargeDB(b *testing.B) {
-	var err error
-	largeDB, err = OpenDB(largeDBDir)
+	largeScopes, largeScopeNames = makeScopeList(100, 10000, 1000, 1)
+	largeDB = initDB(b, largeDBDir, largeScopes)
+	cleanScopes, cleanScopeNames = makeScopeList(100, 10000, 1000, 1)
+	cleanDB = initDB(b, cleanDBDir, cleanScopes)
+}
+
+func initDB(b *testing.B, dir string, insertScopes []string) *DB {
+	db, err := OpenDB(dir)
 	if err != nil {
 		b.Fatalf("Error on open: %s\n", err)
 	}
 
-	largeScopes, largeScopeNames = makeScopeList(100, 10000, 1000, 1)
-	b.Logf("Inserting %d records\n", len(largeScopes))
-	doInserts(largeDB, largeScopes, len(largeScopes))
-	err = largeDB.SetMetadata(firstKey, []byte("0"))
+	b.Logf("Inserting %d records\n", len(insertScopes))
+	doInserts(db, insertScopes, len(insertScopes))
+	err = db.SetMetadata(firstKey, []byte("0"))
 	if err != nil {
 		b.Fatalf("Error setting metadata: %s\n", err)
 	}
+	return db
 }
 
 func doInserts(db *DB, scopes []string, iterations int) {

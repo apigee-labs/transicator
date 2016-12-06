@@ -25,5 +25,10 @@ func TestMain(m *testing.M) {
 		largeDB.Close()
 		largeDB.Delete()
 	}
+	if cleanDB != nil {
+		fmt.Printf("Deleting %s\n", cleanDBDir)
+		cleanDB.Close()
+		cleanDB.Delete()
+	}
 	os.Exit(ret)
 }
