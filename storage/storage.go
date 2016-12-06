@@ -10,6 +10,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/apigee-labs/transicator/common"
+	// Ensure that the sqlite driver is loaded
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -51,7 +52,7 @@ func OpenDB(baseFile string) (*DB, error) {
 			return nil, err
 		}
 	} else if !st.IsDir() {
-		return nil, fmt.Errorf("Database location %s is not a directory")
+		return nil, fmt.Errorf("Database location %s is not a directory", baseFile)
 	}
 
 	url := fmt.Sprintf("%s/transicator", baseFile)
@@ -127,7 +128,7 @@ func (s *DB) PutEntry(scope string, lsn uint64, index uint32, data []byte) error
 }
 
 /*
-GetEntry returns what was written by PutEntry.
+GetEntry returns what was written by PutEntry. It's mainly used for testing.
 */
 func (s *DB) GetEntry(scope string, lsn uint64, index uint32) ([]byte, error) {
 	row := s.db.QueryRow("select data from transicator_entries where scope = ? and lsn = ? and ix = ?",
@@ -188,6 +189,7 @@ func (s *DB) GetMultiEntries(
 	startLSN uint64, startIndex uint32,
 	limit int, filter func([]byte) bool) (final [][]byte, firstSeq common.Sequence, lastSeq common.Sequence, err error) {
 
+	// By doing this in a transaction we should get snapshot-level consistency
 	var tx *sql.Tx
 	tx, err = s.db.Begin()
 	if err != nil {
@@ -195,6 +197,7 @@ func (s *DB) GetMultiEntries(
 	}
 	defer tx.Commit()
 
+	// Read first and last sequences
 	firstSeq, lastSeq, err = s.readLimits(tx)
 	if err != nil {
 		return
@@ -210,6 +213,7 @@ func (s *DB) GetMultiEntries(
 		}
 		results = append(results, rr...)
 	}
+	tx.Commit()
 
 	// Sort and then take limit
 	sort.Sort(results)
@@ -250,7 +254,7 @@ func (s *DB) PurgeEntries(filter func([]byte) bool) (purgeCount uint64, err erro
 	defer rows.Close()
 
 	var cleanStmt *sql.Stmt
-	cleanStmt, err = s.db.Prepare("delete from transicator_entries where scope = ? and lsn = ? and ix = ?")
+	cleanStmt, err = s.db.Prepare(deleteEntrySQL)
 	if err != nil {
 		return
 	}
