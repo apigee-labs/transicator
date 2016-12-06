@@ -18,13 +18,13 @@ package storage
 import (
 	"bytes"
 	"fmt"
-	"math"
 	"testing/quick"
 
 	"encoding/hex"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/apigee-labs/transicator/common"
 )
 
 const (
@@ -65,28 +65,6 @@ var _ = Describe("Storage Main Test", func() {
 		Expect(err).ShouldNot(Succeed())
 	})
 
-	It("String metadata", func() {
-		err := quick.Check(testStringMetadata, nil)
-		Expect(err).Should(Succeed())
-	})
-
-	It("String metadata negative", func() {
-		ret, err := testDB.GetMetadata("NOTFOUND")
-		Expect(err).Should(Succeed())
-		Expect(ret).Should(BeNil())
-	})
-
-	It("Int metadata", func() {
-		err := quick.Check(testIntMetadata, nil)
-		Expect(err).Should(Succeed())
-	})
-
-	It("Int metadata negative", func() {
-		ret, err := testDB.GetIntMetadata("REALLYNOTFOUND")
-		Expect(err).Should(Succeed())
-		Expect(ret).Should(BeEquivalentTo(0))
-	})
-
 	It("Entries", func() {
 		err := quick.Check(testEntry, nil)
 		Expect(err).Should(Succeed())
@@ -120,11 +98,6 @@ var _ = Describe("Storage Main Test", func() {
 		Expect(err).Should(Succeed())
 	})
 
-	It("Entries and metadata", func() {
-		err := quick.Check(testEntryAndData, nil)
-		Expect(err).Should(Succeed())
-	})
-
 	It("Read not found", func() {
 		buf, err := testDB.GetEntry("foo", 0, 0)
 		Expect(err).Should(Succeed())
@@ -141,8 +114,11 @@ var _ = Describe("Storage Main Test", func() {
 		val1 := []byte("Hello!")
 		val2 := []byte("World.")
 
+		rangeEqual(0, 0, 0, 0)
 		testDB.PutEntry("a", 0, 0, val1)
+		rangeEqual(0, 0, 0, 0)
 		testDB.PutEntry("a", 1, 0, val2)
+		rangeEqual(0, 0, 1, 0)
 		testDB.PutEntry("a", 1, 1, val1)
 		testDB.PutEntry("a", 2, 0, val2)
 		testDB.PutEntry("b", 3, 0, val1)
@@ -150,6 +126,7 @@ var _ = Describe("Storage Main Test", func() {
 		testDB.PutEntry("c", 4, 1, val2)
 		testDB.PutEntry("", 10, 0, val1)
 		testDB.PutEntry("", 11, 1, val2)
+		rangeEqual(0, 0, 11, 1)
 
 		// Read whole ranges
 		testGetSequence("a", 0, 0, 100, [][]byte{val1, val2, val1, val2})
@@ -213,6 +190,7 @@ var _ = Describe("Storage Main Test", func() {
 		testDB.PutEntry("c", 4, 1, val2)
 		testDB.PutEntry("", 10, 0, val1)
 		testDB.PutEntry("", 11, 1, val2)
+		rangeEqual(0, 0, 11, 1)
 
 		// Purge only one value
 		count, err := testDB.PurgeEntries(func(buf []byte) bool {
@@ -220,6 +198,7 @@ var _ = Describe("Storage Main Test", func() {
 		})
 		Expect(err).Should(Succeed())
 		Expect(count).Should(BeEquivalentTo(4))
+		rangeEqual(0, 0, 10, 0)
 
 		// Verify that re-purge does nothing
 		count, err = testDB.PurgeEntries(func(buf []byte) bool {
@@ -249,6 +228,7 @@ var _ = Describe("Storage Main Test", func() {
 		})
 		Expect(err).Should(Succeed())
 		Expect(count).Should(BeZero())
+		rangeEqual(0, 0, 0, 0)
 	})
 })
 
@@ -280,31 +260,13 @@ func testGetSequenceFilter(tag string, lsn uint64,
 
 func testGetSequences(tags []string, lsn uint64,
 	index uint32, limit int, expected [][]byte) {
-	ret, _, err := testDB.GetMultiEntries(tags, nil, lsn, index, limit, nil)
+	ret, _, _, err := testDB.GetMultiEntries(tags, lsn, index, limit, nil)
 	Expect(err).Should(Succeed())
 	Expect(len(ret)).Should(Equal(len(expected)))
 	for i := range expected {
 		fmt.Fprintf(GinkgoWriter, "%d: %s = %s\n", i, expected[i], ret[i])
 		Expect(bytes.Equal(expected[i], ret[i])).Should(BeTrue())
 	}
-}
-
-func testStringMetadata(key string, val []byte) bool {
-	err := testDB.SetMetadata(key, val)
-	Expect(err).Should(Succeed())
-	ret, err := testDB.GetMetadata(key)
-	Expect(err).Should(Succeed())
-	Expect(bytes.Equal(val, ret)).Should(BeTrue())
-	return true
-}
-
-func testIntMetadata(key string, val int64) bool {
-	err := testDB.SetIntMetadata(key, val)
-	Expect(err).Should(Succeed())
-	ret, err := testDB.GetIntMetadata(key)
-	Expect(err).Should(Succeed())
-	Expect(ret).Should(Equal(val))
-	return true
 }
 
 func testEntry(key string, lsn uint64, index uint32, val []byte) bool {
@@ -322,40 +284,9 @@ func testEntry(key string, lsn uint64, index uint32, val []byte) bool {
 	return true
 }
 
-func testEntryAndData(key string, lsn uint64, index uint32, val []byte,
-	mkey string, mval []byte) bool {
-	if key == "" {
-		return true
-	}
-	if lsn > math.MaxInt64 {
-		// TODO this does not sound right to me, but the test fails if
-		// the high bit is set
-		return true
-	}
-	fmt.Fprintf(GinkgoWriter, "EandD: key = %v lsn = %x index = %x mkey = %v val = %v mval = %v\n",
-		[]byte(key), lsn, index, []byte(mkey), val, mval)
-	err := testDB.PutEntryAndMetadata(key, lsn, index, val, mkey, mval)
+func rangeEqual(l1 uint64, i1 uint32, l2 uint64, i2 uint32) {
+	fs, ls, err := testDB.GetLimits()
 	Expect(err).Should(Succeed())
-	ret, err := testDB.GetEntry(key, lsn, index)
-	Expect(err).Should(Succeed())
-	Expect(bytes.Equal(val, ret)).Should(BeTrue())
-	mret, err := testDB.GetMetadata(mkey)
-	Expect(err).Should(Succeed())
-	Expect(bytes.Equal(mval, mret)).Should(BeTrue())
-	entries, err :=
-		testDB.GetEntries(key, 0, 0, 100, func([]byte) bool {
-			return true
-		})
-	Expect(err).Should(Succeed())
-	Expect(len(entries)).Should(Equal(1))
-
-	entries, datas, err :=
-		testDB.GetMultiEntries([]string{key}, []string{mkey},
-			0, 0, 100, func([]byte) bool {
-				return true
-			})
-	Expect(err).Should(Succeed())
-	Expect(len(entries)).Should(Equal(1))
-	Expect(len(datas)).Should(Equal(1))
-	return true
+	Expect(fs.Compare(common.MakeSequence(l1, i1))).Should(BeZero())
+	Expect(ls.Compare(common.MakeSequence(l2, i2))).Should(BeZero())
 }

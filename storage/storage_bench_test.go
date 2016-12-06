@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"strconv"
 	"sync"
 	"testing"
 
@@ -115,19 +114,13 @@ func BenchmarkSequence0To100WithMetadata(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		scope := largeScopeNames[rand.Intn(len(largeScopeNames))]
-		entries, meta, err := largeDB.GetMultiEntries(
-			[]string{scope}, []string{firstKey, lastKey}, 0, 0, 100, nil)
+		entries, _, _, err := largeDB.GetMultiEntries(
+			[]string{scope}, 0, 0, 100, nil)
 		if err != nil {
 			b.Fatalf("Error on read: %s\n", err)
 		}
 		if len(entries) == 0 {
 			b.Fatal("Expected at least one entry")
-		}
-		if string(meta[0]) != "0" {
-			b.Fatalf("Expected zero in first key: %s\n", string(meta[0]))
-		}
-		if string(meta[1]) == "0" {
-			b.Fatalf("Expected non-zero in last key: %s\n", string(meta[0]))
 		}
 	}
 }
@@ -169,8 +162,8 @@ func BenchmarkSequence0To100WithMetadataAfterClean(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		scope := cleanScopeNames[rand.Intn(len(cleanScopeNames))]
-		_, _, err := cleanDB.GetMultiEntries(
-			[]string{scope}, []string{firstKey, lastKey}, 0, 0, 100, nil)
+		_, _, _, err := cleanDB.GetMultiEntries(
+			[]string{scope}, 0, 0, 100, nil)
 		if err != nil {
 			b.Fatalf("Error on read: %s\n", err)
 		}
@@ -193,8 +186,8 @@ func BenchmarkSequence0To100WithMetadataAfterCleanCompact(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		scope := cleanScopeNames[rand.Intn(len(cleanScopeNames))]
-		_, _, err := cleanDB.GetMultiEntries(
-			[]string{scope}, []string{firstKey, lastKey}, 0, 0, 100, nil)
+		_, _, _, err := cleanDB.GetMultiEntries(
+			[]string{scope}, 0, 0, 100, nil)
 		if err != nil {
 			b.Fatalf("Error on read: %s\n", err)
 		}
@@ -232,10 +225,6 @@ func initDB(b *testing.B, dir string, insertScopes []string) *DB {
 
 	b.Logf("Inserting %d records\n", len(insertScopes))
 	doInserts(db, insertScopes, len(insertScopes))
-	err = db.SetMetadata(firstKey, []byte("0"))
-	if err != nil {
-		b.Fatalf("Error setting metadata: %s\n", err)
-	}
 	return db
 }
 
@@ -245,8 +234,8 @@ func doInserts(db *DB, scopes []string, iterations int) {
 	for i := 0; i < iterations; i++ {
 		seq++
 		bod := []byte(fmt.Sprintf("seq-%d", seq))
-		err := db.PutEntryAndMetadata(
-			scopes[i], seq, 0, bod, lastKey, []byte(strconv.FormatUint(seq, 10)))
+		err := db.PutEntry(
+			scopes[i], seq, 0, bod)
 		if err != nil {
 			panic(fmt.Sprintf("Error on insert: %s\n", err))
 		}

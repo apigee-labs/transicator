@@ -16,29 +16,25 @@ limitations under the License.
 package storage
 
 import (
-	"errors"
-	"fmt"
 	"math"
 	"sort"
-	"strings"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/apigee-labs/transicator/common"
 	"github.com/tecbot/gorocksdb"
 )
 
 var defaultWriteOptions = gorocksdb.NewDefaultWriteOptions()
 var defaultReadOptions = gorocksdb.NewDefaultReadOptions()
-var entryComparator = new(entryCmp)
 
 const (
-	// ComparatorName gets persisted in the DB and must be handled if changed
-	ComparatorName = "transicator-entries-v1"
+
 	// defaultCFName is the name of the default column family where we keep metadata
 	defaultCFName = "default"
 	// entriesCFName is the name of the column family for indexed entries.
 	entriesCFName = "entries"
-	// metadataCFName is the name of the column family for metadata entries
-	metadataCFName = "metadata"
+	// sequenceCFName is the name of the column family for sequence entries
+	sequenceCFName = "sequence"
 )
 
 /*
@@ -50,60 +46,18 @@ TODO Storage improvements.
 * Use sequence CF when cleaning up old entries.
 */
 
-type entryCmp struct {
-}
-
-/*
-Compare tests the order of two keys in the "entries" collection. Keys are sorted
-primarily in scope order, then by LSN, then by index within the LSN. This
-allows searches to be linear for a given scope.
-*/
-func (c entryCmp) Compare(a, b []byte) int {
-	aScope, aLsn, aIndex, err := keyToLsnAndOffset(a)
-	if err != nil {
-		panic(fmt.Sprintf("Error parsing database key: %s", err))
-	}
-	bScope, bLsn, bIndex, err := keyToLsnAndOffset(b)
-	if err != nil {
-		panic(fmt.Sprintf("Error parsing database key: %s", err))
-	}
-
-	scopeCmp := strings.Compare(aScope, bScope)
-	if scopeCmp == 0 {
-		if aLsn < bLsn {
-			return -1
-		} else if aLsn > bLsn {
-			return 1
-		}
-
-		if aIndex < bIndex {
-			return -1
-		} else if aIndex > bIndex {
-			return 1
-		}
-		return 0
-	}
-	return scopeCmp
-}
-
-/*
-Name is part of the comparator interface.
-*/
-func (c entryCmp) Name() string {
-	return ComparatorName
-}
-
 /*
 A DB is a handle to a RocksDB database.
 */
 type DB struct {
-	baseFile    string
-	db          *gorocksdb.DB
-	metadataCF  *gorocksdb.ColumnFamilyHandle
-	entriesCF   *gorocksdb.ColumnFamilyHandle
-	dbOpts      *gorocksdb.Options
-	dfltOpts    *gorocksdb.Options
-	entriesOpts *gorocksdb.Options
+	baseFile     string
+	db           *gorocksdb.DB
+	sequenceCF   *gorocksdb.ColumnFamilyHandle
+	entriesCF    *gorocksdb.ColumnFamilyHandle
+	dbOpts       *gorocksdb.Options
+	dfltOpts     *gorocksdb.Options
+	sequenceOpts *gorocksdb.Options
+	entriesOpts  *gorocksdb.Options
 }
 
 type readResult struct {
@@ -145,18 +99,21 @@ func OpenDB(baseFile string) (*DB, error) {
 	stor.entriesOpts = gorocksdb.NewDefaultOptions()
 	stor.entriesOpts.SetComparator(entryComparator)
 
+	stor.sequenceOpts = gorocksdb.NewDefaultOptions()
+	stor.sequenceOpts.SetComparator(sequenceComparator)
+
 	var cfs []*gorocksdb.ColumnFamilyHandle
 	stor.db, cfs, err = gorocksdb.OpenDbColumnFamilies(
 		dbOpts,
 		baseFile,
-		[]string{defaultCFName, entriesCFName, metadataCFName},
-		[]*gorocksdb.Options{stor.dfltOpts, stor.entriesOpts, stor.dfltOpts},
+		[]string{defaultCFName, entriesCFName, sequenceCFName},
+		[]*gorocksdb.Options{stor.dfltOpts, stor.entriesOpts, stor.sequenceOpts},
 	)
 	if err != nil {
 		return nil, err
 	}
 	stor.entriesCF = cfs[1]
-	stor.metadataCF = cfs[2]
+	stor.sequenceCF = cfs[2]
 
 	log.Infof("Opened RocksDB file in %s", baseFile)
 	success = true
@@ -184,6 +141,9 @@ func cleanup(s *DB) {
 	if s.dfltOpts != nil {
 		s.dfltOpts.Destroy()
 	}
+	if s.sequenceOpts != nil {
+		s.sequenceOpts.Destroy()
+	}
 	if s.entriesOpts != nil {
 		s.entriesOpts.Destroy()
 	}
@@ -202,86 +162,19 @@ func (s *DB) Delete() error {
 }
 
 /*
-GetIntMetadata returns metadata with the specified key and converts it
-into a uint64. It returns 0 if the key cannot be found.
-*/
-func (s *DB) GetIntMetadata(key string) (int64, error) {
-	keyBuf := []byte(key)
-
-	val, err := s.db.GetCF(defaultReadOptions, s.metadataCF, keyBuf)
-	if err != nil {
-		return 0, err
-	}
-	if val == nil {
-		return 0, nil
-	}
-
-	defer val.Free()
-	return bytesToInt(val.Data()), err
-}
-
-/*
-GetMetadata returns the raw metadata matching the specified key,
-or nil if the key is not found.
-*/
-func (s *DB) GetMetadata(key string) ([]byte, error) {
-	return s.readMetadataKey(key, defaultReadOptions)
-}
-
-func (s *DB) readMetadataKey(key string, ro *gorocksdb.ReadOptions) ([]byte, error) {
-	keyBuf := []byte(key)
-	return s.readEntry(keyBuf, s.metadataCF, ro)
-}
-
-/*
-SetIntMetadata sets the metadata with the specified key to
-the integer value.
-*/
-func (s *DB) SetIntMetadata(key string, val int64) error {
-	keyBuf := []byte(key)
-	valBuf := intToBytes(val)
-
-	return s.db.PutCF(defaultWriteOptions, s.metadataCF, keyBuf, valBuf)
-}
-
-/*
-SetMetadata sets the metadata with the specified key.
-*/
-func (s *DB) SetMetadata(key string, val []byte) error {
-	keyBuf := []byte(key)
-	return s.db.PutCF(defaultWriteOptions, s.metadataCF, keyBuf, val)
-}
-
-/*
 PutEntry writes an entry to the database indexed by scope, lsn, and index in order
 */
-func (s *DB) PutEntry(scope string, lsn uint64, index uint32, data []byte) (err error) {
-	keyBuf := lsnAndOffsetToKey(scope, lsn, index)
-	err = s.db.PutCF(defaultWriteOptions, s.entriesCF, keyBuf, data)
-	return
-}
-
-/*
-PutEntryAndMetadata writes an entry to the database in the same batch as
-a metadata write.
-*/
-func (s *DB) PutEntryAndMetadata(scope string, lsn uint64, index uint32,
-	data []byte, metaKey string, metaVal []byte) (err error) {
-	if len(data) == 0 || len(metaVal) == 0 {
-		err = errors.New("Data or metaval is empty")
-		return
-	}
-
+func (s *DB) PutEntry(scope string, lsn uint64, index uint32, data []byte) error {
 	batch := gorocksdb.NewWriteBatch()
 	defer batch.Destroy()
 
 	keyBuf := lsnAndOffsetToKey(scope, lsn, index)
 	batch.PutCF(s.entriesCF, keyBuf, data)
 
-	mkeyBuf := []byte(metaKey)
-	batch.PutCF(s.metadataCF, mkeyBuf, metaVal)
-	err = s.db.Write(defaultWriteOptions, batch)
-	return
+	seqBuf := common.MakeSequence(lsn, index).Bytes()
+	batch.PutCF(s.sequenceCF, seqBuf, nil)
+
+	return s.db.Write(defaultWriteOptions, batch)
 }
 
 /*
@@ -317,20 +210,19 @@ func (s *DB) GetEntries(scope string, startLSN uint64,
 
 /*
 GetMultiEntries returns entries in sequence number order a list of scopes.
-It also returns a set of metadata.
+It also returns the sequences of the first and last records in the DB.
 The first entry returned will be the first entry that matches the specified
 startLSN and startIndex. No more than "limit" entries will be returned.
 To retrieve the very next entry after an entry, simply increment the index
 by 1. This method uses a snapshot to guarantee consistency even if data is
 being inserted to the database -- as long as the data is being inserted
 in LSN order!
-The first array returned is the array of entries (again, in "sequence" order).
-The second is the array of metadata values, if any, in the order in which
-the keys were supplied.
+The array returned is the array of entries (again, in "sequence" order).
 */
-func (s *DB) GetMultiEntries(scopes []string, metadataKeys []string,
+func (s *DB) GetMultiEntries(
+	scopes []string,
 	startLSN uint64, startIndex uint32,
-	limit int, filter func([]byte) bool) ([][]byte, [][]byte, error) {
+	limit int, filter func([]byte) bool) (final [][]byte, firstSeq common.Sequence, lastSeq common.Sequence, err error) {
 
 	// Do this all inside a level DB snapshot so that we get a repeatable read
 	snap := s.db.NewSnapshot()
@@ -340,36 +232,36 @@ func (s *DB) GetMultiEntries(scopes []string, metadataKeys []string,
 	ropts.SetSnapshot(snap)
 	defer ropts.Destroy()
 
+	firstSeq, lastSeq, err = s.readLimits(ropts)
+	if err != nil {
+		return
+	}
+
 	// Read range for each scope
 	var results readResults
 	for _, scope := range scopes {
-		rr, err := s.readOneRange(scope, startLSN, startIndex, limit, ropts, filter)
+		var rr readResults
+		rr, err = s.readOneRange(scope, startLSN, startIndex, limit, ropts, filter)
 		if err != nil {
-			return nil, nil, err
+			return
 		}
 		results = append(results, rr...)
-	}
-
-	// Read metadata for each key
-	var metadata [][]byte
-	for _, key := range metadataKeys {
-		data, err := s.readMetadataKey(key, ropts)
-		if err != nil {
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-		metadata = append(metadata, data)
 	}
 
 	// Sort and then take limit
 	sort.Sort(results)
 
-	var final [][]byte
 	for count := 0; count < len(results) && count < limit; count++ {
 		final = append(final, results[count].data)
 	}
-	return final, metadata, nil
+	return
+}
+
+/*
+GetLimits returns the first and last sequences in the database.
+*/
+func (s *DB) GetLimits() (common.Sequence, common.Sequence, error) {
+	return s.readLimits(defaultReadOptions)
 }
 
 /*
@@ -389,7 +281,7 @@ func (s *DB) PurgeEntries(filter func([]byte) bool) (purgeCount uint64, err erro
 	for ; it.Valid(); it.Next() {
 		dataBuf := it.Value().Data()
 		if filter(dataBuf) {
-			err = s.db.DeleteCF(defaultWriteOptions, s.entriesCF, it.Key().Data())
+			err = s.deleteIterKey(it)
 			if err != nil {
 				return
 			}
@@ -398,6 +290,21 @@ func (s *DB) PurgeEntries(filter func([]byte) bool) (purgeCount uint64, err erro
 		rowCount++
 	}
 	return
+}
+
+func (s *DB) deleteIterKey(it *gorocksdb.Iterator) error {
+	batch := gorocksdb.NewWriteBatch()
+	defer batch.Destroy()
+
+	keyData := readIterKey(it)
+	_, lsn, index, err := keyToLsnAndOffset(keyData)
+	if err != nil {
+		return err
+	}
+
+	batch.DeleteCF(s.sequenceCF, common.MakeSequence(lsn, index).Bytes())
+	batch.DeleteCF(s.entriesCF, keyData)
+	return s.db.Write(defaultWriteOptions, batch)
 }
 
 func (s *DB) readOneRange(scope string, startLSN uint64,
@@ -457,6 +364,47 @@ func (s *DB) readEntry(key []byte, cf *gorocksdb.ColumnFamilyHandle, ro *gorocks
 		return
 	}
 	return
+}
+
+func (s *DB) readLimits(ro *gorocksdb.ReadOptions) (firstSeq, lastSeq common.Sequence, err error) {
+	// Read first and last sequences
+	seqIter := s.db.NewIteratorCF(ro, s.sequenceCF)
+	defer seqIter.Close()
+
+	seqIter.SeekToFirst()
+	kb := readIterKey(seqIter)
+	if kb != nil {
+		firstSeq, err = common.ParseSequenceBytes(kb)
+		if err != nil {
+			return
+		}
+
+		seqIter.SeekToLast()
+		kb = readIterKey(seqIter)
+		if kb == nil {
+			lastSeq = firstSeq
+		} else {
+			lastSeq, err = common.ParseSequenceBytes(kb)
+			if err != nil {
+				return
+			}
+		}
+	}
+	return
+}
+
+func readIterKey(it *gorocksdb.Iterator) []byte {
+	if !it.Valid() {
+		return nil
+	}
+	s := it.Key()
+	if s.Data() == nil {
+		return nil
+	}
+	key := make([]byte, s.Size())
+	copy(key, s.Data())
+	s.Free()
+	return key
 }
 
 // Needed to sort read results by LSN and index
