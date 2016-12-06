@@ -1,8 +1,6 @@
 package storage
 
 import (
-	"testing/quick"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -24,15 +22,17 @@ var _ = Describe("Conversion", func() {
 		Expect(lsn).Should(BeEquivalentTo(3))
 		Expect(offset).Should(BeEquivalentTo(5))
 	})
-
+/*
 	It("Index Key Compare", func() {
 		s := testIndexKeyCompare("foo", "foo", 123, 123, 456, 456)
 		Expect(s).Should(BeTrue())
 		err := quick.Check(testIndexKeyCompare, nil)
 		Expect(err).Should(Succeed())
 	})
+	*/
 })
 
+/*
 func testIndexKeyCompare(tag1, tag2 string, lsn1, lsn2 uint64, seq1, seq2 uint32) bool {
 	kb1 := lsnAndOffsetToKey(tag1, lsn1, seq1)
 	kb2 := lsnAndOffsetToKey(tag2, lsn2, seq2)
@@ -68,3 +68,4 @@ func testIndexKeyCompare(tag1, tag2 string, lsn1, lsn2 uint64, seq1, seq2 uint32
 	}
 	return cmp == 0
 }
+*/

@@ -9,15 +9,16 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/tecbot/gorocksdb"
 )
 
 const (
 	benchDBDir = "./benchdata"
 	largeDBDir = "./benchlargedata"
 	cleanDBDir = "./cleanlargedata"
-	firstKey   = "firstlsn"
-	lastKey    = "lasttlsn"
+	//numScopes = 100
+	numScopes = 20
+	meanSize = 1000
+	stddev = 1000
 )
 
 var largeInit = &sync.Once{}
@@ -36,7 +37,7 @@ func BenchmarkInserts(b *testing.B) {
 		db.Delete()
 	}()
 
-	scopes, _ := makeScopeList(100, 10000, 1000, b.N)
+	scopes, _ := makeScopeList(numScopes, stddev, meanSize, b.N)
 	b.Logf("Created %d scopes\n", len(scopes))
 	b.Logf("Running %d insert iterations\n", b.N)
 	b.ResetTimer()
@@ -91,9 +92,6 @@ func BenchmarkSequence0To100WithMetadata(b *testing.B) {
 		initLargeDB(b)
 	})
 
-	if b.N > len(largeScopes) {
-		b.Fatalf("Too many iterations: %d\n", b.N)
-	}
 	b.Logf("Reading %d sequences\n", b.N)
 	b.ResetTimer()
 
@@ -115,9 +113,6 @@ func BenchmarkSequenceAfterEnd(b *testing.B) {
 		initLargeDB(b)
 	})
 
-	if b.N > len(largeScopes) {
-		b.Fatalf("Too many iterations: %d\n", b.N)
-	}
 	b.Logf("Reading %d sequences after end\n", b.N)
 	b.ResetTimer()
 
@@ -155,30 +150,6 @@ func BenchmarkSequence0To100WithMetadataAfterClean(b *testing.B) {
 	}
 }
 
-func BenchmarkSequence0To100WithMetadataAfterCleanCompact(b *testing.B) {
-	largeInit.Do(func() {
-		initLargeDB(b)
-	})
-
-	cleanInit.Do(func() {
-		purgeNRecords(b, cleanDB, len(cleanScopes) / 2)
-	})
-
-	b.Logf("Compacting database\n")
-	cleanDB.db.CompactRangeCF(cleanDB.entriesCF, gorocksdb.Range{})
-	b.Logf("Reading %d sequences\n", b.N)
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		scope := cleanScopeNames[rand.Intn(len(cleanScopeNames))]
-		_, _, _, err := cleanDB.GetMultiEntries(
-			[]string{scope}, 0, 0, 100, nil)
-		if err != nil {
-			b.Fatalf("Error on read: %s\n", err)
-		}
-	}
-}
-
 func purgeNRecords(b *testing.B, db *DB, toPurge int) {
 	b.Logf("Cleaning the up to %d records\n", toPurge)
 	pc := 0
@@ -196,9 +167,9 @@ func purgeNRecords(b *testing.B, db *DB, toPurge int) {
 }
 
 func initLargeDB(b *testing.B) {
-	largeScopes, largeScopeNames = makeScopeList(100, 10000, 1000, 1)
+	largeScopes, largeScopeNames = makeScopeList(numScopes, stddev, meanSize, 1)
 	largeDB = initDB(b, largeDBDir, largeScopes)
-	cleanScopes, cleanScopeNames = makeScopeList(100, 10000, 1000, 1)
+	cleanScopes, cleanScopeNames = makeScopeList(numScopes, stddev, meanSize, 1)
 	cleanDB = initDB(b, cleanDBDir, cleanScopes)
 }
 
@@ -231,9 +202,9 @@ var _ = Describe("Bench checks", func() {
 	It("Permuted scope list", func() {
 		sl, _ := makeScopeList(0, 0, 0, 0)
 		Expect(sl).Should(BeEmpty())
-		sl, sn := makeScopeList(100, 10000, 1000, 200000)
-		Expect(len(sl)).Should(BeNumerically(">=", 1000))
-		Expect(len(sn)).Should(Equal(100))
+		sl, sn := makeScopeList(numScopes, stddev, meanSize, 200000)
+		Expect(len(sl)).Should(BeNumerically(">=", meanSize))
+		Expect(len(sn)).Should(BeNumerically(">=", numScopes))
 	})
 })
 

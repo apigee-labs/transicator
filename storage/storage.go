@@ -1,48 +1,28 @@
 package storage
 
 import (
-	"math"
 	"sort"
+
+	"database/sql"
+
+	"fmt"
+	"os"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/apigee-labs/transicator/common"
-	"github.com/tecbot/gorocksdb"
-)
-
-var defaultWriteOptions = gorocksdb.NewDefaultWriteOptions()
-var defaultReadOptions = gorocksdb.NewDefaultReadOptions()
-
-const (
-
-	// defaultCFName is the name of the default column family where we keep metadata
-	defaultCFName = "default"
-	// entriesCFName is the name of the column family for indexed entries.
-	entriesCFName = "entries"
-	// sequenceCFName is the name of the column family for sequence entries
-	sequenceCFName = "sequence"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 /*
-TODO Storage improvements.
-
-* Remove metadata CF.
-* Replace with a "sequence" CF.
-* Insert sequence numbers in there.
-* Use sequence CF when cleaning up old entries.
-*/
-
-/*
-A DB is a handle to a RocksDB database.
+A DB is a handle to a database.
 */
 type DB struct {
-	baseFile     string
-	db           *gorocksdb.DB
-	sequenceCF   *gorocksdb.ColumnFamilyHandle
-	entriesCF    *gorocksdb.ColumnFamilyHandle
-	dbOpts       *gorocksdb.Options
-	dfltOpts     *gorocksdb.Options
-	sequenceOpts *gorocksdb.Options
-	entriesOpts  *gorocksdb.Options
+	baseFile  string
+	db        *sql.DB
+	insert    *sql.Stmt
+	readRange *sql.Stmt
+	readFirst *sql.Stmt
+	readLast  *sql.Stmt
 }
 
 type readResult struct {
@@ -63,44 +43,54 @@ an empty database, make sure that it is empty.
 func OpenDB(baseFile string) (*DB, error) {
 
 	success := false
-	stor := &DB{
-		baseFile: baseFile,
-	}
-	defer func() {
-		if !success {
-			cleanup(stor)
+
+	st, err := os.Stat(baseFile)
+	if err != nil {
+		err = os.Mkdir(baseFile, 0775)
+		if err != nil {
+			return nil, err
 		}
-	}()
+	} else if !st.IsDir() {
+		return nil, fmt.Errorf("Database location %s is not a directory")
+	}
 
-	var err error
-
-	dbOpts := gorocksdb.NewDefaultOptions()
-	dbOpts.SetCreateIfMissing(true)
-	dbOpts.SetCreateIfMissingColumnFamilies(true)
-	stor.dbOpts = dbOpts
-
-	stor.dfltOpts = gorocksdb.NewDefaultOptions()
-
-	stor.entriesOpts = gorocksdb.NewDefaultOptions()
-	stor.entriesOpts.SetComparator(entryComparator)
-
-	stor.sequenceOpts = gorocksdb.NewDefaultOptions()
-	stor.sequenceOpts.SetComparator(sequenceComparator)
-
-	var cfs []*gorocksdb.ColumnFamilyHandle
-	stor.db, cfs, err = gorocksdb.OpenDbColumnFamilies(
-		dbOpts,
-		baseFile,
-		[]string{defaultCFName, entriesCFName, sequenceCFName},
-		[]*gorocksdb.Options{stor.dfltOpts, stor.entriesOpts, stor.sequenceOpts},
-	)
+	url := fmt.Sprintf("%s/transicator", baseFile)
+	log.Infof("Opening SQLite DB at %s\n", url)
+	db, err := sql.Open("sqlite3", url)
 	if err != nil {
 		return nil, err
 	}
-	stor.entriesCF = cfs[1]
-	stor.sequenceCF = cfs[2]
 
-	log.Infof("Opened RocksDB file in %s", baseFile)
+	defer func() {
+		if !success {
+			db.Close()
+		}
+	}()
+
+	_, err = db.Exec(createTableSQL)
+	if err != nil {
+		return nil, err
+	}
+
+	stor := &DB{
+		baseFile: baseFile,
+		db:       db,
+	}
+
+	stor.insert, err = db.Prepare(insertSQL)
+	if err == nil {
+		stor.readRange, err = db.Prepare(readRangeSQL)
+	}
+	if err == nil {
+		stor.readFirst, err = db.Prepare(readFirstSQL)
+	}
+	if err == nil {
+		stor.readLast, err = db.Prepare(readLastSQL)
+	}
+	if err != nil {
+		return nil, err
+	}
+
 	success = true
 
 	return stor, nil
@@ -119,55 +109,37 @@ Close closes the database cleanly.
 func (s *DB) Close() {
 	log.Infof("Closed DB in %s", s.baseFile)
 	s.db.Close()
-	cleanup(s)
-}
-
-func cleanup(s *DB) {
-	if s.dfltOpts != nil {
-		s.dfltOpts.Destroy()
-	}
-	if s.sequenceOpts != nil {
-		s.sequenceOpts.Destroy()
-	}
-	if s.entriesOpts != nil {
-		s.entriesOpts.Destroy()
-	}
-	if s.dbOpts != nil {
-		s.dbOpts.Destroy()
-	}
 }
 
 /*
 Delete deletes all the files used by the database.
 */
 func (s *DB) Delete() error {
-	options := gorocksdb.NewDefaultOptions()
-	defer options.Destroy()
-	return gorocksdb.DestroyDb(s.baseFile, options)
+	return os.RemoveAll(s.baseFile)
 }
 
 /*
 PutEntry writes an entry to the database indexed by scope, lsn, and index in order
 */
 func (s *DB) PutEntry(scope string, lsn uint64, index uint32, data []byte) error {
-	batch := gorocksdb.NewWriteBatch()
-	defer batch.Destroy()
-
-	keyBuf := lsnAndOffsetToKey(scope, lsn, index)
-	batch.PutCF(s.entriesCF, keyBuf, data)
-
-	seqBuf := common.MakeSequence(lsn, index).Bytes()
-	batch.PutCF(s.sequenceCF, seqBuf, nil)
-
-	return s.db.Write(defaultWriteOptions, batch)
+	_, err := s.insert.Exec(scope, lsn, index, data)
+	return err
 }
 
 /*
 GetEntry returns what was written by PutEntry.
 */
 func (s *DB) GetEntry(scope string, lsn uint64, index uint32) ([]byte, error) {
-	keyBuf := lsnAndOffsetToKey(scope, lsn, index)
-	return s.readEntry(keyBuf, s.entriesCF, defaultReadOptions)
+	row := s.db.QueryRow("select data from transicator_entries where scope = ? and lsn = ? and ix = ?",
+		scope, lsn, index)
+	var data []byte
+	err := row.Scan(&data)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	} else if err == nil {
+		return data, nil
+	}
+	return nil, err
 }
 
 /*
@@ -180,8 +152,15 @@ by 1.
 func (s *DB) GetEntries(scope string, startLSN uint64,
 	startIndex uint32, limit int, filter func([]byte) bool) ([][]byte, error) {
 
+	var tx *sql.Tx
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Commit()
+
 	rr, err := s.readOneRange(scope, startLSN, startIndex, limit,
-		defaultReadOptions, filter)
+		tx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -209,15 +188,14 @@ func (s *DB) GetMultiEntries(
 	startLSN uint64, startIndex uint32,
 	limit int, filter func([]byte) bool) (final [][]byte, firstSeq common.Sequence, lastSeq common.Sequence, err error) {
 
-	// Do this all inside a level DB snapshot so that we get a repeatable read
-	snap := s.db.NewSnapshot()
-	defer snap.Release()
+	var tx *sql.Tx
+	tx, err = s.db.Begin()
+	if err != nil {
+		return
+	}
+	defer tx.Commit()
 
-	ropts := gorocksdb.NewDefaultReadOptions()
-	ropts.SetSnapshot(snap)
-	defer ropts.Destroy()
-
-	firstSeq, lastSeq, err = s.readLimits(ropts)
+	firstSeq, lastSeq, err = s.readLimits(tx)
 	if err != nil {
 		return
 	}
@@ -226,7 +204,7 @@ func (s *DB) GetMultiEntries(
 	var results readResults
 	for _, scope := range scopes {
 		var rr readResults
-		rr, err = s.readOneRange(scope, startLSN, startIndex, limit, ropts, filter)
+		rr, err = s.readOneRange(scope, startLSN, startIndex, limit, tx, filter)
 		if err != nil {
 			return
 		}
@@ -245,8 +223,15 @@ func (s *DB) GetMultiEntries(
 /*
 GetLimits returns the first and last sequences in the database.
 */
-func (s *DB) GetLimits() (common.Sequence, common.Sequence, error) {
-	return s.readLimits(defaultReadOptions)
+func (s *DB) GetLimits() (firstSeq, lastSeq common.Sequence, err error) {
+	var tx *sql.Tx
+	tx, err = s.db.Begin()
+	if err != nil {
+		return
+	}
+	defer tx.Commit()
+
+	return s.readLimits(tx)
 }
 
 /*
@@ -257,139 +242,111 @@ then a non-nil error will be returned. Be aware that this operation may
 take a long time, so it is important to run it in a separate goroutine.
 */
 func (s *DB) PurgeEntries(filter func([]byte) bool) (purgeCount uint64, err error) {
-	it := s.db.NewIteratorCF(defaultReadOptions, s.entriesCF)
-	defer it.Close()
+	var rows *sql.Rows
+	rows, err = s.db.Query("select scope, lsn, ix, data from transicator_entries")
+	if err != nil {
+		return
+	}
+	defer rows.Close()
 
-	it.SeekToFirst()
+	var cleanStmt *sql.Stmt
+	cleanStmt, err = s.db.Prepare("delete from transicator_entries where scope = ? and lsn = ? and ix = ?")
+	if err != nil {
+		return
+	}
+	defer cleanStmt.Close()
 
-	var rowCount int
-	for ; it.Valid(); it.Next() {
-		dataBuf := it.Value().Data()
-		if filter(dataBuf) {
-			err = s.deleteIterKey(it)
+	for rows.Next() {
+		var scope string
+		var lsn uint64
+		var ix uint32
+		var data []byte
+		err = rows.Scan(&scope, &lsn, &ix, &data)
+		if err != nil {
+			return
+		}
+
+		if filter(data) {
+			var res sql.Result
+			res, err = cleanStmt.Exec(scope, lsn, ix)
 			if err != nil {
+				return
+			}
+			rc, _ := res.RowsAffected()
+			if rc != 1 {
+				err = fmt.Errorf("Expected to delete 1 row, deleted %d\n", rc)
 				return
 			}
 			purgeCount++
 		}
-		rowCount++
 	}
 	return
 }
 
-func (s *DB) deleteIterKey(it *gorocksdb.Iterator) error {
-	batch := gorocksdb.NewWriteBatch()
-	defer batch.Destroy()
-
-	keyData := readIterKey(it)
-	_, lsn, index, err := keyToLsnAndOffset(keyData)
-	if err != nil {
-		return err
-	}
-
-	batch.DeleteCF(s.sequenceCF, common.MakeSequence(lsn, index).Bytes())
-	batch.DeleteCF(s.entriesCF, keyData)
-	return s.db.Write(defaultWriteOptions, batch)
-}
-
 func (s *DB) readOneRange(scope string, startLSN uint64,
-	startIndex uint32, limit int, ro *gorocksdb.ReadOptions,
-	filter func([]byte) bool) (readResults, error) {
+	startIndex uint32, limit int, tx *sql.Tx,
+	filter func([]byte) bool) (results readResults, err error) {
 
-	startKeyBuf := lsnAndOffsetToKey(scope, startLSN, startIndex)
-	endKeyBuf := lsnAndOffsetToKey(scope, math.MaxInt64, math.MaxInt32)
+	var rows *sql.Rows
+	rrs := tx.Stmt(s.readRange)
+	defer rrs.Close()
+	rows, err = rrs.Query(scope, startLSN, startIndex, limit)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
 
-	it := s.db.NewIteratorCF(ro, s.entriesCF)
-	defer it.Close()
-
-	it.Seek(startKeyBuf)
-
-	var results readResults
-
-	for ; it.Valid() && len(results) < limit; it.Next() {
-		iterKey := it.Key().Data()
-		if entryComparator.Compare(iterKey, endKeyBuf) > 0 {
-			// Reached the end of our range
-			//fmt.Printf("Stopped due to end of range, iterKey is %s, endKey is %s\n", hex.Dump(iterKey), hex.Dump(endKeyBuf))
-			break
-		}
-
-		_, iterLSN, iterIx, err := keyToLsnAndOffset(iterKey)
+	for rows.Next() {
+		var lsn uint64
+		var index uint32
+		var data []byte
+		err = rows.Scan(&lsn, &index, &data)
 		if err != nil {
-			return nil, err
+			return
 		}
-
-		newVal := it.Value().Data()
-
-		if filter == nil || filter(newVal) {
-			result := readResult{
-				lsn:   iterLSN,
-				index: iterIx,
-				data:  newVal,
-			}
-			results = append(results, result)
+		result := readResult{
+			lsn:   lsn,
+			index: index,
+			data:  data,
 		}
+		results = append(results, result)
 	}
 
 	return results, nil
 }
 
-func (s *DB) readEntry(key []byte, cf *gorocksdb.ColumnFamilyHandle, ro *gorocksdb.ReadOptions) (val []byte, err error) {
-	d, err := s.db.GetCF(ro, cf, key)
-	if err == nil {
-		if d == nil {
-			return
-		}
-		if d.Data() == nil {
-			return
-		}
-		val = make([]byte, d.Size())
-		copy(val, d.Data())
-		d.Free()
+func (s *DB) readLimits(tx *sql.Tx) (firstSeq, lastSeq common.Sequence, err error) {
+	rfs := tx.Stmt(s.readFirst)
+	defer rfs.Close()
+
+	row := rfs.QueryRow()
+
+	var lsn uint64
+	var ix uint32
+	err = row.Scan(&lsn, &ix)
+	if err == sql.ErrNoRows {
+		err = nil
+		return
+	} else if err != nil {
 		return
 	}
+	firstSeq = common.MakeSequence(lsn, ix)
+
+	rls := tx.Stmt(s.readLast)
+	defer rls.Close()
+
+	row = rls.QueryRow()
+
+	err = row.Scan(&lsn, &ix)
+	if err == sql.ErrNoRows {
+		err = nil
+		lastSeq = firstSeq
+		return
+	} else if err != nil {
+		return
+	}
+	lastSeq = common.MakeSequence(lsn, ix)
 	return
-}
-
-func (s *DB) readLimits(ro *gorocksdb.ReadOptions) (firstSeq, lastSeq common.Sequence, err error) {
-	// Read first and last sequences
-	seqIter := s.db.NewIteratorCF(ro, s.sequenceCF)
-	defer seqIter.Close()
-
-	seqIter.SeekToFirst()
-	kb := readIterKey(seqIter)
-	if kb != nil {
-		firstSeq, err = common.ParseSequenceBytes(kb)
-		if err != nil {
-			return
-		}
-
-		seqIter.SeekToLast()
-		kb = readIterKey(seqIter)
-		if kb == nil {
-			lastSeq = firstSeq
-		} else {
-			lastSeq, err = common.ParseSequenceBytes(kb)
-			if err != nil {
-				return
-			}
-		}
-	}
-	return
-}
-
-func readIterKey(it *gorocksdb.Iterator) []byte {
-	if !it.Valid() {
-		return nil
-	}
-	s := it.Key()
-	if s.Data() == nil {
-		return nil
-	}
-	key := make([]byte, s.Size())
-	copy(key, s.Data())
-	s.Free()
-	return key
 }
 
 // Needed to sort read results by LSN and index
