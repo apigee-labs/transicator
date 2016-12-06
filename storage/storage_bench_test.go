@@ -16,9 +16,10 @@ const (
 	largeDBDir = "./benchlargedata"
 	cleanDBDir = "./cleanlargedata"
 	//numScopes = 100
-	numScopes = 20
+	numScopes = 100
 	meanSize = 1000
 	stddev = 1000
+	parallelism = 100
 )
 
 var largeInit = &sync.Once{}
@@ -44,49 +45,6 @@ func BenchmarkInserts(b *testing.B) {
 	doInserts(db, scopes, b.N)
 }
 
-func BenchmarkRandomReads(b *testing.B) {
-	largeInit.Do(func() {
-		initLargeDB(b)
-	})
-
-	if b.N > len(largeScopes) {
-		b.Fatalf("Too many iterations: %d\n", b.N)
-	}
-	b.Logf("Reading %d iterations\n", b.N)
-	b.ResetTimer()
-
-	plsns := rand.Perm(len(largeScopes))
-	for i := 0; i < b.N; i++ {
-		_, err := largeDB.GetEntry(largeScopes[plsns[i]], uint64(plsns[i]), 0)
-		if err != nil {
-			b.Fatalf("Error on read: %s\n", err)
-		}
-	}
-}
-
-func BenchmarkSequence0To100(b *testing.B) {
-	largeInit.Do(func() {
-		initLargeDB(b)
-	})
-
-	if b.N > len(largeScopes) {
-		b.Fatalf("Too many iterations: %d\n", b.N)
-	}
-	b.Logf("Reading %d sequences\n", b.N)
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		scope := largeScopeNames[rand.Intn(len(largeScopeNames))]
-		entries, err := largeDB.GetEntries(scope, 0, 0, 100, nil)
-		if err != nil {
-			b.Fatalf("Error on read: %s\n", err)
-		}
-		if len(entries) == 0 {
-			b.Fatal("Expected at least one entry")
-		}
-	}
-}
-
 func BenchmarkSequence0To100WithMetadata(b *testing.B) {
 	largeInit.Do(func() {
 		initLargeDB(b)
@@ -106,6 +64,29 @@ func BenchmarkSequence0To100WithMetadata(b *testing.B) {
 			b.Fatal("Expected at least one entry")
 		}
 	}
+}
+
+func BenchmarkSequence0To100WithMetadataParallel(b *testing.B) {
+	largeInit.Do(func() {
+		initLargeDB(b)
+	})
+	b.Logf("Reading %d sequences in %d goroutines\n", b.N, parallelism)
+	b.SetParallelism(parallelism)
+	b.ResetTimer()
+
+	b.RunParallel(func (pb *testing.PB) {
+		for pb.Next() {
+			scope := largeScopeNames[rand.Intn(len(largeScopeNames))]
+			entries, _, _, err := largeDB.GetMultiEntries(
+				[]string{scope}, 0, 0, 100, nil)
+			if err != nil {
+				b.Fatalf("Error on read: %s\n", err)
+			}
+			if len(entries) == 0 {
+				b.Fatal("Expected at least one entry")
+			}
+		}
+	})
 }
 
 func BenchmarkSequenceAfterEnd(b *testing.B) {
