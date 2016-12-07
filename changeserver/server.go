@@ -41,7 +41,7 @@ const (
 var scopeField = defaultScopeField
 
 type server struct {
-	db          *storage.DB
+	db          storage.DB
 	repl        *replication.Replicator
 	tracker     *changeTracker
 	cleaner     *cleaner
@@ -59,7 +59,7 @@ func createChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix stri
 	success := false
 	slotName := sanitizeSlotName(pgSlot)
 
-	db, err := storage.OpenDB(dbDir)
+	db, err := storage.Open(dbDir)
 	if err != nil {
 		return nil, err
 	}
@@ -69,20 +69,9 @@ func createChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix stri
 		}
 	}()
 
-	fcBuf, err := db.GetMetadata(lastSequenceKey)
-	if err != nil {
-		return nil, err
-	}
-
-	var firstChange common.Sequence
-	if fcBuf == nil {
-		firstChange = common.Sequence{}
-	} else {
-		firstChange, err = common.ParseSequenceBytes(fcBuf)
-		if err != nil {
-			return nil, err
-		}
-	}
+	// Retrieve the highest sequence from the DB so that we don't
+	// process duplicate updates that might come from PG.
+	_, _, firstChange, err := db.Scan(nil, 0, 0, 0, nil)
 
 	repl, err := replication.CreateReplicator(pgURL, slotName)
 	if err != nil {
@@ -129,7 +118,8 @@ func (s *server) delete() error {
 }
 
 func (s *server) checkHealth() (goscaffold.HealthStatus, error) {
-	_, err := s.db.GetMetadata(lastSequenceKey)
+	// Scan the first and last sequence numbers from the DB
+	_, _, _, err := s.db.Scan(nil, 0, 0, 0, nil)
 	if err == nil {
 		return goscaffold.OK, nil
 	}

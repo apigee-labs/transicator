@@ -20,6 +20,8 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"time"
+	"bytes"
 )
 
 var _ = Describe("Conversion", func() {
@@ -45,6 +47,20 @@ var _ = Describe("Conversion", func() {
 		Expect(s).Should(BeTrue())
 		err := quick.Check(testIndexKeyCompare, nil)
 		Expect(err).Should(Succeed())
+	})
+
+	It("Add and remove timestamps", func() {
+		now := time.Now()
+		msg := []byte("Hello, World!")
+		b := prependTimestamp(now, msg)
+		et, eb := extractTimestamp(b)
+		Expect(et).Should(Equal(now))
+		Expect(bytes.Equal(eb, msg)).Should(BeTrue())
+
+		b = prependTimestamp(now, nil)
+		et, eb = extractTimestamp(b)
+		Expect(et).Should(Equal(now))
+		Expect(eb).Should(BeEmpty())
 	})
 })
 

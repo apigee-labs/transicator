@@ -25,19 +25,20 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/apigee-labs/transicator/common"
+	"time"
 )
 
 const (
 	testDBDir = "./testdb"
 )
 
-var testDB *DB
+var testDB DB
 
 var _ = Describe("Storage Main Test", func() {
 
 	BeforeEach(func() {
 		var err error
-		testDB, err = OpenDB(testDBDir)
+		testDB, err = Open(testDBDir)
 		Expect(err).Should(Succeed())
 	})
 
@@ -49,10 +50,10 @@ var _ = Describe("Storage Main Test", func() {
 
 	It("Open and reopen", func() {
 		fmt.Fprintln(GinkgoWriter, "Open and re-open")
-		stor, err := OpenDB("./openleveldb")
+		stor, err := Open("./openleveldb")
 		Expect(err).Should(Succeed())
 		stor.Close()
-		stor, err = OpenDB("./openleveldb")
+		stor, err = Open("./openleveldb")
 		Expect(err).Should(Succeed())
 		stor.Close()
 		err = stor.Delete()
@@ -61,8 +62,14 @@ var _ = Describe("Storage Main Test", func() {
 	})
 
 	It("Bad path", func() {
-		_, err := OpenDB("./does/not/exist")
+		_, err := Open("./does/not/exist")
 		Expect(err).ShouldNot(Succeed())
+	})
+
+	It("Read not found", func() {
+		buf, err := testDB.Get("foo", 0, 0)
+		Expect(err).Should(Succeed())
+		Expect(buf).Should(BeNil())
 	})
 
 	It("Entries", func() {
@@ -98,34 +105,22 @@ var _ = Describe("Storage Main Test", func() {
 		Expect(err).Should(Succeed())
 	})
 
-	It("Read not found", func() {
-		buf, err := testDB.GetEntry("foo", 0, 0)
-		Expect(err).Should(Succeed())
-		Expect(buf).Should(BeNil())
-	})
-
-	It("Read not found multi", func() {
-		bufs, err := testDB.GetEntries("foo", 0, 0, 100, nil)
-		Expect(err).Should(Succeed())
-		Expect(bufs).Should(BeEmpty())
-	})
-
 	It("Reading sequences", func() {
 		val1 := []byte("Hello!")
 		val2 := []byte("World.")
 
 		rangeEqual(0, 0, 0, 0)
-		testDB.PutEntry("a", 0, 0, val1)
+		testDB.Put("a", 0, 0, val1)
 		rangeEqual(0, 0, 0, 0)
-		testDB.PutEntry("a", 1, 0, val2)
+		testDB.Put("a", 1, 0, val2)
 		rangeEqual(0, 0, 1, 0)
-		testDB.PutEntry("a", 1, 1, val1)
-		testDB.PutEntry("a", 2, 0, val2)
-		testDB.PutEntry("b", 3, 0, val1)
-		testDB.PutEntry("c", 4, 0, val1)
-		testDB.PutEntry("c", 4, 1, val2)
-		testDB.PutEntry("", 10, 0, val1)
-		testDB.PutEntry("", 11, 1, val2)
+		testDB.Put("a", 1, 1, val1)
+		testDB.Put("a", 2, 0, val2)
+		testDB.Put("b", 3, 0, val1)
+		testDB.Put("c", 4, 0, val1)
+		testDB.Put("c", 4, 1, val2)
+		testDB.Put("", 10, 0, val1)
+		testDB.Put("", 11, 1, val2)
 		rangeEqual(0, 0, 11, 1)
 
 		// Read whole ranges
@@ -170,62 +165,64 @@ var _ = Describe("Storage Main Test", func() {
 	})
 
 	It("Purge empty database", func() {
-		count, err := testDB.PurgeEntries(func(buf []byte) bool {
-			return true
-		})
+		count, err := testDB.Purge(time.Now())
 		Expect(err).Should(Succeed())
 		Expect(count).Should(BeZero())
 	})
 
 	It("Purge some entries", func() {
-		val1 := []byte("Hello")
-		val2 := []byte("Goodbye")
+		vals := [][]byte{
+			[]byte("one"),
+			[]byte("two"),
+			[]byte("three"),
+			[]byte("four"),
+			[]byte("five"),
+			[]byte("six"),
+			[]byte("seven"),
+			[]byte("eight"),
+			[]byte("nine"),
+			[]byte("ten"),
+		}
 
-		testDB.PutEntry("a", 0, 0, val1)
-		testDB.PutEntry("a", 1, 0, val2)
-		testDB.PutEntry("a", 1, 1, val1)
-		testDB.PutEntry("a", 2, 0, val2)
-		testDB.PutEntry("b", 3, 0, val1)
-		testDB.PutEntry("c", 4, 0, val1)
-		testDB.PutEntry("c", 4, 1, val2)
-		testDB.PutEntry("", 10, 0, val1)
-		testDB.PutEntry("", 11, 1, val2)
+		testDB.Put("a", 0, 0, vals[0])
+		testDB.Put("a", 1, 0, vals[1])
+		testDB.Put("a", 1, 1, vals[2])
+		testDB.Put("a", 2, 0, vals[3])
+		purgePoint := time.Now()
+
+		testDB.Put("b", 3, 0, vals[4])
+		testDB.Put("c", 4, 0, vals[5])
+		testDB.Put("c", 4, 1, vals[6])
+		testDB.Put("", 10, 0, vals[7])
+		testDB.Put("", 11, 1, vals[8])
 		rangeEqual(0, 0, 11, 1)
 
-		// Purge only one value
-		count, err := testDB.PurgeEntries(func(buf []byte) bool {
-			return bytes.Equal(buf, val2)
-		})
+		// Purge half the values
+		count, err := testDB.Purge(purgePoint)
 		Expect(err).Should(Succeed())
 		Expect(count).Should(BeEquivalentTo(4))
-		rangeEqual(0, 0, 10, 0)
+		rangeEqual(3, 0, 11, 1)
 
 		// Verify that re-purge does nothing
-		count, err = testDB.PurgeEntries(func(buf []byte) bool {
-			return bytes.Equal(buf, val2)
-		})
+		count, err = testDB.Purge(purgePoint)
 		Expect(err).Should(Succeed())
 		Expect(count).Should(BeZero())
 
-		found, err := testDB.GetEntry("a", 0, 0)
+		found, err := testDB.Get("b", 3, 0)
 		Expect(err).Should(Succeed())
-		Expect(bytes.Equal(found, val1)).Should(BeTrue())
+		Expect(bytes.Equal(found, vals[4])).Should(BeTrue())
 
-		found, err = testDB.GetEntry("a", 0, 1)
+		found, err = testDB.Get("a", 0, 1)
 		Expect(err).Should(Succeed())
 		Expect(found).Should(BeNil())
 
 		// Purge the rest of the entries
-		count, err = testDB.PurgeEntries(func(buf []byte) bool {
-			return true
-		})
+		count, err = testDB.Purge(time.Now())
 		Expect(err).Should(Succeed())
 		Expect(count).Should(BeEquivalentTo(5))
 
 		// Verify that everything is gone now
-		count, err = testDB.PurgeEntries(func(buf []byte) bool {
-			return true
-		})
+		count, err = testDB.Purge(time.Now())
 		Expect(err).Should(Succeed())
 		Expect(count).Should(BeZero())
 		rangeEqual(0, 0, 0, 0)
@@ -234,7 +231,7 @@ var _ = Describe("Storage Main Test", func() {
 
 func testGetSequence(tag string, lsn uint64,
 	index uint32, limit int, expected [][]byte) {
-	ret, err := testDB.GetEntries(tag, lsn, index, limit, nil)
+	ret, _, _, err := testDB.Scan([]string{tag}, lsn, index, limit, nil)
 	Expect(err).Should(Succeed())
 	Expect(len(ret)).Should(Equal(len(expected)))
 	for i := range expected {
@@ -244,7 +241,7 @@ func testGetSequence(tag string, lsn uint64,
 
 func testGetSequenceFilter(tag string, lsn uint64,
 	index uint32, limit int, expected [][]byte, rejected []byte) {
-	ret, err := testDB.GetEntries(tag, lsn, index, limit,
+	ret, _, _, err := testDB.Scan([]string{tag}, lsn, index, limit,
 		func(rej []byte) bool {
 			if bytes.Equal(rej, rejected) {
 				return false
@@ -260,7 +257,7 @@ func testGetSequenceFilter(tag string, lsn uint64,
 
 func testGetSequences(tags []string, lsn uint64,
 	index uint32, limit int, expected [][]byte) {
-	ret, _, _, err := testDB.GetMultiEntries(tags, lsn, index, limit, nil)
+	ret, _, _, err := testDB.Scan(tags, lsn, index, limit, nil)
 	Expect(err).Should(Succeed())
 	Expect(len(ret)).Should(Equal(len(expected)))
 	for i := range expected {
@@ -272,9 +269,9 @@ func testGetSequences(tags []string, lsn uint64,
 func testEntry(key string, lsn uint64, index uint32, val []byte) bool {
 	fmt.Fprintf(GinkgoWriter, "key = %s lsn = %d ix = %d\n",
 		key, lsn, index)
-	err := testDB.PutEntry(key, lsn, index, val)
+	err := testDB.Put(key, lsn, index, val)
 	Expect(err).Should(Succeed())
-	ret, err := testDB.GetEntry(key, lsn, index)
+	ret, err := testDB.Get(key, lsn, index)
 	Expect(err).Should(Succeed())
 	if !bytes.Equal(val, ret) {
 		fmt.Fprintf(GinkgoWriter, "Val is %d %s ret is %d %s, key is %s, lsn is %d index is %d\n",
@@ -285,7 +282,7 @@ func testEntry(key string, lsn uint64, index uint32, val []byte) bool {
 }
 
 func rangeEqual(l1 uint64, i1 uint32, l2 uint64, i2 uint32) {
-	fs, ls, err := testDB.GetLimits()
+	_, fs, ls, err := testDB.Scan(nil, 0, 0, 0, nil)
 	Expect(err).Should(Succeed())
 	Expect(fs.Compare(common.MakeSequence(l1, i1))).Should(BeZero())
 	Expect(ls.Compare(common.MakeSequence(l2, i2))).Should(BeZero())

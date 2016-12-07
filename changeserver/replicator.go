@@ -71,9 +71,8 @@ func (s *server) handleChange(c *common.Change, firstChange common.Sequence) com
 			c.Timestamp = time.Now().Unix()
 		}
 		dataBuf := encodeChangeProto(c)
-		s.db.PutEntryAndMetadata(
-			scope, c.CommitSequence, c.CommitIndex, dataBuf,
-			lastSequenceKey, changeSeq.Bytes())
+		s.db.Put(
+			scope, c.CommitSequence, c.CommitIndex, dataBuf)
 		s.tracker.update(changeSeq, scope)
 
 	} else {

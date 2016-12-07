@@ -24,26 +24,25 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/tecbot/gorocksdb"
+	"time"
 )
 
 const (
 	benchDBDir  = "./benchdata"
 	largeDBDir  = "./benchlargedata"
 	cleanDBDir  = "./cleanlargedata"
-	firstKey    = "firstlsn"
-	lastKey     = "lasttlsn"
 	parallelism = 100
 )
 
 var largeInit = &sync.Once{}
 var cleanInit = &sync.Once{}
-var largeDB, cleanDB *DB
+var largeDB, cleanDB DB
 var largeScopes, cleanScopes []string
 var largeScopeNames, cleanScopeNames []string
+var purgePoint time.Time
 
 func BenchmarkInserts(b *testing.B) {
-	db, err := OpenDB(benchDBDir)
+	db, err := Open(benchDBDir)
 	if err != nil {
 		b.Fatalf("Error on open: %s\n", err)
 	}
@@ -72,7 +71,7 @@ func BenchmarkSequence0To100WithMetadata(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		scope := largeScopeNames[rand.Intn(len(largeScopeNames))]
-		entries, _, _, err := largeDB.GetMultiEntries(
+		entries, _, _, err := largeDB.Scan(
 			[]string{scope}, 0, 0, 100, nil)
 		if err != nil {
 			b.Fatalf("Error on read: %s\n", err)
@@ -96,7 +95,7 @@ func BenchmarkSequenceAfterEnd(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		scope := largeScopeNames[rand.Intn(len(largeScopeNames))]
-		entries, err := largeDB.GetEntries(scope, uint64(len(largeScopes)+1), 0, 100, nil)
+		entries, _, _, err := largeDB.Scan([]string{scope}, uint64(len(largeScopes)+1), 0, 100, nil)
 		if err != nil {
 			b.Fatalf("Error on read: %s\n", err)
 		}
@@ -117,7 +116,7 @@ func BenchmarkSequence0To100WithMetadataParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			scope := largeScopeNames[rand.Intn(len(largeScopeNames))]
-			entries, _, _, err := largeDB.GetMultiEntries(
+			entries, _, _, err := largeDB.Scan(
 				[]string{scope}, 0, 0, 100, nil)
 			if err != nil {
 				b.Fatalf("Error on read: %s\n", err)
@@ -135,7 +134,7 @@ func BenchmarkSequence0To100WithMetadataAfterClean(b *testing.B) {
 	})
 
 	cleanInit.Do(func() {
-		purgeNRecords(b, cleanDB, len(cleanScopes)/2)
+		purgeRecords(b, cleanDB)
 	})
 
 	b.Logf("Reading %d sequences\n", b.N)
@@ -143,7 +142,7 @@ func BenchmarkSequence0To100WithMetadataAfterClean(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		scope := cleanScopeNames[rand.Intn(len(cleanScopeNames))]
-		_, _, _, err := cleanDB.GetMultiEntries(
+		_, _, _, err := cleanDB.Scan(
 			[]string{scope}, 0, 0, 100, nil)
 		if err != nil {
 			b.Fatalf("Error on read: %s\n", err)
@@ -151,76 +150,51 @@ func BenchmarkSequence0To100WithMetadataAfterClean(b *testing.B) {
 	}
 }
 
-func BenchmarkSequence0To100WithMetadataAfterCleanCompact(b *testing.B) {
-	largeInit.Do(func() {
-		initLargeDB(b)
-	})
-
-	cleanInit.Do(func() {
-		purgeNRecords(b, cleanDB, len(cleanScopes)/2)
-	})
-
-	b.Logf("Compacting database\n")
-	cleanDB.db.CompactRangeCF(cleanDB.entriesCF, gorocksdb.Range{})
-	b.Logf("Reading %d sequences\n", b.N)
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		scope := cleanScopeNames[rand.Intn(len(cleanScopeNames))]
-		_, _, _, err := cleanDB.GetMultiEntries(
-			[]string{scope}, 0, 0, 100, nil)
-		if err != nil {
-			b.Fatalf("Error on read: %s\n", err)
-		}
-	}
-}
-
-func purgeNRecords(b *testing.B, db *DB, toPurge int) {
-	b.Logf("Cleaning the up to %d records\n", toPurge)
-	pc := 0
-	purged, err := db.PurgeEntries(func(b []byte) bool {
-		if pc < toPurge {
-			pc++
-			return true
-		}
-		return false
-	})
+func purgeRecords(b *testing.B, db DB) {
+	b.Logf("Purging about half the records...\n")
+	purged, err := db.Purge(purgePoint)
 	if err != nil {
 		b.Fatalf("Error on purge: %s\n", err)
 	}
-	b.Logf("Cleaned %d.\n", purged)
+	b.Logf("Cleaned %d\n", purged)
 }
 
 func initLargeDB(b *testing.B) {
 	largeScopes, largeScopeNames = makeScopeList(100, 10000, 1000, 1)
-	largeDB = initDB(b, largeDBDir, largeScopes)
+	largeDB, _ = initDB(b, largeDBDir, largeScopes)
 	cleanScopes, cleanScopeNames = makeScopeList(100, 10000, 1000, 1)
-	cleanDB = initDB(b, cleanDBDir, cleanScopes)
+	cleanDB, purgePoint = initDB(b, cleanDBDir, cleanScopes)
 }
 
-func initDB(b *testing.B, dir string, insertScopes []string) *DB {
-	db, err := OpenDB(dir)
+func initDB(b *testing.B, dir string, insertScopes []string) (DB, time.Time) {
+	db, err := Open(dir)
 	if err != nil {
 		b.Fatalf("Error on open: %s\n", err)
 	}
 
 	b.Logf("Inserting %d records\n", len(insertScopes))
-	doInserts(db, insertScopes, len(insertScopes))
-	return db
+	purgePoint := doInserts(db, insertScopes, len(insertScopes))
+	return db, purgePoint
 }
 
-func doInserts(db *DB, scopes []string, iterations int) {
+func doInserts(db DB, scopes []string, iterations int) time.Time {
 	var seq uint64
+	var purgePoint time.Time
 
 	for i := 0; i < iterations; i++ {
 		seq++
 		bod := []byte(fmt.Sprintf("seq-%d", seq))
-		err := db.PutEntry(
+		err := db.Put(
 			scopes[i], seq, 0, bod)
 		if err != nil {
 			panic(fmt.Sprintf("Error on insert: %s\n", err))
 		}
+		if i == (iterations / 2) {
+			// Record half way along so that we can purge half the data
+			purgePoint = time.Now()
+		}
 	}
+	return purgePoint
 }
 
 var _ = Describe("Bench checks", func() {

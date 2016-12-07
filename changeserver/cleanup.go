@@ -56,18 +56,10 @@ func (c *cleaner) run() {
 }
 
 func (c *cleaner) performCleanup() {
-	cleanupAge := time.Now().Add(-c.maxAge).Unix()
+	cleanupAge := time.Now().Add(-c.maxAge)
 	log.Debugf("Cleaning up data records since before %v", cleanupAge)
 
-	cleanupCount, err := c.s.db.PurgeEntries(func(buf []byte) bool {
-		ts, err := decodeChangeTimestamp(buf)
-		if err == nil && ts > 0 {
-			if ts < cleanupAge {
-				return true
-			}
-		}
-		return false
-	})
+	cleanupCount, err := c.s.db.Purge(cleanupAge)
 
 	if err != nil {
 		log.Errorf("Error after cleaning up %d records: %s", cleanupCount, err)

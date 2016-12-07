@@ -1,5 +1,6 @@
 *.o
 *.so
+*.iml
 .DS_Store
 bin/
 .idea/

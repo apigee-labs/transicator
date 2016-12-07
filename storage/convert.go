@@ -18,6 +18,7 @@ package storage
 import (
 	"bytes"
 	"encoding/binary"
+	"time"
 )
 
 /*
@@ -32,22 +33,6 @@ import (
  *   Sequeuence (int64)
  *   Index (int32)
  */
-
-// Byte order does not matter since all comparisons are done in Go, but
-// for portability we'll pick the native Intel order
-var storageByteOrder = binary.LittleEndian
-
-func intToBytes(v int64) []byte {
-	buf := &bytes.Buffer{}
-	binary.Write(buf, storageByteOrder, v)
-	return buf.Bytes()
-}
-
-func bytesToInt(bb []byte) (ret int64) {
-	buf := bytes.NewBuffer(bb)
-	binary.Read(buf, storageByteOrder, &ret)
-	return
-}
 
 /*
 Create an entry key.
@@ -96,4 +81,22 @@ func keyToLsnAndOffset(key []byte) (scope string, lsn uint64, index uint32, err 
 	}
 	index = uint32(iv)
 	return
+}
+
+/*
+Functions for putting timestamps in front of records and taking them out.
+*/
+func prependTimestamp(t time.Time, b []byte) []byte {
+	tb := make([]byte, binary.MaxVarintLen64)
+	tl := binary.PutVarint(tb, t.UnixNano())
+	return append(tb[:tl], b...)
+}
+
+func extractTimestamp(b []byte) (time.Time, []byte) {
+	bb := bytes.NewBuffer(b)
+	ts, err := binary.ReadVarint(bb)
+	if err != nil {
+		panic(err.Error())
+	}
+	return time.Unix(0, ts), bb.Bytes()
 }
