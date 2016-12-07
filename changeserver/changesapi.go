@@ -88,7 +88,6 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 
 	// Need to advance past a single "since" value
 	sinceSeq.Index++
-	var metadata [][]byte
 
 	log.Debugf("Receiving changes: scopes = %v since = %s limit = %d block = %d",
 		scopes, sinceSeq, limit, block)
@@ -117,12 +116,6 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 			}
 		}
 		log.Debugf("Received %d changes after blocking", len(entries))
-
-		lastSeq, err = common.ParseSequenceBytes(metadata[0])
-		if err != nil {
-			sendError(resp, req, http.StatusInternalServerError, err.Error())
-			return
-		}
 	}
 
 	changeList := common.ChangeList{
