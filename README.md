@@ -18,6 +18,11 @@ In order to consume changes, all a client needs is to be able to make an HTTPs
 request to the Transicator servers. This makes it possible to create clients
 for Transicator that run in a variety of constrained environments.
 
+## Status
+
+This is not an official Google product. It is an open-source project and
+we are happy to receive feedback.
+
 # Overview
 
 There are three components to Transicator:
