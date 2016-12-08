@@ -6,6 +6,11 @@ all: ./bin/changeserver ./bin/snapshotserver
 ./bin/snapshotserver: ./bin ./*/*.go
 	go build -o $@ ./snapshotserver
 
+./bin/changeserver-rocksdb: ./bin ./*/*.go
+	go build -tags rocksdb -o $@ ./changeserver
+
+rocksdb: ./bin/changeserver-rocksdb ./bin/snapshotserver
+
 ./bin:
 	mkdir bin
 

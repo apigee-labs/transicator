@@ -21,7 +21,8 @@ for Transicator that run in a variety of constrained environments.
 ## Status
 
 This is not an official Google product. It is an open-source project and
-we are happy to receive feedback.
+we are happy to receive feedback, fixes, and improvements. Please see
+[CONTRIBUTING](./CONTRIBUTING.md) for more.
 
 # Overview
 
@@ -500,11 +501,6 @@ brew info postgresql
 ```
 
 ```
-### Install rocksdb and other dependencies
-
-    brew install rocksdb
-    brew install protobuf
-    brew install protobuf-c
 
 ## Build and install PG logical replication output plugin
 
@@ -582,3 +578,22 @@ up, and eventually fail.
 ## To delete a replication slot:
 
     select * from pg_drop_replication_slot('SLOT_NAME');
+
+## Storage Engines
+
+The change server maintains a local database of changes so that many clients
+can poll for changes without putting a load on the database server.
+The default storage implementation is built on top of SQLite -- we find that
+it gives us good performance for our use case.
+
+There is also an implementation of the changes server that uses RocksDB.
+This implementation has different performance characteristics and these may
+be better for some use cases. The "rocksdb" build tag is used to
+build and/or test this version.
+
+The build rule:
+
+    make rocksdb
+
+Adds the build tag and produces a binary called "changeserver-rocksdb" that uses
+this storage engine.
