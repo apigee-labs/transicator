@@ -1,5 +1,5 @@
-hash: d4ca6b7dc2aca8fbf68dbe0efef3d9f19a8166d993e7e116247fe8149d6b8e9e
-updated: 2016-12-07T20:13:41.511891337-08:00
+hash: bcddc87691b59c9b684ca222ba35984a22fa98b07d38f2e68d06381695ed4002
+updated: 2016-12-08T12:33:57.56540524-08:00
 imports:
 - name: github.com/30x/goscaffold
   version: bc27656c53f79500b27ef1648c3a12ac8d06a084
@@ -54,7 +54,7 @@ imports:
 - name: github.com/Sirupsen/logrus
   version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
 - name: github.com/spf13/afero
-  version: 06b7e5f50606ecd49148a01a6008942d9b669217
+  version: 2f30b2a92c0e5700bcfe4715891adb1f2a7a406d
   subpackages:
   - mem
 - name: github.com/spf13/cast
@@ -66,9 +66,9 @@ imports:
 - name: github.com/spf13/viper
   version: 651d9d916abc3c3d6a91a12549495caba5edffd2
 - name: github.com/tecbot/gorocksdb
-  version: 17991d3138a879b166adebf86f7c84da3c1517a7
+  version: f2a0b10f7228cff360e2d9efa081a15a8cbd68b7
 - name: golang.org/x/net
-  version: 944c58e9d57bcecf171fd4bea155269aa8a96805
+  version: cbed01e851ceabac8eab72f5e0f1086ecbc60338
   subpackages:
   - context
 - name: golang.org/x/sys

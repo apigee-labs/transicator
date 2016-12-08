@@ -16,6 +16,7 @@ import:
 - package: github.com/30x/goscaffold
   version: master
 - package: github.com/tecbot/gorocksdb
+  version: f2a0b10f7228cff360e2d9efa081a15a8cbd68b7
 - package: github.com/spf13/viper
   version: master
 - package: github.com/spf13/pflag
