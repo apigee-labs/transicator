@@ -25,10 +25,10 @@ import (
 	"testing"
 
 	"github.com/30x/goscaffold"
+	"github.com/Sirupsen/logrus"
 	"github.com/apigee-labs/transicator/common"
 	"github.com/apigee-labs/transicator/pgclient"
 	"github.com/apigee-labs/transicator/replication"
-	"github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -107,7 +107,7 @@ var _ = BeforeSuite(func() {
 	// Poll until we are connected to PG and replication has begun
 	Eventually(func() replication.State {
 		return testServer.repl.State()
-	},30,10).Should(Equal(replication.Running))
+	}, 30, 10).Should(Equal(replication.Running))
 
 	// Start listening for HTTP calls
 	go func() {

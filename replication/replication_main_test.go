@@ -23,9 +23,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/apigee-labs/transicator/common"
 	"github.com/apigee-labs/transicator/pgclient"
-	"github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"

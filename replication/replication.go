@@ -25,9 +25,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/apigee-labs/transicator/common"
 	"github.com/apigee-labs/transicator/pgclient"
-	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -607,10 +607,10 @@ func (r *Replicator) updateLSN(highLSN uint64, conn *pgclient.PgConnection) {
 	log.Debugf("Updating server with last LSN %d", highLSN)
 	om := pgclient.NewOutputMessage(pgclient.CopyDataOut)
 	om.WriteByte(byte(pgclient.StandbyStatusUpdate))
-	om.WriteUint64(highLSN+1)                          // last written to disk+1
-	om.WriteUint64(highLSN+1)                          // last flushed to disk+1
-	om.WriteUint64(highLSN+1)                          // last applied+1
-	om.WriteUint64((uint64)((time.Now().UnixNano()/1000) - epoch2000)) // Timestamp, in microseconds
+	om.WriteUint64(highLSN + 1)                                          // last written to disk+1
+	om.WriteUint64(highLSN + 1)                                          // last flushed to disk+1
+	om.WriteUint64(highLSN + 1)                                          // last applied+1
+	om.WriteUint64((uint64)((time.Now().UnixNano() / 1000) - epoch2000)) // Timestamp, in microseconds
 	om.WriteByte(0)
 
 	conn.WriteMessage(om)

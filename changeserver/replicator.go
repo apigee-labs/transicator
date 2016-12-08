@@ -19,8 +19,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/apigee-labs/transicator/common"
 	log "github.com/Sirupsen/logrus"
+	"github.com/apigee-labs/transicator/common"
 )
 
 const (

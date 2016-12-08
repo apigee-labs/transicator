@@ -21,9 +21,9 @@ import (
 	"time"
 
 	"github.com/30x/goscaffold"
+	log "github.com/Sirupsen/logrus"
 	"github.com/apigee-labs/transicator/common"
 	"github.com/apigee-labs/transicator/replication"
-	log "github.com/Sirupsen/logrus"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -120,7 +120,7 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 
 	changeList := common.ChangeList{
 		FirstSequence: firstSeq.String(),
-		LastSequence: lastSeq.String(),
+		LastSequence:  lastSeq.String(),
 	}
 
 	for _, e := range entries {
