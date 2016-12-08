@@ -18,10 +18,10 @@ package storage
 import (
 	"testing/quick"
 
+	"bytes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"time"
-	"bytes"
 )
 
 var _ = Describe("Conversion", func() {

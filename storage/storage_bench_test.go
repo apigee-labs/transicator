@@ -55,7 +55,24 @@ func BenchmarkInserts(b *testing.B) {
 	b.Logf("Created %d scopes\n", len(scopes))
 	b.Logf("Running %d insert iterations\n", b.N)
 	b.ResetTimer()
-	doInserts(db, scopes, b.N)
+	doInserts(db, scopes, b.N, 1)
+}
+
+func BenchmarkBatch10Inserts(b *testing.B) {
+	db, err := Open(benchDBDir)
+	if err != nil {
+		b.Fatalf("Error on open: %s\n", err)
+	}
+	defer func() {
+		db.Close()
+		db.Delete()
+	}()
+
+	scopes, _ := makeScopeList(100, 10000, 1000, b.N)
+	b.Logf("Created %d scopes\n", len(scopes))
+	b.Logf("Running %d insert iterations\n", b.N)
+	b.ResetTimer()
+	doInserts(db, scopes, b.N, 10)
 }
 
 func BenchmarkSequence0To100WithMetadata(b *testing.B) {
@@ -173,25 +190,36 @@ func initDB(b *testing.B, dir string, insertScopes []string) (DB, time.Time) {
 	}
 
 	b.Logf("Inserting %d records\n", len(insertScopes))
-	purgePoint := doInserts(db, insertScopes, len(insertScopes))
+	purgePoint := doInserts(db, insertScopes, len(insertScopes), 100)
 	return db, purgePoint
 }
 
-func doInserts(db DB, scopes []string, iterations int) time.Time {
+func doInserts(db DB, scopes []string, iterations, batchSize int) time.Time {
 	var seq uint64
 	var purgePoint time.Time
 
-	for i := 0; i < iterations; i++ {
-		seq++
-		bod := []byte(fmt.Sprintf("seq-%d", seq))
-		err := db.Put(
-			scopes[i], seq, 0, bod)
-		if err != nil {
-			panic(fmt.Sprintf("Error on insert: %s\n", err))
+	i := 0
+	for i < iterations {
+		var batch []Entry
+		for b := 0; b < batchSize && i < iterations; b++ {
+			seq++
+			bod := []byte(fmt.Sprintf("seq-%d", seq))
+			nb := Entry{
+				Scope: scopes[i],
+				LSN:   seq,
+				Index: 0,
+				Data:  bod,
+			}
+			batch = append(batch, nb)
+			if i == (iterations / 2) {
+				// Record half way along so that we can purge half the data
+				purgePoint = time.Now()
+			}
+			i++
 		}
-		if i == (iterations / 2) {
-			// Record half way along so that we can purge half the data
-			purgePoint = time.Now()
+		err := db.PutBatch(batch)
+		if err != nil {
+			panic(fmt.Sprintf("Fatal error on batch insert: %s\n", err))
 		}
 	}
 	return purgePoint

@@ -22,6 +22,16 @@ import (
 )
 
 /*
+An Entry represents a whole record in one go.
+*/
+type Entry struct {
+	Scope string
+	LSN   uint64
+	Index uint32
+	Data  []byte
+}
+
+/*
 A DB is a generic interface to the storage system. It maintains
 entries indexec by scope, lsn, and index within an LSN. It allows
 entries to be retrieved sequentially, or to be purged by time.
@@ -36,6 +46,9 @@ type DB interface {
 	// Insert a new entry.
 	Put(scope string, lsn uint64, index uint32, data []byte) error
 
+	// Insert a bunch of entries in one atomic batch
+	PutBatch(entries []Entry) error
+
 	// Retrieve a single entry
 	Get(scope string, lsn uint64, index uint32) ([]byte, error)
 
@@ -43,10 +56,10 @@ type DB interface {
 	// in the "scopes" array. If filter is non-nil, return only entries
 	// for which it returns true.
 	Scan(scopes []string,
-	     startLSN uint64, startIndex uint32,
-	     limit int,
-	     filter func ([]byte) bool) ([][]byte, common.Sequence, common.Sequence, error)
+		startLSN uint64, startIndex uint32,
+		limit int,
+		filter func([]byte) bool) ([][]byte, common.Sequence, common.Sequence, error)
 
-  // Delete entries older than "oldest"
+	// Delete entries older than "oldest"
 	Purge(oldest time.Time) (purgeCount uint64, err error)
 }

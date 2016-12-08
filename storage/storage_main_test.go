@@ -21,6 +21,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -33,6 +34,7 @@ func TestStorage(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	logrus.SetLevel(logrus.ErrorLevel)
 	flag.Parse()
 	ret := m.Run()
 	if largeDB != nil {

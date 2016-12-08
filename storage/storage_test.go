@@ -22,10 +22,11 @@ import (
 
 	"encoding/hex"
 
+	"time"
+
+	"github.com/apigee-labs/transicator/common"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/apigee-labs/transicator/common"
-	"time"
 )
 
 const (
@@ -110,17 +111,23 @@ var _ = Describe("Storage Main Test", func() {
 		val2 := []byte("World.")
 
 		rangeEqual(0, 0, 0, 0)
-		testDB.Put("a", 0, 0, val1)
+		err := testDB.Put("a", 0, 0, val1)
+		Expect(err).Should(Succeed())
 		rangeEqual(0, 0, 0, 0)
-		testDB.Put("a", 1, 0, val2)
+		err = testDB.Put("a", 1, 0, val2)
+		Expect(err).Should(Succeed())
 		rangeEqual(0, 0, 1, 0)
-		testDB.Put("a", 1, 1, val1)
-		testDB.Put("a", 2, 0, val2)
-		testDB.Put("b", 3, 0, val1)
-		testDB.Put("c", 4, 0, val1)
-		testDB.Put("c", 4, 1, val2)
-		testDB.Put("", 10, 0, val1)
-		testDB.Put("", 11, 1, val2)
+
+		err = testDB.PutBatch([]Entry{
+			{Scope: "a", LSN: 1, Index: 1, Data: val1},
+			{Scope: "a", LSN: 2, Index: 0, Data: val2},
+			{Scope: "b", LSN: 3, Index: 0, Data: val1},
+			{Scope: "c", LSN: 4, Index: 0, Data: val1},
+			{Scope: "c", LSN: 4, Index: 1, Data: val2},
+			{Scope: "", LSN: 10, Index: 0, Data: val1},
+			{Scope: "", LSN: 11, Index: 1, Data: val2},
+		})
+		Expect(err).Should(Succeed())
 		rangeEqual(0, 0, 11, 1)
 
 		// Read whole ranges
@@ -232,6 +239,7 @@ var _ = Describe("Storage Main Test", func() {
 func testGetSequence(tag string, lsn uint64,
 	index uint32, limit int, expected [][]byte) {
 	ret, _, _, err := testDB.Scan([]string{tag}, lsn, index, limit, nil)
+	fmt.Fprintf(GinkgoWriter, "Expected %v == %v\n", ret, expected)
 	Expect(err).Should(Succeed())
 	Expect(len(ret)).Should(Equal(len(expected)))
 	for i := range expected {
@@ -267,6 +275,10 @@ func testGetSequences(tags []string, lsn uint64,
 }
 
 func testEntry(key string, lsn uint64, index uint32, val []byte) bool {
+	if lsn > 1<<63 {
+		// SQLite cannot handle the high bit.
+		return true
+	}
 	fmt.Fprintf(GinkgoWriter, "key = %s lsn = %d ix = %d\n",
 		key, lsn, index)
 	err := testDB.Put(key, lsn, index, val)

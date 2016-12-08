@@ -1,3 +1,5 @@
+// +build rocksdb
+
 /*
 Copyright 2016 Google Inc.
 
@@ -13,6 +15,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package storage
 
 import (
@@ -153,13 +156,31 @@ func (s *RocksDB) Put(scope string, lsn uint64, index uint32, data []byte) error
 	batch := gorocksdb.NewWriteBatch()
 	defer batch.Destroy()
 
-	keyBuf := lsnAndOffsetToKey(scope, lsn, index)
-	batch.PutCF(s.entriesCF, keyBuf, prependTimestamp(time.Now(), data))
-
-	seqBuf := common.MakeSequence(lsn, index).Bytes()
-	batch.PutCF(s.sequenceCF, seqBuf, nil)
+	s.putOne(batch, scope, lsn, index, data)
 
 	return s.db.Write(defaultWriteOptions, batch)
+}
+
+/*
+PutBatch does multiple Put operations in a single batch.
+*/
+func (s *RocksDB) PutBatch(entries []Entry) error {
+	batch := gorocksdb.NewWriteBatch()
+	defer batch.Destroy()
+
+	for _, entry := range entries {
+		s.putOne(batch, entry.Scope, entry.LSN, entry.Index, entry.Data)
+	}
+
+	return s.db.Write(defaultWriteOptions, batch)
+}
+
+func (s *RocksDB) putOne(b *gorocksdb.WriteBatch, scope string, lsn uint64, index uint32, data []byte) {
+	keyBuf := lsnAndOffsetToKey(scope, lsn, index)
+	b.PutCF(s.entriesCF, keyBuf, prependTimestamp(time.Now(), data))
+
+	seqBuf := common.MakeSequence(lsn, index).Bytes()
+	b.PutCF(s.sequenceCF, seqBuf, nil)
 }
 
 /*
