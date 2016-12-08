@@ -1,5 +1,10 @@
 package: github.com/apigee-labs/transicator
 license: Apache-2.0
+ignore:
+- github.com/cockroachdb/c-jemalloc
+- github.com/cockroachdb/c-lz4
+- github.com/cockroachdb/c-rocksdb
+- github.com/cockroachdb/c-snappy
 import:
 - package: github.com/Sirupsen/logrus
   version: ~0.10.0
@@ -16,15 +21,8 @@ import:
 - package: github.com/spf13/pflag
   version: master
 - package: github.com/onsi/ginkgo
-- package: github.com/spf13/viper
-  version: master
-- package: github.com/spf13/pflag
-  version: master
+- package: github.com/mattn/go-sqlite3
+  version: ^1.2.0
 testImport:
 - package: github.com/onsi/gomega
 - package: github.com/onsi/ginkgo
-ignore:
-- github.com/cockroachdb/c-jemalloc
-- github.com/cockroachdb/c-lz4
-- github.com/cockroachdb/c-rocksdb
-- github.com/cockroachdb/c-snappy
