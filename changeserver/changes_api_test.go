@@ -488,13 +488,13 @@ var _ = Describe("Changes API Tests", func() {
 			return len(lcc.Changes)
 		}, 10*time.Second, time.Second).Should(BeZero())
 
-		// Should actually have first and last be present at all times.
-		// test case where database is empty but snapshot still too old.
-		// TODO want the oldest to be here, not just the
+		// Even after a full cleanup to an empty database, we should have
+		// remembered the last sequence that we got so that clients know
+		// whether they are up to date.
 		lastCl := getChanges(fmt.Sprintf(
 			"%s/changes?scope=clean", baseURL))
-		Expect(lastCl.FirstSequence).Should(Equal(emptySequenceStr))
-		Expect(lastCl.LastSequence).Should(Equal(emptySequenceStr))
+		Expect(lastCl.FirstSequence).Should(Equal(newLast.String()))
+		Expect(lastCl.LastSequence).Should(Equal(newLast.String()))
 	})
 })
 

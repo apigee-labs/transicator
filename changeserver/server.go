@@ -31,11 +31,15 @@ import (
 )
 
 const (
-	jsonContent       = "application/json"
-	protoContent      = "application/transicator+protobuf"
-	textContent       = "text/plain"
-	lastSequenceKey   = "_ls"
+	jsonContent  = "application/json"
+	protoContent = "application/transicator+protobuf"
+	textContent  = "text/plain"
+
 	defaultScopeField = "_apid_scope"
+
+	// internalScope is a scope we'll use to track sequences on delete. It
+	// should never show up in data that we get from clients.
+	internalScope = "__transicator_internal"
 )
 
 var scopeField = defaultScopeField

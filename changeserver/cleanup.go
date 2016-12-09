@@ -59,6 +59,23 @@ func (c *cleaner) performCleanup() {
 	cleanupAge := time.Now().Add(-c.maxAge)
 	log.Debugf("Cleaning up data records since before %v", cleanupAge)
 
+	// Get the current last sequence
+	_, _, lastSeq, err := c.s.db.Scan(nil, 0, 0, 0, nil)
+	if err != nil {
+		log.Errorf("Error after preparing for cleanup: %s", err)
+		return
+	}
+
+	// Always insert a dummy record before cleaning up. That way when the
+	// database is empty, we'll still have the last change number in there.
+	err = c.s.db.Put(internalScope, lastSeq.LSN, lastSeq.Index, nil)
+	if err != nil {
+		log.Errorf("Error after preparing for cleanup: %s", err)
+		return
+	}
+
+	// Now we can do the cleanup knowing that there will still be one record
+	// so we can keep track of the highest sequence that we processed.
 	cleanupCount, err := c.s.db.Purge(cleanupAge)
 
 	if err != nil {
