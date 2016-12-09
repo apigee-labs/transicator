@@ -19,9 +19,13 @@ import (
 	"fmt"
 	"time"
 
+	"encoding/json"
 	"github.com/apigee-labs/transicator/common"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"io"
+	"io/ioutil"
+	"net/http"
 )
 
 const (
@@ -29,9 +33,12 @@ const (
 	testInterval = 250 * time.Millisecond
 )
 
+var emptySequenceStr = common.Sequence{}.String()
+
 var _ = Describe("Changes API Tests", func() {
 	var lastTestSequence = time.Now().Unix()
 	lastChangeSequence := common.Sequence{}
+	veryFirstSequence := common.Sequence{}
 
 	It("Empty database", func() {
 		bod := executeGet(fmt.Sprintf(
@@ -39,6 +46,41 @@ var _ = Describe("Changes API Tests", func() {
 		cl, err := common.UnmarshalChangeList(bod)
 		Expect(err).Should(Succeed())
 		Expect(cl.Changes).Should(BeEmpty())
+		Expect(cl.FirstSequence).Should(Equal(emptySequenceStr))
+		Expect(cl.LastSequence).Should(Equal(emptySequenceStr))
+	})
+
+	It("First Change", func() {
+		lastTestSequence++
+		fmt.Fprintf(GinkgoWriter, "Inserting sequence %d\n", lastTestSequence)
+		_, err := insertStmt.Exec(lastTestSequence, "foo")
+		Expect(err).Should(Succeed())
+
+		Eventually(func() bool {
+			bod := executeGet(fmt.Sprintf(
+				"%s/changes?since=%s&scope=foo", baseURL, lastChangeSequence))
+			cl, err := common.UnmarshalChangeList(bod)
+			Expect(err).Should(Succeed())
+			if len(cl.Changes) == 0 {
+				return false
+			}
+			for _, c := range cl.Changes {
+				var newSeq int64
+				err = c.NewRow.Get("sequence", &newSeq)
+				Expect(err).Should(Succeed())
+				if newSeq == lastTestSequence {
+					Expect(c.Sequence).Should(Equal(c.GetSequence().String()))
+					lastChangeSequence = c.GetSequence()
+					veryFirstSequence = lastChangeSequence
+					Expect(cl.FirstSequence).Should(Equal(lastChangeSequence.String()))
+					Expect(cl.LastSequence).Should(Equal(lastChangeSequence.String()))
+					return true
+				}
+			}
+			fmt.Fprintf(GinkgoWriter, "Received %d changes last sequence = %s\n",
+				len(cl.Changes), cl.Changes[len(cl.Changes)-1].NewRow["sequence"].Value)
+			return false
+		}, testTimeout, testInterval).Should(BeTrue())
 	})
 
 	It("Different scope", func() {
@@ -69,37 +111,6 @@ var _ = Describe("Changes API Tests", func() {
 				len(cl.Changes), cl.Changes[len(cl.Changes)-1].NewRow["sequence"].Value)
 			return false
 		})
-
-	})
-
-	It("First Change", func() {
-		lastTestSequence++
-		fmt.Fprintf(GinkgoWriter, "Inserting sequence %d\n", lastTestSequence)
-		_, err := insertStmt.Exec(lastTestSequence, "foo")
-		Expect(err).Should(Succeed())
-
-		Eventually(func() bool {
-			bod := executeGet(fmt.Sprintf(
-				"%s/changes?since=%s&scope=foo", baseURL, lastChangeSequence))
-			cl, err := common.UnmarshalChangeList(bod)
-			Expect(err).Should(Succeed())
-			if len(cl.Changes) == 0 {
-				return false
-			}
-			for _, c := range cl.Changes {
-				var newSeq int64
-				err = c.NewRow.Get("sequence", &newSeq)
-				Expect(err).Should(Succeed())
-				if newSeq == lastTestSequence {
-					Expect(c.Sequence).Should(Equal(c.GetSequence().String()))
-					lastChangeSequence = c.GetSequence()
-					return true
-				}
-			}
-			fmt.Fprintf(GinkgoWriter, "Received %d changes last sequence = %s\n",
-				len(cl.Changes), cl.Changes[len(cl.Changes)-1].NewRow["sequence"].Value)
-			return false
-		}, testTimeout, testInterval).Should(BeTrue())
 	})
 
 	It("Next change", func() {
@@ -117,6 +128,7 @@ var _ = Describe("Changes API Tests", func() {
 			if compareSequence(cl, 0, lastTestSequence) {
 				lastChangeSequence = cl.Changes[0].GetSequence()
 				Expect(cl.LastSequence).Should(Equal(lastChangeSequence.String()))
+				Expect(cl.FirstSequence).Should(Equal(veryFirstSequence.String()))
 				return true
 			}
 			return false
@@ -229,6 +241,64 @@ var _ = Describe("Changes API Tests", func() {
 			"%s/changes?since=%s&scope=foo&limit=1", baseURL, origLastSequence))
 		Expect(len(cl.Changes)).Should(Equal(1))
 		Expect(compareSequence(cl, 0, lastTestSequence-3)).Should(BeTrue())
+	})
+
+	It("Last sequence inserted", func() {
+		for i := 0; i < 3; i++ {
+			lastTestSequence++
+			_, err := insertStmt.Exec(lastTestSequence, "foo")
+			Expect(err).Should(Succeed())
+			lastTestSequence++
+			_, err = insertStmt.Exec(lastTestSequence, "bar")
+			Expect(err).Should(Succeed())
+		}
+
+		origLastSequence := lastChangeSequence
+		var highestSequence string
+
+		Eventually(func() int {
+			cl := getChanges(fmt.Sprintf(
+				"%s/changes?since=%s&scope=bar", baseURL, origLastSequence))
+			if len(cl.Changes) == 3 {
+				lastChangeSequence = cl.Changes[2].GetSequence()
+				highestSequence = cl.LastSequence
+			}
+			return len(cl.Changes)
+		}).Should(Equal(3))
+
+		// Now we have six new records, alternating in scope
+		// Get them all and we should always get the same lastSequence
+		cl := getChanges(fmt.Sprintf(
+			"%s/changes?since=%s&scope=foo&scope=bar&limit=10", baseURL, origLastSequence))
+		Expect(len(cl.Changes)).Should(Equal(6))
+		Expect(cl.LastSequence).Should(Equal(highestSequence))
+
+		cl = getChanges(fmt.Sprintf(
+			"%s/changes?since=%s&scope=foo&limit=10", baseURL, origLastSequence))
+		Expect(len(cl.Changes)).Should(Equal(3))
+		Expect(cl.LastSequence).Should(Equal(highestSequence))
+
+		cl = getChanges(fmt.Sprintf(
+			"%s/changes?since=%s&scope=bar&limit=10", baseURL, origLastSequence))
+		Expect(len(cl.Changes)).Should(Equal(3))
+		Expect(cl.LastSequence).Should(Equal(highestSequence))
+
+		// But if we run into the limit, then it's important that we return
+		// only as far as we got with the query -- otherwise we'll drop stuff
+		cl = getChanges(fmt.Sprintf(
+			"%s/changes?since=%s&scope=foo&limit=2", baseURL, origLastSequence))
+		Expect(len(cl.Changes)).Should(Equal(2))
+		Expect(cl.LastSequence).Should(Equal(cl.Changes[1].Sequence))
+
+		cl = getChanges(fmt.Sprintf(
+			"%s/changes?since=%s&scope=bar&limit=2", baseURL, origLastSequence))
+		Expect(len(cl.Changes)).Should(Equal(2))
+		Expect(cl.LastSequence).Should(Equal(cl.Changes[1].Sequence))
+
+		cl = getChanges(fmt.Sprintf(
+			"%s/changes?since=%s&scope=foo&scope=bar&limit=5", baseURL, origLastSequence))
+		Expect(len(cl.Changes)).Should(Equal(5))
+		Expect(cl.LastSequence).Should(Equal(cl.Changes[4].Sequence))
 	})
 
 	It("Long polling empty", func() {
@@ -367,12 +437,23 @@ var _ = Describe("Changes API Tests", func() {
 			testServer.cleaner = nil
 		}()
 
+		// Get oldest sequence and ensure we can still use it in API calls
+		lc := getChanges(fmt.Sprintf(
+			"%s/changes?scope=clean", baseURL))
+		origFirstSequence := lc.FirstSequence
+		resp, err := http.Get(fmt.Sprintf(
+			"%s/changes?scope=clean&since=%s", baseURL, origFirstSequence))
+		Expect(err).Should(Succeed())
+		resp.Body.Close()
+		Expect(resp.StatusCode).Should(Equal(200))
+
+		// Insert a new record
 		lastTestSequence++
-		_, err := insertStmt.Exec(lastTestSequence, "clean")
+		_, err = insertStmt.Exec(lastTestSequence, "clean")
 		Expect(err).Should(Succeed())
 		var newLast common.Sequence
 
-		// Should still be there for five seconds...
+		// Should be visible well before five seconds is up
 		Eventually(func() int {
 			lc := getChanges(fmt.Sprintf(
 				"%s/changes?scope=clean", baseURL))
@@ -387,12 +468,33 @@ var _ = Describe("Changes API Tests", func() {
 			lastChangeSequence = newLast
 		}()
 
-		// And should be cleaned up within 10
+		// Still within five seconds, should start to get "old snapshot" error
+		Eventually(func() bool {
+			resp, err := http.Get(fmt.Sprintf(
+				"%s/changes?scope=clean&since=%s", baseURL, origFirstSequence))
+			Expect(err).Should(Succeed())
+			defer resp.Body.Close()
+			if resp.StatusCode == 400 {
+				verifyErrorCode(resp.Body, "SNAPSHOT_TOO_OLD")
+				return true
+			}
+			return false
+		}, 2*time.Second).Should(BeTrue())
+
+		// All records should be deleted before 10 seconds is up
 		Eventually(func() int {
 			lcc := getChanges(fmt.Sprintf(
 				"%s/changes?scope=clean", baseURL))
 			return len(lcc.Changes)
 		}, 10*time.Second, time.Second).Should(BeZero())
+
+		// Should actually have first and last be present at all times.
+		// test case where database is empty but snapshot still too old.
+		// TODO want the oldest to be here, not just the
+		lastCl := getChanges(fmt.Sprintf(
+			"%s/changes?scope=clean", baseURL))
+		Expect(lastCl.FirstSequence).Should(Equal(emptySequenceStr))
+		Expect(lastCl.LastSequence).Should(Equal(emptySequenceStr))
 	})
 })
 
@@ -412,4 +514,14 @@ func compareSequence(cl *common.ChangeList, index int, lts int64) bool {
 	Expect(err).Should(Succeed())
 	fmt.Fprintf(GinkgoWriter, "New seq = %d last = %d orig = %v\n", newSeq, lts, cl.Changes[index].NewRow["sequence"])
 	return newSeq == lts
+}
+
+func verifyErrorCode(in io.Reader, code string) {
+	bod, err := ioutil.ReadAll(in)
+	Expect(err).Should(Succeed())
+
+	msg := make(map[string]string)
+	err = json.Unmarshal(bod, &msg)
+	Expect(err).Should(Succeed())
+	Expect(msg["code"]).Should(Equal(code))
 }

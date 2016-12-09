@@ -31,6 +31,9 @@ const (
 	defaultLimit = 100
 )
 
+var emptySequence = common.Sequence{}
+var lowestPossibleSequence = common.MakeSequence(0, 1)
+
 func (s *server) initChangesAPI(prefix string, router *httprouter.Router) {
 	router.HandlerFunc("GET", prefix+"/changes", s.handleGetChanges)
 }
@@ -38,7 +41,7 @@ func (s *server) initChangesAPI(prefix string, router *httprouter.Router) {
 func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 	enc := goscaffold.SelectMediaType(req, []string{jsonContent, protoContent})
 	if enc == "" {
-		resp.WriteHeader(http.StatusUnsupportedMediaType)
+		sendAPIError(unsupportedFormat, "", resp, req)
 		return
 	}
 
@@ -46,13 +49,13 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 
 	limit, err := getIntParam(q, "limit", defaultLimit)
 	if err != nil {
-		sendError(resp, req, http.StatusBadRequest, "Invalid limit parameter")
+		sendAPIError(invalidParameter, "limit", resp, req)
 		return
 	}
 
 	block, err := getIntParam(q, "block", 0)
 	if err != nil {
-		sendError(resp, req, http.StatusBadRequest, "Invalid block parameter")
+		sendAPIError(invalidParameter, "block", resp, req)
 		return
 	}
 
@@ -65,11 +68,11 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 	var sinceSeq common.Sequence
 	since := q.Get("since")
 	if since == "" {
-		sinceSeq = common.Sequence{}
+		sinceSeq = emptySequence
 	} else {
 		sinceSeq, err = common.ParseSequence(since)
 		if err != nil {
-			sendError(resp, req, http.StatusBadRequest, fmt.Sprintf("Invalid since value %s", since))
+			sendAPIError(invalidParameter, "since", resp, req)
 			return
 		}
 	}
@@ -80,7 +83,7 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 		var snapshot *replication.Snapshot
 		snapshot, err = replication.MakeSnapshot(snapStr)
 		if err != nil {
-			sendError(resp, req, http.StatusBadRequest, fmt.Sprintf("Invalid snapshot %s", snapStr))
+			sendAPIError(invalidParameter, "snapshot", resp, req)
 			return
 		}
 		snapshotFilter = makeSnapshotFilter(snapshot)
@@ -89,15 +92,11 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 	// Need to advance past a single "since" value
 	sinceSeq.Index++
 
-	log.Debugf("Receiving changes: scopes = %v since = %s limit = %d block = %d",
-		scopes, sinceSeq, limit, block)
-	entries, firstSeq, lastSeq, err := s.db.Scan(
-		scopes, sinceSeq.LSN, sinceSeq.Index, limit, snapshotFilter)
-	if err != nil {
-		sendError(resp, req, http.StatusInternalServerError, err.Error())
+	firstSeq, lastSeq, entries, success :=
+		s.receiveChanges(scopes, sinceSeq, limit, snapshotFilter, resp, req)
+	if !success {
 		return
 	}
-	log.Debugf("Received %d changes", len(entries))
 
 	if len(entries) == 0 && block > 0 {
 		// Query -- which was consistent at the "snapshot" level -- didn't
@@ -107,15 +106,14 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 
 		log.Debugf("Blocking at %s for up to %d seconds", waitSeq, block)
 		newIndex := s.tracker.timedWait(waitSeq, time.Duration(block)*time.Second, scopes)
+
 		if newIndex.Compare(sinceSeq) > 0 {
-			entries, firstSeq, lastSeq, err = s.db.Scan(
-				scopes, sinceSeq.LSN, sinceSeq.Index, limit, snapshotFilter)
-			if err != nil {
-				sendError(resp, req, http.StatusInternalServerError, err.Error())
+			firstSeq, lastSeq, entries, success =
+				s.receiveChanges(scopes, sinceSeq, limit, snapshotFilter, resp, req)
+			if !success {
 				return
 			}
 		}
-		log.Debugf("Received %d changes after blocking", len(entries))
 	}
 
 	changeList := common.ChangeList{
@@ -126,12 +124,17 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 	for _, e := range entries {
 		change, err := decodeChangeProto(e)
 		if err != nil {
-			sendError(resp, req, http.StatusInternalServerError,
-				fmt.Sprintf("Invalid data in database: %s", err))
+			sendAPIError(serverError,
+				fmt.Sprintf("Invalid data in database: %s", err), resp, req)
 		}
 		// Database doesn't have value of "Sequence" in it
 		change.Sequence = change.GetSequence().String()
 		changeList.Changes = append(changeList.Changes, *change)
+	}
+
+	// Important to return an intermediate sequence if we ran up against the limit
+	if len(entries) == limit && limit > 0 {
+		changeList.LastSequence = changeList.Changes[len(entries)-1].Sequence
 	}
 
 	switch enc {
@@ -144,6 +147,35 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 	default:
 		panic("Got to an unsupported media type")
 	}
+}
+
+func (s *server) receiveChanges(
+	scopes []string, sinceSeq common.Sequence,
+	limit int, filter func([]byte) bool,
+	resp http.ResponseWriter, req *http.Request) (firstSeq, lastSeq common.Sequence, entries [][]byte, success bool) {
+
+	log.Debugf("Receiving changes: scopes = %v since = %s limit = %d",
+		scopes, sinceSeq, limit)
+
+	var err error
+	entries, firstSeq, lastSeq, err = s.db.Scan(
+		scopes, sinceSeq.LSN, sinceSeq.Index, limit, filter)
+
+	if err != nil {
+		sendAPIError(serverError, err.Error(), resp, req)
+		return
+	}
+	if sinceSeq.Compare(firstSeq) < 0 && sinceSeq.Compare(lowestPossibleSequence) > 0 {
+		// "since" parameter specified and too old. Need to return an error.
+		log.Debugf("since value of %s is too old compared to %s\n",
+			sinceSeq, firstSeq)
+		sendAPIError(snapshotOld, "", resp, req)
+		return
+	}
+
+	log.Debugf("Received %d changes", len(entries))
+	success = true
+	return
 }
 
 func makeSnapshotFilter(ss *replication.Snapshot) func([]byte) bool {

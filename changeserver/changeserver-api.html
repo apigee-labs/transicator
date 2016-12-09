@@ -3,7 +3,7 @@
   <head>
     <title>changeserver</title>
     <style type="text/css">
-      body { 
+      body {
 	font-family: Trebuchet MS, sans-serif;
 	font-size: 15px;
 	color: #444;
@@ -25,7 +25,6 @@ hr	{
 	border: 0;
 	color: #ddd;
 	background-color: #ddd;
-	display: none;
 }
 
 .app-desc {
@@ -176,11 +175,12 @@ font-style: italic;
   display: inline-block;
   text-decoration: none;
 }
+
     </style>
   </head>
   <body>
   <h1>changeserver</h1>
-    <div class="app-desc">Changeserver consumes changes from a Postgres replication scheme created by the \"transicator_output\" plugin and makes them available to consumers via an API. The API supports long polling so that a large number of consumers may be notified of changes.</div>
+    <div class="app-desc">Changeserver consumes changes from a Postgres replication scheme created by the "transicator_output" plugin and makes them available to consumers via an API. The API supports long polling so that a large number of consumers may be notified of changes.</div>
     <div class="app-desc">More information: <a href="http://www.apigee.com/">http://www.apigee.com/</a></div>
     <div class="app-desc">Contact Info: <a href="sales@apigee.com">sales@apigee.com</a></div>
     <div class="app-desc">Version: 0.0.1</div>
@@ -192,21 +192,23 @@ font-style: italic;
   <h2><a name="__Methods">Methods</a></h2>
   [ Jump to <a href="#__Models">Models</a> ]
 
-  <h2>Table of Contents </h2>
+  <h3>Table of Contents </h3>
   <div class="method-summary"></div>
-  <ol>
+  <h4><a href="#Default">Default</a></h4>
+  <ul>
   <li><a href="#changesGet"><code><span class="http-method">get</span> /changes</code></a></li>
   <li><a href="#healthGet"><code><span class="http-method">get</span> /health</code></a></li>
   <li><a href="#markdownGet"><code><span class="http-method">get</span> /markdown</code></a></li>
   <li><a href="#readyGet"><code><span class="http-method">get</span> /ready</code></a></li>
-  </ol>
+  </ul>
 
+  <h1><a name="Default">Default</a></h1>
   <div class="method"><a name="changesGet"/>
     <div class="method-path">
     <a class="up" href="#__Methods">Up</a>
     <pre class="get"><code class="huge"><span class="http-method">get</span> /changes</code></pre></div>
     <div class="method-summary"> (<span class="nickname">changesGet</span>)</div>
-    <div class="method-notes">Retrieve a list of changes. The query parameters may be used to restrict the number of changes that are retrieved or return only changes since a particular sequence. In addition, it is possible to block (aka \&quot;long poll\&quot;) until a new matching change is available. The result will be produced in JSON format unless the Accept header is used to select the protobuf format.</div>
+    <div class="method-notes">Retrieve a list of changes. The query parameters may be used to restrict the number of changes that are retrieved or return only changes since a particular sequence. In addition, it is possible to block (aka &quot;long poll&quot;) until a new matching change is available. The result will be produced in JSON format unless the Accept header is used to select the protobuf format.</div>
 
 
 
@@ -216,15 +218,15 @@ font-style: italic;
     <div class="field-items">
       <div class="param">scope (required)</div>
 
-      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; The scope limits the changes that are returned. It is extracted from a database column whenever a change is made. Every call to this API must contain at least one scope. Multiple \&quot;scope\&quot; parameters may also be used. if more than one \&quot;scope\&quot; is included, then the operation is treated as an \&quot;OR\&quot; of all the scopes, and the results are sorted by sequence regardless of scope. </div><div class="param">snapshot (optional)</div>
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; The scope limits the changes that are returned. It is extracted from a database column whenever a change is made. Every call to this API must contain at least one scope. Multiple &quot;scope&quot; parameters may also be used. if more than one &quot;scope&quot; is included, then the operation is treated as an &quot;OR&quot; of all the scopes, and the results are sorted by sequence regardless of scope. </div><div class="param">snapshot (optional)</div>
 
-      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; If specified, then this must be set to a \&quot;snapshot ID\&quot; from Postgres. This will be in the format \&quot;xmin:xmax:xip1,xip2,...xipN\&quot; and is normally returned by executing \&quot;select txid_current_snapshot()\&quot;. By including this parameter, the change list will never include any data that would be *visible* in the specified snapshot. So in other words, if the value of this parameter comes from a Postgres query executed during a transaction, then the change server will not return any database changes that were already in the snapshot. </div><div class="param">since (optional)</div>
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; If specified, then this must be set to a &quot;snapshot ID&quot; from Postgres. This will be in the format &quot;xmin:xmax:xip1,xip2,...xipN&quot; and is normally returned by executing &quot;select txid_current_snapshot()&quot;. By including this parameter, the change list will never include any data that would be *visible* in the specified snapshot. So in other words, if the value of this parameter comes from a Postgres query executed during a transaction, then the change server will not return any database changes that were already in the snapshot. </div><div class="param">since (optional)</div>
 
-      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; The value of \&quot;sequence\&quot; from a previous invocation of this API. If so specified, this API will only return changes that happened after the change with the specified sequence. Otherwise, this API will return changes since the beginning. </div><div class="param">limit (optional)</div>
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; The value of &quot;sequence&quot; from a previous invocation of this API. If so specified, this API will only return changes that happened after the change with the specified sequence. Otherwise, this API will return changes since the beginning. If this parameter is specified, but the specified sequence no longer exists in the database, then a 400 error and the error code &quot;SNAPSHOT_TOO_OLD&quot; will be returned. </div><div class="param">limit (optional)</div>
 
       <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; Limit the number of changes returned by a single API call. The default limit is 100. </div><div class="param">block (optional)</div>
 
-      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; If specified, this sets the number of seconds that the API call will block if there are no changes available since the \&quot;since\&quot; value for the set of specified scopes. In the event that there are no changes available when the API call is made, the API will block for the specified number of seconds until a matching change appears. If no changes appear in the specified number of seconds, then an empty change list will be returned. </div>
+      <div class="param-desc"><span class="param-type">Query Parameter</span> &mdash; If specified, this sets the number of seconds that the API call will block if there are no changes available since the &quot;since&quot; value for the set of specified scopes. In the event that there are no changes available when the API call is made, the API will block for the specified number of seconds until a matching change appears. If no changes appear in the specified number of seconds, then an empty change list will be returned. </div>
     </div>  <!-- field-items -->
 
 
@@ -266,6 +268,9 @@ font-style: italic;
     <h4 class="field-label">200</h4>
     Successful response
         <a href="#ChangeList">ChangeList</a>
+    <h4 class="field-label">400</h4>
+    Invalid input. Error &quot;code&quot; will tell why. a code of &quot;SNAPSHOT_TOO_OLD&quot; means that records dating back to the &quot;since&quot; parameter are not available.
+        <a href="#Error">Error</a>
   </div> <!-- method -->
   <hr/>
   <div class="method"><a name="healthGet"/>
@@ -273,7 +278,7 @@ font-style: italic;
     <a class="up" href="#__Methods">Up</a>
     <pre class="get"><code class="huge"><span class="http-method">get</span> /health</code></pre></div>
     <div class="method-summary"> (<span class="nickname">healthGet</span>)</div>
-    <div class="method-notes">Describes whether the server is \&quot;healthy.\&quot; When the server is not healthy, it is not able to process any requests, and should be killed and restarted. If the server was started with a management port enabled, this URL only resolves on that port.</div>
+    <div class="method-notes">Describes whether the server is &quot;healthy.&quot; When the server is not healthy, it is not able to process any requests, and should be killed and restarted. If the server was started with a management port enabled, this URL only resolves on that port.</div>
 
 
 
@@ -307,7 +312,7 @@ font-style: italic;
     <a class="up" href="#__Methods">Up</a>
     <pre class="get"><code class="huge"><span class="http-method">get</span> /markdown</code></pre></div>
     <div class="method-summary"> (<span class="nickname">markdownGet</span>)</div>
-    <div class="method-notes">Changes the state of the server to denote that it has been marked down. After this is called, the \&quot;/ready\&quot; path will return 503, and all other API calls except \&quot;/health\&quot; will also fail with 503. After this API call has been made, the server will delete its Postgres replication slot when it exits. Management software should call this URL before a planned shutdown to ensure cleanup of Postgres resources. If the server was started with a management port enabled, this URL only resolves on that port.</div>
+    <div class="method-notes">Changes the state of the server to denote that it has been marked down. After this is called, the &quot;/ready&quot; path will return 503, and all other API calls except &quot;/health&quot; will also fail with 503. After this API call has been made, the server will delete its Postgres replication slot when it exits. Management software should call this URL before a planned shutdown to ensure cleanup of Postgres resources. If the server was started with a management port enabled, this URL only resolves on that port.</div>
 
 
 
@@ -331,7 +336,7 @@ font-style: italic;
     <a class="up" href="#__Methods">Up</a>
     <pre class="get"><code class="huge"><span class="http-method">get</span> /ready</code></pre></div>
     <div class="method-summary"> (<span class="nickname">readyGet</span>)</div>
-    <div class="method-notes">Describes whether the server is \&quot;ready.\&quot; When the server is not ready, it is not able to process any requests. Load balancers should not route calls to a server that is not ready. The server may not be ready because it is still starting up, or because it is shutting down. It is possible for a server to be \&quot;ready\&quot; but still \&quot;healthy.\&quot; If the server was started with a management port enabled, this URL only resolves on that port.</div>
+    <div class="method-notes">Describes whether the server is &quot;ready.&quot; When the server is not ready, it is not able to process any requests. Load balancers should not route calls to a server that is not ready. The server may not be ready because it is still starting up, or because it is shutting down. It is possible for a server to be &quot;ready&quot; but still &quot;healthy.&quot; If the server was started with a management port enabled, this URL only resolves on that port.</div>
 
 
 
@@ -365,30 +370,33 @@ font-style: italic;
   <h2><a name="__Models">Models</a></h2>
   [ Jump to <a href="#__Methods">Methods</a> ]
 
-  <h2>Table of Contents</h2>
+  <h3>Table of Contents</h3>
   <ol>
     <li><a href="#Change"><code>Change</code></a></li>
     <li><a href="#ChangeList"><code>ChangeList</code></a></li>
+    <li><a href="#Error"><code>Error</code></a></li>
     <li><a href="#Status"><code>Status</code></a></li>
     <li><a href="#Value"><code>Value</code></a></li>
   </ol>
 
   <div class="model">
-    <h3 class="field-label"><a name="Change">Change</a> <a class="up" href="#__Models">Up</a></h3>
+    <h3 class="field-label"><a name="Change">Change - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'>A single change.</div>
     <div class="field-items">
-      <div class="param">operation (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span> The type of change. \&quot;1\&quot; denotes an insert. \&quot;2\&quot; denotes an update. \&quot;3\&quot; denotes a delete. </div>
+      <div class="param">operation (optional)</div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span> The type of change. &quot;1&quot; denotes an insert. &quot;2&quot; denotes an update. &quot;3&quot; denotes a delete. </div>
 <div class="param">table (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The name of the database table that was changed. </div>
 <div class="param">sequence (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The unique, ordered identifier of the change in the list of changes. </div>
 <div class="param">commitSequence (optional)</div><div class="param-desc"><span class="param-type"><a href="#long">Long</a></span> The order of this transaction&#39;s commit in the list of changes. format: int64</div>
 <div class="param">changeSequence (optional)</div><div class="param-desc"><span class="param-type"><a href="#long">Long</a></span> The order of this change in the list of changes. Since transactions commit in different orders, changes are not necessarily shown in this order format: int64</div>
 <div class="param">commitIndex (optional)</div><div class="param-desc"><span class="param-type"><a href="#long">Long</a></span> The order of this change in the list of changes for a particular transaction. When multiple changes are made in a transaction, they have the same commitSequence but different values of commitIndex. format: int64</div>
 <div class="param">txid (optional)</div><div class="param-desc"><span class="param-type"><a href="#long">Long</a></span> The database transaction ID for this change format: int64</div>
-<div class="param">newRow (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">Object</a></span> The new value of the row for an insert or update operation. The fields in the object are named after the fields in the row, and each field&#39;s value is a \&quot;Value\&quot; object. </div>
+<div class="param">newRow (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">Object</a></span> The new value of the row for an insert or update operation. The fields in the object are named after the fields in the row, and each field&#39;s value is a &quot;Value&quot; object. </div>
 <div class="param">oldRow (optional)</div><div class="param-desc"><span class="param-type"><a href="#object">Object</a></span> The old value of the row for a delete or update operation. </div>
     </div>  <!-- field-items -->
   </div>
   <div class="model">
-    <h3 class="field-label"><a name="ChangeList">ChangeList</a> <a class="up" href="#__Models">Up</a></h3>
+    <h3 class="field-label"><a name="ChangeList">ChangeList - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'>A set of changes.</div>
     <div class="field-items">
       <div class="param">firstSequence (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The oldest sequence present in the databse </div>
 <div class="param">lastSequence (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The newest sequence present in the databse </div>
@@ -396,13 +404,24 @@ font-style: italic;
     </div>  <!-- field-items -->
   </div>
   <div class="model">
-    <h3 class="field-label"><a name="Status">Status</a> <a class="up" href="#__Models">Up</a></h3>
+    <h3 class="field-label"><a name="Error">Error - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'>An error in processing by the server.</div>
+    <div class="field-items">
+      <div class="param">code </div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> A short symbolic description of the error </div>
+<div class="param">error </div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> A short description of the error </div>
+<div class="param">description (optional)</div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> A longer description of the error </div>
+    </div>  <!-- field-items -->
+  </div>
+  <div class="model">
+    <h3 class="field-label"><a name="Status">Status - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'>A response sent by a server that has been marked down.</div>
     <div class="field-items">
       <div class="param">reason </div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The reason that a server has been marked down. Suitable for writing in to logs and diagnostic errors. </div>
     </div>  <!-- field-items -->
   </div>
   <div class="model">
-    <h3 class="field-label"><a name="Value">Value</a> <a class="up" href="#__Models">Up</a></h3>
+    <h3 class="field-label"><a name="Value">Value - </a> <a class="up" href="#__Models">Up</a></h3>
+    <div class='model-description'>The value of a row in the &quot;newRow&quot; or &quot;oldRow&quot; property of a change.</div>
     <div class="field-items">
       <div class="param">value </div><div class="param-desc"><span class="param-type"><a href="#string">String</a></span> The row value in string form </div>
 <div class="param">type </div><div class="param-desc"><span class="param-type"><a href="#integer">Integer</a></span> The Postgres numeric type of the field </div>

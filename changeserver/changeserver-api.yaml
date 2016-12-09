@@ -63,7 +63,10 @@ paths:
             this API. If so specified, this API will only return changes
             that happened after the change with the specified sequence.
             Otherwise, this API will return changes since the
-            beginning.
+            beginning. If this parameter is specified, but the specified
+            sequence no longer exists in the database, then a 400
+            error and the error code "SNAPSHOT_TOO_OLD" will be
+            returned.
           required: false
           type: string
         - name: limit
@@ -92,6 +95,12 @@ paths:
           description: Successful response
           schema:
             $ref: '#/definitions/ChangeList'
+        400:
+          description: Invalid input. Error "code" will tell why.
+            a code of "SNAPSHOT_TOO_OLD" means that records dating
+            back to the "since" parameter are not available.
+          schema:
+            $ref: '#/definitions/Error'
             
   /health:
     get:
@@ -264,3 +273,20 @@ definitions:
         description:
           If the server has been marked down, a reason why.
           One of "Unhealtly" or "NotReady".
+          
+  Error:
+    description: An error in processing by the server.
+    required:
+      - code
+      - error
+    properties:
+      code:
+        description: A short symbolic description of the error
+        type: string
+      error:
+        description: A short description of the error
+        type: string
+      description:
+        description: A longer description of the error
+        type: string
+        
