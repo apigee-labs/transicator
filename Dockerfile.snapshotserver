@@ -8,7 +8,7 @@
 #
 # docker run --rm -t snapshotserver -u postgres://user:pass@host/databasename?ssl=false
 
-FROM thirtyx/go-leveldb:1.7.1
+FROM golang:1.7.3-alpine
 
 COPY . /go/src/github.com/apigee-labs/transicator
 

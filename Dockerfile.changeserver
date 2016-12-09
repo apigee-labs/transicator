@@ -16,9 +16,12 @@
 #
 # docker run --rm -t changeserver -s test -u postgres://user:pass@host/databasename?ssl=false
 
-FROM thirtyx/go-rocksdb:v1.7.1
+FROM golang:1.7.3-alpine
 
 COPY . /go/src/github.com/apigee-labs/transicator
+
+RUN \
+  apk add --no-cache gcc linux-headers musl-dev
 
 RUN \
     (cd /go/src/github.com/apigee-labs/transicator/changeserver; go build -o /changeserver) \

@@ -28,6 +28,6 @@ clean:
 	rm -f bin/snapshotserver
 
 docker:
-	make -C ./changeserver docker
-	make -C ./snapshotserver docker
-	./buildpostgresdocker.sh
+	docker build -f pgoutput/Dockerfile ./pgoutput/ -t apigeelabs/transicator-postgres
+	docker build -f Dockerfile.changeserver . -t apigeelabs/transicator-changeserver
+	docker build -f Dockerfile.snapshotserver . -t apigeelabs/transicator-snapshot
