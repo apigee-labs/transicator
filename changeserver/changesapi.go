@@ -56,10 +56,9 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	scopes := q["scope"]
-	if len(scopes) == 0 {
-		// If no scope specified, replace with the empty scope
-		scopes = []string{""}
+	selectors := q["change_selector"]
+	if len(selectors) == 0 {
+		selectors = []string{""}
 	}
 
 	var sinceSeq common.Sequence
@@ -89,10 +88,10 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 	// Need to advance past a single "since" value
 	sinceSeq.Index++
 
-	log.Debugf("Receiving changes: scopes = %v since = %s limit = %d block = %d",
-		scopes, sinceSeq, limit, block)
+	log.Debugf("Receiving changes: selectors = %v since = %s limit = %d block = %d",
+		selectors, sinceSeq, limit, block)
 	entries, firstSeq, lastSeq, err := s.db.Scan(
-		scopes, sinceSeq.LSN, sinceSeq.Index, limit, snapshotFilter)
+		selectors, sinceSeq.LSN, sinceSeq.Index, limit, snapshotFilter)
 	if err != nil {
 		sendError(resp, req, http.StatusInternalServerError, err.Error())
 		return
@@ -106,10 +105,10 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 		waitSeq.Index++
 
 		log.Debugf("Blocking at %s for up to %d seconds", waitSeq, block)
-		newIndex := s.tracker.timedWait(waitSeq, time.Duration(block)*time.Second, scopes)
+		newIndex := s.tracker.timedWait(waitSeq, time.Duration(block)*time.Second, selectors)
 		if newIndex.Compare(sinceSeq) > 0 {
 			entries, firstSeq, lastSeq, err = s.db.Scan(
-				scopes, sinceSeq.LSN, sinceSeq.Index, limit, snapshotFilter)
+				selectors, sinceSeq.LSN, sinceSeq.Index, limit, snapshotFilter)
 			if err != nil {
 				sendError(resp, req, http.StatusInternalServerError, err.Error())
 				return

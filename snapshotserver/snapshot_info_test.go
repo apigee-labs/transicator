@@ -134,8 +134,8 @@ var allTables = []string{
 	"public.app",
 	"public.developer",
 	"public.snapshot_test",
-	"public.apid_config_scope",
-	"public.apid_config",
+	"public.DATA_SCOPE",
+	"public.APID_CLUSTER",
 	"transicator_tests.schema_table",
 }
 
@@ -153,19 +153,19 @@ const testTableSQL = `
     double float8,
     date date,
     time time with time zone,
-    _apid_scope varchar(255),
+    _change_selector varchar(255),
     timestamp timestamp with time zone,
     timestampp timestamp
   );
-  CREATE TABLE DEVELOPER (
+  CREATE TABLE public.DEVELOPER (
 	org varchar(255),
 	id varchar(255),
 	username varchar(255),
 	firstname varchar(255),
 	created_at integer,
 	created_by varchar(255),
- 	_apid_scope varchar(255),
-	PRIMARY KEY (id, _apid_scope)
+ 	_change_selector varchar(255),
+	PRIMARY KEY (id, _change_selector)
 );
 alter table public.developer replica identity full;
   CREATE TABLE public.APP (
@@ -176,12 +176,12 @@ alter table public.developer replica identity full;
 	name varchar(255),
 	created_at integer,
 	created_by varchar(255),
- 	_apid_scope varchar(255),
-	PRIMARY KEY (id, _apid_scope)
+ 	_change_selector varchar(255),
+	PRIMARY KEY (id, _change_selector)
 );
 alter table public.app replica identity full;
 
-CREATE TABLE public.apid_config (
+CREATE TABLE public.APID_CLUSTER (
     id character varying(36) NOT NULL,
     name character varying(100) NOT NULL,
     description character varying(255),
@@ -190,29 +190,29 @@ CREATE TABLE public.apid_config (
     created_by character varying(100),
     updated timestamp without time zone,
     updated_by character varying(100),
-    CONSTRAINT apid_config_pkey PRIMARY KEY (id)
+    CONSTRAINT APID_CLUSTER_pkey PRIMARY KEY (id)
 );
-alter table public.apid_config replica identity full;
+alter table public.APID_CLUSTER replica identity full;
 
-CREATE TABLE public.apid_config_scope (
+CREATE TABLE public.DATA_SCOPE (
     id character varying(36) NOT NULL,
-    apid_config_id character varying(36) NOT NULL,
+    APID_CLUSTER_id character varying(36) NOT NULL,
     scope character varying(100) NOT NULL,
     created timestamp without time zone,
     created_by character varying(100),
     updated timestamp without time zone,
     updated_by character varying(100),
-    CONSTRAINT apid_config_scope_pkey PRIMARY KEY (id),
-    CONSTRAINT apid_config_scope_apid_config_id_fk FOREIGN KEY (apid_config_id)
-          REFERENCES apid_config (id)
+    CONSTRAINT DATA_SCOPE_pkey PRIMARY KEY (id),
+    CONSTRAINT DATA_SCOPE_APID_CLUSTER_id_fk FOREIGN KEY (APID_CLUSTER_id)
+          REFERENCES APID_CLUSTER (id)
           ON UPDATE NO ACTION ON DELETE NO ACTION
 );
-alter table public.apid_config_scope replica identity full;
+alter table public.DATA_SCOPE replica identity full;
 
 CREATE TABLE transicator_tests.schema_table (
   id character varying primary key,
 	created_at integer,
-	_apid_scope character varying
+	_change_selector character varying
 );
 alter table transicator_tests.schema_table replica identity full;
 `
@@ -232,8 +232,8 @@ var _ = Describe("Taking a snapshot", func() {
 		"public.app":                     true,
 		"public.developer":               true,
 		"public.snapshot_test":           true,
-		"public.apid_config_scope":       true,
-		"public.apid_config":             true,
+		"public.DATA_SCOPE":       true,
+		"public.APID_CLUSTER":             true,
 		"transicator_tests.schema_table": true,
 	}
 
@@ -248,18 +248,18 @@ var _ = Describe("Taking a snapshot", func() {
 	Context("Insert Tables (App & Developer), Get JSON data for ONE scope", func() {
 		It("Insert with single scope, retrieve single scope data", func() {
 
-			keys := []string{"org", "id", "username", "created_at", "_apid_scope",
+			keys := []string{"org", "id", "username", "created_at", "_change_selector",
 				"dev_id", "display_name", "created_by", "created_at",
 				"firstname", "name"}
 
 			_, err := db.Exec(`
-				insert into APP (org, id, dev_id, display_name, created_at, _apid_scope)
+				insert into APP (org, id, dev_id, display_name, created_at, _change_selector)
 				values
 				('Pepsi', 'aaa-bbb-ccc', 'xxx-yyy-zzz', 'Oracle', 9859348, 'pepsi__dev')
 				`)
 			Expect(err).Should(Succeed())
 			_, err = db.Exec(`
-				insert into transicator_tests.schema_table (id, created_at, _apid_scope)
+				insert into transicator_tests.schema_table (id, created_at, _change_selector)
 			 values ('aaa-bbb-ccc', 9859348, 'pepsi__dev')
 			`)
 			Expect(err).Should(Succeed())
@@ -350,18 +350,18 @@ var _ = Describe("Taking a snapshot", func() {
 
 	Context("Insert Tables (App & Developer), Get JSON data for Multi scopes", func() {
 		It("Insert with multiple scopes, retrieve multiple scopes data", func() {
-			keys := []string{"org", "id", "username", "created_at", "_apid_scope", "dev_id", "display_name", "created_by", "created_at", "firstname", "name"}
+			keys := []string{"org", "id", "username", "created_at", "_change_selector", "dev_id", "display_name", "created_by", "created_at", "firstname", "name"}
 			idvals := []string{"xxx-yyy-zzz", "xxy-yyy-zzz", "xxz-yyy-zzz", "aaa-bbb-ccc"}
 
 			tx, err := db.Begin()
 			Expect(err).Should(Succeed())
-			_, err = tx.Exec("insert into DEVELOPER (org, id, username, created_at, _apid_scope) values ('Pepsi', 'xxx-yyy-zzz', 'sundar', 3231231, 'pepsi__dev')")
+			_, err = tx.Exec("insert into DEVELOPER (org, id, username, created_at, _change_selector) values ('Pepsi', 'xxx-yyy-zzz', 'sundar', 3231231, 'pepsi__dev')")
 			Expect(err).Should(Succeed())
-			_, err = tx.Exec("insert into DEVELOPER (org, id, username, created_at, _apid_scope) values ('Pepsi', 'xxy-yyy-zzz', 'sundar', 3221231, 'pepsi__dev')")
+			_, err = tx.Exec("insert into DEVELOPER (org, id, username, created_at, _change_selector) values ('Pepsi', 'xxy-yyy-zzz', 'sundar', 3221231, 'pepsi__dev')")
 			Expect(err).Should(Succeed())
-			_, err = tx.Exec("insert into DEVELOPER (org, id, username, created_at, _apid_scope) values ('Pepsi', 'xxz-yyy-zzz', 'sundar', 3231231, 'pepsi__test')")
+			_, err = tx.Exec("insert into DEVELOPER (org, id, username, created_at, _change_selector) values ('Pepsi', 'xxz-yyy-zzz', 'sundar', 3231231, 'pepsi__test')")
 			Expect(err).Should(Succeed())
-			_, err = tx.Exec("insert into APP (org, id, dev_id, display_name, created_at, _apid_scope) values ('Pepsi', 'aaa-bbb-ccc', 'xxx-yyy-zzz', 'Oracle', 9859348, 'pepsi__dev')")
+			_, err = tx.Exec("insert into APP (org, id, dev_id, display_name, created_at, _change_selector) values ('Pepsi', 'aaa-bbb-ccc', 'xxx-yyy-zzz', 'Oracle', 9859348, 'pepsi__dev')")
 			Expect(err).Should(Succeed())
 			err = tx.Commit()
 			Expect(err).Should(Succeed())
@@ -403,24 +403,24 @@ var _ = Describe("Taking a snapshot", func() {
 			}
 		})
 	})
-	Context("Insert Tables (apid_config and apid_config_scope), Get JSON data for apidconfigId", func() {
+	Context("Insert Tables (APID_CLUSTER and DATA_SCOPE), Get JSON data for apidconfigId", func() {
 		It("Insert apidconfig, scopes, and retrieve based on apiconfigid", func() {
-			keys := []string{"id", "name", "umbrella_org_app_name", "scope", "apid_config_scope_pkey"}
+			keys := []string{"id", "name", "umbrella_org_app_name", "scope", "DATA_SCOPE_pkey"}
 			idvals := []string{"111-222-333", "222-333-444", "aaa-bbb-ccc"}
 
 			tx, err := db.Begin()
 			Expect(err).Should(Succeed())
-			_, err = tx.Exec("insert into APID_CONFIG (id, name, umbrella_org_app_name) values ('aaa-bbb-ccc', 'ConfigId1', 'pepsi');")
+			_, err = tx.Exec("insert into APID_CLUSTER (id, name, umbrella_org_app_name) values ('aaa-bbb-ccc', 'ConfigId1', 'pepsi');")
 			Expect(err).Should(Succeed())
-			_, err = tx.Exec("insert into APID_CONFIG_SCOPE (id, apid_config_id, scope) values ('111-222-333','aaa-bbb-ccc', 'cokescope1');")
+			_, err = tx.Exec("insert into DATA_SCOPE (id, APID_CLUSTER_id, scope) values ('111-222-333','aaa-bbb-ccc', 'cokescope1');")
 			Expect(err).Should(Succeed())
-			_, err = tx.Exec("insert into APID_CONFIG_SCOPE (id, apid_config_id, scope) values ('222-333-444','aaa-bbb-ccc', 'cokescope2');")
+			_, err = tx.Exec("insert into DATA_SCOPE (id, APID_CLUSTER_id, scope) values ('222-333-444','aaa-bbb-ccc', 'cokescope2');")
 			Expect(err).Should(Succeed())
-			_, err = tx.Exec("insert into APID_CONFIG (id, name, umbrella_org_app_name) values ('aaa-bbb-ddd', 'ConfigId2', 'pepsi');")
+			_, err = tx.Exec("insert into APID_CLUSTER (id, name, umbrella_org_app_name) values ('aaa-bbb-ddd', 'ConfigId2', 'pepsi');")
 			Expect(err).Should(Succeed())
-			_, err = tx.Exec("insert into APID_CONFIG_SCOPE (id, apid_config_id, scope) values ('111-222-555','aaa-bbb-ddd', 'pepsiscope1');")
+			_, err = tx.Exec("insert into DATA_SCOPE (id, APID_CLUSTER_id, scope) values ('111-222-555','aaa-bbb-ddd', 'pepsiscope1');")
 			Expect(err).Should(Succeed())
-			_, err = tx.Exec("insert into APID_CONFIG_SCOPE (id, apid_config_id, scope) values ('222-333-666','aaa-bbb-ddd', 'pespsiscope2');")
+			_, err = tx.Exec("insert into DATA_SCOPE (id, APID_CLUSTER_id, scope) values ('222-333-666','aaa-bbb-ddd', 'pespsiscope2');")
 			Expect(err).Should(Succeed())
 			err = tx.Commit()
 			Expect(err).Should(Succeed())
@@ -474,7 +474,7 @@ var _ = Describe("Taking a snapshot", func() {
 				}
 			}
 
-			_, err := db.Exec("insert into snapshot_test (id, _apid_scope) values ('one', 'foo')")
+			_, err := db.Exec("insert into snapshot_test (id, _change_selector) values ('one', 'foo')")
 			Expect(err).Should(Succeed())
 
 			buf := &bytes.Buffer{}
@@ -526,7 +526,7 @@ var _ = Describe("Taking a snapshot", func() {
 			}
 
 			_, err := db.Exec(`
-				insert into snapshot_test (id, _apid_scope, bool, int, double, timestamp)
+				insert into snapshot_test (id, _change_selector, bool, int, double, timestamp)
 				values ('one', 'foo', true, 123, 3.14, now())
 			`)
 			Expect(err).Should(Succeed())

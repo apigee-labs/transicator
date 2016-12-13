@@ -35,10 +35,10 @@ const (
 	protoContent      = "application/transicator+protobuf"
 	textContent       = "text/plain"
 	lastSequenceKey   = "_ls"
-	defaultScopeField = "_apid_scope"
+	defaultSelectorColumn = "_change_selector"
 )
 
-var scopeField = defaultScopeField
+var selectorColumn = defaultSelectorColumn
 
 type server struct {
 	db          storage.DB

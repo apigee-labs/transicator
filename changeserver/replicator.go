@@ -65,15 +65,15 @@ func (s *server) handleChange(c *common.Change, firstChange common.Sequence) com
 	changeSeq := c.GetSequence()
 
 	if changeSeq.Compare(firstChange) > 0 {
-		scope := getScope(c)
-		log.Debugf("Received change %d for scope %s", c.ChangeSequence, scope)
+		selector := getSelector(c)
+		log.Debugf("Received change %d for selector %s", c.ChangeSequence, selector)
 		if c.Timestamp == 0 {
 			c.Timestamp = time.Now().Unix()
 		}
 		dataBuf := encodeChangeProto(c)
 		s.db.Put(
-			scope, c.CommitSequence, c.CommitIndex, dataBuf)
-		s.tracker.update(changeSeq, scope)
+			selector, c.CommitSequence, c.CommitIndex, dataBuf)
+		s.tracker.update(changeSeq, selector)
 
 	} else {
 		log.Debugf("Ignoring change %s which we already processed", changeSeq)
@@ -81,13 +81,13 @@ func (s *server) handleChange(c *common.Change, firstChange common.Sequence) com
 	return changeSeq
 }
 
-func getScope(c *common.Change) string {
-	var scope string
+func getSelector(c *common.Change) string {
+	var selector string
 	if c.NewRow != nil {
-		c.NewRow.Get(scopeField, &scope)
+		c.NewRow.Get(selectorColumn, &selector)
 	}
 	if c.OldRow != nil {
-		c.OldRow.Get(scopeField, &scope)
+		c.OldRow.Get(selectorColumn, &selector)
 	}
-	return scope
+	return selector
 }

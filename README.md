@@ -65,7 +65,7 @@ A scope is simply a unique identifier for a particular set of records in the
 database.
 
 In order for transicator to work, we need to identify records by scope. We do
-this by adding a "text" column named "_apid_scope" to every table that we
+this by adding a "text" column named "_change_selector" to every table that we
 wish to replicate using transicator.
 
 # API Specifications:
@@ -104,7 +104,7 @@ Now, start a snapshot server running on port 9001:
 
 You can test quickly -- this API call should return "303 See Other":
 
-    curl -v http://localhost:9001/snapshots?scope=foo
+    curl -v http://localhost:9001/snapshots?change_selector=foo
 
 Finally, start a change server running on port 9000:
 
@@ -120,8 +120,8 @@ This API call will tell you that the database is empty:
 Now that the servers are running, you can test the API.
 
 To get started, imagine that we have a database that contains some tables
-that have an _apid_scope column, and that there are some rows in those tables
-that have the value "foo" for _apid_scope. For instance, let's create a table
+that have an _change_selector column, and that there are some rows in those tables
+that have the value "foo" for _change_selector. For instance, let's create a table
 and insert some values:
 
 ````
@@ -129,7 +129,7 @@ psql -W -h localhost postgres postgres
 postgres=# create table test
     (id varchar primary key,
     val integer,
-    _apid_scope varchar);
+    _change_selector varchar);
 CREATE TABLE
 postgres=# alter table test replica identity full;
 ALTER TABLE
@@ -146,15 +146,15 @@ INSERT 0 1
 We can now get a snapshot in JSON format using the snapshot server:
 
 ````
-$ curl -H "Accept: application/json" -L http://localhost:9001/snapshots?scope=foo
+$ curl -H "Accept: application/json" -L http://localhost:9001/snapshots?change_selector=foo
 
 {"snapshotInfo":"229444:229444:","timestamp":"2016-10-13T17:42:12.171306-07:00",
 "tables":[{"name":"public.snapshot_test","rows":[]},{"name":"scope","rows":[
-{"_apid_scope":{"value":"foo","type":1043},"val":{"value":"bar","type":1043}}]},
+{"_change_selector":{"value":"foo","type":1043},"val":{"value":"bar","type":1043}}]},
 {"name":"public.developer","rows":[]},{"name":"app","rows":[]},
-{"name":"public.test","rows":[{"_apid_scope":{"value":"foo","type":1043},
+{"name":"public.test","rows":[{"_change_selector":{"value":"foo","type":1043},
 "id":{"value":"one","type":1043},"val":{"value":"1","type":23}},
-{"_apid_scope":{"value":"foo","type":1043},"id":{"value":"three","type":1043},
+{"_change_selector":{"value":"foo","type":1043},"id":{"value":"three","type":1043},
 "val":{"value":"3","type":23}}]}]}
 ````
 
@@ -175,7 +175,7 @@ Postgres transactions were visible when the snapshot was created.
 At this point, using the changeserver, a client may issue the following
 API call:
 
-    curl -H "Accept: application/json" "http://localhost:9000/changes?snapshot=229444:229444:&scope=foo&block=10"
+    curl -H "Accept: application/json" "http://localhost:9000/changes?snapshot=229444:229444:&change_selector=foo&block=10"
 
 This call asks for all the changes for the scope "foo" starting from the first
 change that was not visible in the sequence. If no changes appear for 10 seconds,
@@ -195,14 +195,14 @@ Once the first set of changes has been retrieved, the "lastSequence" parameter
 tells us where in the change stream we left off. We can now use this
 in another API call to wait for more changes:
 
-    curl -H "Accept: application/json" "http://changeserver/changes?since=0.1390d838.0&scope=foo&block=10"
+    curl -H "Accept: application/json" "http://changeserver/changes?since=0.1390d838.0&change_selector=foo&block=10"
 
 This call won't result in any changes either but it will return us another sequence
 if anything changed in the database.
 
 Let's try again (with a longer timeout this time):
 
-    curl -H "Accept: application/json" "http://changeserver/changes?since=0.1390d838.0&scope=foo&block=60"
+    curl -H "Accept: application/json" "http://changeserver/changes?since=0.1390d838.0&change_selector=foo&block=60"
 
 and while we're waiting, let's use another window to insert something to the database:
 
@@ -228,7 +228,7 @@ should come back from the API call.
       "commitIndex": 0,
       "txid": 229444,
       "newRow": {
-        "_apid_scope": {
+        "_change_selector": {
           "value": "foo",
           "type": 1043
         },
@@ -254,7 +254,7 @@ when the transactions commit. Rolled back transactions will never appear.
 
 For instance:
 
-    curl -H "Accept: application/json" "http://localhost:9000/changes?scope=foo&bock=60&since=0.1392ed18.0"
+    curl -H "Accept: application/json" "http://localhost:9000/changes?change_selector=foo&bock=60&since=0.1392ed18.0"
 
 and then...
 
@@ -285,7 +285,7 @@ Should result in:
       "commitIndex": 0,
       "txid": 229449,
       "newRow": {
-        "_apid_scope": {
+        "_change_selector": {
           "value": "foo",
           "type": 1043
         },
@@ -299,7 +299,7 @@ Should result in:
         }
       },
       "oldRow": {
-        "_apid_scope": {
+        "_change_selector": {
           "value": "foo",
           "type": 1043
         },
@@ -333,7 +333,7 @@ and then another call should immediately give us:
       "commitIndex": 1,
       "txid": 229449,
       "oldRow": {
-        "_apid_scope": {
+        "_change_selector": {
           "value": "foo",
           "type": 1043
         },
@@ -360,7 +360,7 @@ right away.)
 If, in the example above, no information was delivered on the "delete"
 or "update" operations, it may be the replication settings for Postgres.
 By default, Postgres only delivers the primary key on a deleted or updated
-row, and that means that the change server does not see the "_apid_scope"
+row, and that means that the change server does not see the "_change_selector"
 column.
 
 The way to fix this is to change the table settings in Postgres so that
