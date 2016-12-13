@@ -35,7 +35,7 @@ var _ = Describe("Changes API Tests", func() {
 
 	It("Empty database", func() {
 		bod := executeGet(fmt.Sprintf(
-			"%s/changes?change_selector=foo", baseURL))
+			"%s/changes?scope=foo", baseURL))
 		cl, err := common.UnmarshalChangeList(bod)
 		Expect(err).Should(Succeed())
 		Expect(cl.Changes).Should(BeEmpty())
@@ -51,7 +51,7 @@ var _ = Describe("Changes API Tests", func() {
 
 		Eventually(func() bool {
 			bod := executeGet(fmt.Sprintf(
-				"%s/changes?since=%s&change_selector=boop", baseURL, lastChangeSequence))
+				"%s/changes?since=%s&scope=boop", baseURL, lastChangeSequence))
 			cl, err := common.UnmarshalChangeList(bod)
 			Expect(err).Should(Succeed())
 			if len(cl.Changes) == 0 {
@@ -80,7 +80,7 @@ var _ = Describe("Changes API Tests", func() {
 
 		Eventually(func() bool {
 			bod := executeGet(fmt.Sprintf(
-				"%s/changes?since=%s&change_selector=foo", baseURL, lastChangeSequence))
+				"%s/changes?since=%s&scope=foo", baseURL, lastChangeSequence))
 			cl, err := common.UnmarshalChangeList(bod)
 			Expect(err).Should(Succeed())
 			if len(cl.Changes) == 0 {
@@ -110,7 +110,7 @@ var _ = Describe("Changes API Tests", func() {
 
 		Eventually(func() bool {
 			cl := getChanges(fmt.Sprintf(
-				"%s/changes?since=%s&change_selector=foo", baseURL, lastChangeSequence))
+				"%s/changes?since=%s&scope=foo", baseURL, lastChangeSequence))
 			if len(cl.Changes) < 1 {
 				return false
 			}
@@ -149,7 +149,7 @@ var _ = Describe("Changes API Tests", func() {
 		// Without snapshot ID, should get two changes
 		Eventually(func() bool {
 			cl := getChanges(fmt.Sprintf(
-				"%s/changes?since=%s&change_selector=foo", baseURL, lastChangeSequence))
+				"%s/changes?since=%s&scope=foo", baseURL, lastChangeSequence))
 			if len(cl.Changes) < 2 {
 				return false
 			}
@@ -169,7 +169,7 @@ var _ = Describe("Changes API Tests", func() {
 		Eventually(func() bool {
 			fmt.Fprintf(GinkgoWriter, "Reading with snapshot %s\n", snap)
 			cl := getChanges(fmt.Sprintf(
-				"%s/changes?since=%s&change_selector=foo&snapshot=%s",
+				"%s/changes?since=%s&scope=foo&snapshot=%s",
 				baseURL, lastChangeSequence, snap))
 			if len(cl.Changes) < 1 {
 				return false
@@ -197,7 +197,7 @@ var _ = Describe("Changes API Tests", func() {
 
 		Eventually(func() bool {
 			cl := getChanges(fmt.Sprintf(
-				"%s/changes?since=%s&change_selector=foo", baseURL, origLastSequence))
+				"%s/changes?since=%s&scope=foo", baseURL, origLastSequence))
 			if len(cl.Changes) != 4 {
 				return false
 			}
@@ -210,23 +210,23 @@ var _ = Describe("Changes API Tests", func() {
 
 		// Un-matched scope
 		cl := getChanges(fmt.Sprintf(
-			"%s/changes?since=%s&change_selector=bar", baseURL, origLastSequence))
+			"%s/changes?since=%s&scope=bar", baseURL, origLastSequence))
 		Expect(cl.Changes).Should(BeEmpty())
 
 		// Out of range
 		oorSeq := common.MakeSequence(lastChangeSequence.LSN+10, lastChangeSequence.Index)
 		cl = getChanges(fmt.Sprintf(
-			"%s/changes?since=%s&change_selector=foo", baseURL, oorSeq))
+			"%s/changes?since=%s&scope=foo", baseURL, oorSeq))
 		Expect(cl.Changes).Should(BeEmpty())
 
 		// Short limit
 		cl = getChanges(fmt.Sprintf(
-			"%s/changes?since=%s&change_selector=foo&limit=0", baseURL, origLastSequence))
+			"%s/changes?since=%s&scope=foo&limit=0", baseURL, origLastSequence))
 		Expect(cl.Changes).Should(BeEmpty())
 
 		// Less short limit
 		cl = getChanges(fmt.Sprintf(
-			"%s/changes?since=%s&change_selector=foo&limit=1", baseURL, origLastSequence))
+			"%s/changes?since=%s&scope=foo&limit=1", baseURL, origLastSequence))
 		Expect(len(cl.Changes)).Should(Equal(1))
 		Expect(compareSequence(cl, 0, lastTestSequence-3)).Should(BeTrue())
 	})
@@ -234,14 +234,14 @@ var _ = Describe("Changes API Tests", func() {
 	It("Long polling empty", func() {
 		lastCommit := lastChangeSequence
 		cl := getChanges(fmt.Sprintf(
-			"%s/changes?since=%s&change_selector=foo", baseURL, lastChangeSequence))
+			"%s/changes?since=%s&scope=foo", baseURL, lastChangeSequence))
 		if len(cl.Changes) > 0 {
 			lastCommit = cl.Changes[len(cl.Changes)-1].GetSequence()
 		}
 
 		oorSeq := common.MakeSequence(lastCommit.LSN+10, lastCommit.Index)
 		cl = getChanges(fmt.Sprintf(
-			"%s/changes?since=%s&change_selector=foo&block=1", baseURL, oorSeq))
+			"%s/changes?since=%s&scope=foo&block=1", baseURL, oorSeq))
 		Expect(cl.Changes).Should(BeEmpty())
 	})
 
@@ -250,10 +250,10 @@ var _ = Describe("Changes API Tests", func() {
 
 		go func() {
 			lc := getChanges(fmt.Sprintf(
-				"%s/changes?since=%s&change_selector=foo", baseURL, lastChangeSequence))
+				"%s/changes?since=%s&scope=foo", baseURL, lastChangeSequence))
 			resultChan <- lc
 			lc = getChanges(fmt.Sprintf(
-				"%s/changes?since=%s&change_selector=foo&block=30", baseURL, lastChangeSequence))
+				"%s/changes?since=%s&scope=foo&block=30", baseURL, lastChangeSequence))
 			resultChan <- lc
 		}()
 
@@ -284,10 +284,10 @@ var _ = Describe("Changes API Tests", func() {
 
 		go func() {
 			lc := getChanges(fmt.Sprintf(
-				"%s/changes?snapshot=%s&change_selector=foo", baseURL, snapshot))
+				"%s/changes?snapshot=%s&scope=foo", baseURL, snapshot))
 			resultChan <- lc
 			lc = getChanges(fmt.Sprintf(
-				"%s/changes?snapshot=%s&change_selector=foo&block=30", baseURL, snapshot))
+				"%s/changes?snapshot=%s&scope=foo&block=30", baseURL, snapshot))
 			resultChan <- lc
 		}()
 
@@ -337,10 +337,10 @@ var _ = Describe("Changes API Tests", func() {
 
 		go func() {
 			lc := getChanges(fmt.Sprintf(
-				"%s/changes?since=%s&change_selector=foo&change_selector=bar", baseURL, lastChangeSequence))
+				"%s/changes?since=%s&scope=foo&scope=bar", baseURL, lastChangeSequence))
 			resultChan <- lc
 			lc = getChanges(fmt.Sprintf(
-				"%s/changes?since=%s&change_selector=foo&change_selector=bar&block=30", baseURL, lastChangeSequence))
+				"%s/changes?since=%s&scope=foo&scope=bar&block=30", baseURL, lastChangeSequence))
 			resultChan <- lc
 		}()
 
@@ -375,7 +375,7 @@ var _ = Describe("Changes API Tests", func() {
 		// Should still be there for five seconds...
 		Eventually(func() int {
 			lc := getChanges(fmt.Sprintf(
-				"%s/changes?change_selector=clean", baseURL))
+				"%s/changes?scope=clean", baseURL))
 			if len(lc.Changes) > 0 {
 				Expect(compareSequence(lc, 0, lastTestSequence)).Should(BeTrue())
 				newLast = lc.Changes[0].GetSequence()
@@ -390,7 +390,7 @@ var _ = Describe("Changes API Tests", func() {
 		// And should be cleaned up within 10
 		Eventually(func() int {
 			lcc := getChanges(fmt.Sprintf(
-				"%s/changes?change_selector=clean", baseURL))
+				"%s/changes?scope=clean", baseURL))
 			return len(lcc.Changes)
 		}, 10*time.Second, time.Second).Should(BeZero())
 	})

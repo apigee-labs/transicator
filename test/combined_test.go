@@ -62,7 +62,7 @@ var _ = Describe("Combined tests", func() {
 
 		// Take a snapshot. Specify the streaming protobuf format.
 		// We will get a 303 and automatically follow the redirect
-		url := fmt.Sprintf("%s/snapshots?change_selector=scope1", snapshotBase)
+		url := fmt.Sprintf("%s/snapshots?scope=scope1", snapshotBase)
 		fmt.Fprintf(GinkgoWriter, "GET %s\n", url)
 		req, err := http.NewRequest("GET", url, nil)
 		Expect(err).Should(Succeed())
@@ -121,7 +121,7 @@ var _ = Describe("Combined tests", func() {
 		Expect(foundTable).Should(BeTrue())
 
 		// Check for changes. There should be none.
-		changes := getChanges(fmt.Sprintf("snapshot=%s&change_selector=scope1",
+		changes := getChanges(fmt.Sprintf("snapshot=%s&scope=scope1",
 			sr.SnapshotInfo()), 0)
 		Expect(changes.Changes).Should(BeEmpty())
 
@@ -130,7 +130,7 @@ var _ = Describe("Combined tests", func() {
 		Expect(err).Should(Succeed())
 
 		// Verify the changes
-		changes = getChanges(fmt.Sprintf("snapshot=%s&change_selector=scope1&since=%s&block=5",
+		changes = getChanges(fmt.Sprintf("snapshot=%s&scope=scope1&since=%s&block=5",
 			sr.SnapshotInfo(), changes.LastSequence), 1)
 		Expect(changes.Changes[0].NewRow["id"]).ShouldNot(BeNil())
 		Expect(changes.Changes[0].NewRow["id"].Value).Should(Equal("4"))
@@ -140,7 +140,7 @@ var _ = Describe("Combined tests", func() {
 		Expect(err).Should(Succeed())
 		Expect(result.RowsAffected()).Should(BeEquivalentTo(1))
 
-		changes = getChanges(fmt.Sprintf("snapshot=%s&change_selector=scope1&since=%s&block=5",
+		changes = getChanges(fmt.Sprintf("snapshot=%s&scope=scope1&since=%s&block=5",
 			sr.SnapshotInfo(), changes.LastSequence), 1)
 		Expect(changes.Changes[0].OldRow["id"]).ShouldNot(BeNil())
 		Expect(changes.Changes[0].OldRow["id"].Value).Should(Equal("1"))

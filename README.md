@@ -104,7 +104,7 @@ Now, start a snapshot server running on port 9001:
 
 You can test quickly -- this API call should return "303 See Other":
 
-    curl -v http://localhost:9001/snapshots?change_selector=foo
+    curl -v http://localhost:9001/snapshots?scope=foo
 
 Finally, start a change server running on port 9000:
 
@@ -146,7 +146,7 @@ INSERT 0 1
 We can now get a snapshot in JSON format using the snapshot server:
 
 ````
-$ curl -H "Accept: application/json" -L http://localhost:9001/snapshots?change_selector=foo
+$ curl -H "Accept: application/json" -L http://localhost:9001/snapshots?scope=foo
 
 {"snapshotInfo":"229444:229444:","timestamp":"2016-10-13T17:42:12.171306-07:00",
 "tables":[{"name":"public.snapshot_test","rows":[]},{"name":"scope","rows":[
@@ -175,7 +175,7 @@ Postgres transactions were visible when the snapshot was created.
 At this point, using the changeserver, a client may issue the following
 API call:
 
-    curl -H "Accept: application/json" "http://localhost:9000/changes?snapshot=229444:229444:&change_selector=foo&block=10"
+    curl -H "Accept: application/json" "http://localhost:9000/changes?snapshot=229444:229444:&scope=foo&block=10"
 
 This call asks for all the changes for the scope "foo" starting from the first
 change that was not visible in the sequence. If no changes appear for 10 seconds,
@@ -195,14 +195,14 @@ Once the first set of changes has been retrieved, the "lastSequence" parameter
 tells us where in the change stream we left off. We can now use this
 in another API call to wait for more changes:
 
-    curl -H "Accept: application/json" "http://changeserver/changes?since=0.1390d838.0&change_selector=foo&block=10"
+    curl -H "Accept: application/json" "http://changeserver/changes?since=0.1390d838.0&scope=foo&block=10"
 
 This call won't result in any changes either but it will return us another sequence
 if anything changed in the database.
 
 Let's try again (with a longer timeout this time):
 
-    curl -H "Accept: application/json" "http://changeserver/changes?since=0.1390d838.0&change_selector=foo&block=60"
+    curl -H "Accept: application/json" "http://changeserver/changes?since=0.1390d838.0&scope=foo&block=60"
 
 and while we're waiting, let's use another window to insert something to the database:
 
@@ -254,7 +254,7 @@ when the transactions commit. Rolled back transactions will never appear.
 
 For instance:
 
-    curl -H "Accept: application/json" "http://localhost:9000/changes?change_selector=foo&bock=60&since=0.1392ed18.0"
+    curl -H "Accept: application/json" "http://localhost:9000/changes?scope=foo&bock=60&since=0.1392ed18.0"
 
 and then...
 

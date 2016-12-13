@@ -56,7 +56,7 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	selectors := q["change_selector"]
+	selectors := q["scope"]
 	if len(selectors) == 0 {
 		selectors = []string{""}
 	}

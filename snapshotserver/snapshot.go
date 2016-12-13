@@ -412,11 +412,11 @@ func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 	var changeSelectorParam string
 
 	r.ParseForm()
-	changeSelectorInput := r.URL.Query()["change_selector"]
+	changeSelectorInput := r.URL.Query()["scope"]
 	if len(changeSelectorInput) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("Must include at least one \"change_selector\" query parameter"))
+		w.Write([]byte("Must include at least one \"scope\" query parameter"))
 		return
 	}
 
@@ -433,7 +433,7 @@ func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, selector := range changeSelectorInput {
-		changeSelectorParam += "change_selector=" + selector + "&"
+		changeSelectorParam += "scope=" + selector + "&"
 	}
 	redURL := "/data?" + changeSelectorParam + "type=" + typeParam
 
@@ -447,7 +447,7 @@ DownloadSnapshot downloads and resturns the JSON related to the scope
 func DownloadSnapshot(
 w http.ResponseWriter, r *http.Request,
 db *sql.DB, p httprouter.Params) {
-	scopes := r.URL.Query()["change_selector"]
+	scopes := r.URL.Query()["scope"]
 	if len(scopes) == 0 {
 		log.Errorf("change_selector Missing, Request Ignored")
 		return
