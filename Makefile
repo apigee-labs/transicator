@@ -28,7 +28,7 @@ tests: ./test-reports
 dockerTests:
 	./test/dockertest.sh
 
-presubmit: $(foreach d, $(SUBDIRS), ./$d.checked)
+presubmit: $(foreach d, $(SUBDIRS), ./$d.checked) pgoutput.checked
 
 clean:
 	rm -f bin/changeserver
