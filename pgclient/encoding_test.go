@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -176,25 +175,5 @@ var _ = Describe("Encoding Tests", func() {
 		Expect(c).Should(BeEquivalentTo(45))
 		c = parseRowCount("FOO BAR 45")
 		Expect(c).Should(BeZero())
-	})
-
-	It("Timestamp sanity checks", func() {
-		unixEpoch, err :=
-			time.Parse("1/2/2006 15:04:05 -0700", "1/1/1970 00:00:00 -0000")
-		Expect(err).Should(Succeed())
-		Expect(unixEpoch.Unix()).Should(BeZero())
-
-		pgEpoch, err :=
-			time.Parse("1/2/2006 15:04:05 -0700", "1/1/2000 00:00:00 -0000")
-		Expect(err).Should(Succeed())
-		Expect(pgEpoch.UnixNano()).Should(BeEquivalentTo(postgresEpochNanos))
-	})
-
-	It("Timestamp conversion", func() {
-		now := time.Now()
-		nowRounded := time.Unix(0, now.UnixNano()-now.UnixNano()%1000)
-		r := PgTimestampToTime(TimeToPgTimestamp(nowRounded))
-		Expect(r.UnixNano()).Should(Equal(nowRounded.UnixNano()))
-		Expect(r).Should(Equal(nowRounded))
 	})
 })

@@ -23,6 +23,8 @@ import (
 	"math"
 	"strconv"
 	"time"
+
+	"github.com/apigee-labs/transicator/common"
 )
 
 /*
@@ -131,7 +133,7 @@ time.Time, and otherwise will produce a string.
 func convertTimestampParam(v driver.Value) ([]byte, error) {
 	switch v.(type) {
 	case time.Time:
-		return convertInt8Param(TimeToPgTimestamp(v.(time.Time)), nil)
+		return convertInt8Param(common.TimeToPgTimestamp(v.(time.Time)), nil)
 	default:
 		return convertStringParam(v)
 	}
@@ -250,7 +252,7 @@ func convertColumnValue(t PgType, b []byte) driver.Value {
 		buf := bytes.NewBuffer(b)
 		var ts8 int64
 		binary.Read(buf, networkByteOrder, &ts8)
-		return PgTimestampToTime(ts8)
+		return common.PgTimestampToTime(ts8)
 	default:
 		// This may have been a "bytea" column, in which case we must return the
 		// raw bytes. Otherwise, the database returned a string or nil here, and
