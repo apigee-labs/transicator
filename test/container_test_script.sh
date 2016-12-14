@@ -27,6 +27,7 @@ if [ ! -d test-reports ]
 then
   mkdir test-reports
 fi
+make presubmit
 go test \
   ./common ./storage ./pgclient \
   ./replication ./snapshotserver ./changeserver

@@ -232,8 +232,8 @@ var _ = Describe("Taking a snapshot", func() {
 		"public.app":                     true,
 		"public.developer":               true,
 		"public.snapshot_test":           true,
-		"public.DATA_SCOPE":       true,
-		"public.APID_CLUSTER":             true,
+		"public.DATA_SCOPE":              true,
+		"public.APID_CLUSTER":            true,
 		"transicator_tests.schema_table": true,
 	}
 

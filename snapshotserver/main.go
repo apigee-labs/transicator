@@ -34,7 +34,7 @@ const (
 	packageName string = "transicator"
 	appName     string = "snapshotserver"
 	// Default timeout for individual Postgres transactions
-	defaultPGTimeout  = 30 * time.Second
+	defaultPGTimeout      = 30 * time.Second
 	defaultSelectorColumn = "_change_selector"
 )
 
@@ -83,7 +83,7 @@ func main() {
 	cert := viper.GetString("cert")
 
 	debug := viper.GetBool("debug")
-	selectorColumn := viper.GetString("selectorColumn")
+	selectorColumn = viper.GetString("selectorColumn")
 
 	if pgURL == "" {
 		printUsage()
@@ -97,8 +97,6 @@ func main() {
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
-
-	selectorColumn = selectorColumn
 
 	log.Infof("Connecting to Postgres DB %s\n", pgURL)
 	db, err := sql.Open("transicator", pgURL)

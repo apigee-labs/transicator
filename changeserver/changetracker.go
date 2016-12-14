@@ -85,7 +85,7 @@ func (t *changeTracker) update(change common.Sequence, selector string) {
 	u := trackerUpdate{
 		updateType: update,
 		change:     change,
-		selector:      selector,
+		selector:   selector,
 	}
 	t.updateChan <- u
 }
@@ -132,9 +132,9 @@ func (t *changeTracker) doWait(curChange common.Sequence, selectors []string) (i
 		updateType: newWaiter,
 		key:        key,
 		waiter: changeWaiter{
-			change: curChange,
+			change:    curChange,
 			selectors: selectorMap,
-			rc:     resultChan,
+			rc:        resultChan,
 		},
 	}
 	t.updateChan <- u

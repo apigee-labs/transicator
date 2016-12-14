@@ -33,9 +33,9 @@ import (
 )
 
 const (
-	jsonType = "json"
-	protoType = "proto"
-	jsonMediaType = "application/json"
+	jsonType       = "json"
+	protoType      = "proto"
+	jsonMediaType  = "application/json"
 	protoMediaType = "application/transicator+protobuf"
 )
 
@@ -50,7 +50,7 @@ func GetTenants(tenantID []string) string {
 	for idx, tid := range tenantID {
 		log.Debugf("Get table id: ", tid, idx)
 		str.WriteString("'" + tid + "'")
-		if idx != len(tenantID) - 1 {
+		if idx != len(tenantID)-1 {
 			str.WriteString(",")
 		}
 	}
@@ -63,8 +63,8 @@ func GetTenants(tenantID []string) string {
 GetScopes returns the set of scopes for a particular cluster.
 */
 func GetScopes(
-w http.ResponseWriter, r *http.Request,
-db *sql.DB, p httprouter.Params) {
+	w http.ResponseWriter, r *http.Request,
+	db *sql.DB, p httprouter.Params) {
 
 	cid := p[0].Value
 	if cid == "" {
@@ -189,8 +189,8 @@ GetTenantSnapshotData pulls the snapshot for a given set of tenants and sends
 them back to a response writer.
 */
 func GetTenantSnapshotData(
-tenantID []string, mediaType string,
-db *sql.DB, w io.Writer) error {
+	tenantID []string, mediaType string,
+	db *sql.DB, w io.Writer) error {
 
 	var (
 		snapInfo, snapTime string
@@ -243,8 +243,8 @@ db *sql.DB, w io.Writer) error {
 }
 
 func writeJSONSnapshot(
-snapData *common.Snapshot, tables []string, tenantID []string,
-db *sql.DB, w io.Writer) error {
+	snapData *common.Snapshot, tables []string, tenantID []string,
+	db *sql.DB, w io.Writer) error {
 
 	for _, tn := range tables {
 		// Postgres won't let us parameterize the table name here, and we don't
@@ -273,8 +273,8 @@ db *sql.DB, w io.Writer) error {
 }
 
 func writeProtoSnapshot(
-snapData *common.Snapshot, tables []string, tenantID []string,
-db *sql.DB, w io.Writer) error {
+	snapData *common.Snapshot, tables []string, tenantID []string,
+	db *sql.DB, w io.Writer) error {
 
 	sw, err := common.CreateSnapshotWriter(
 		snapData.Timestamp, snapData.SnapshotInfo, w)
@@ -366,7 +366,7 @@ func getSchemaAndTableNames(db *sql.DB) ([]string, error) {
 			log.Errorf("Failed to get table names from DB : %+v", err)
 			return nil, err
 		}
-		tables = append(tables, schema + "." + name)
+		tables = append(tables, schema+"."+name)
 	}
 	return tables, nil
 }
@@ -445,8 +445,8 @@ func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 DownloadSnapshot downloads and resturns the JSON related to the scope
 */
 func DownloadSnapshot(
-w http.ResponseWriter, r *http.Request,
-db *sql.DB, p httprouter.Params) {
+	w http.ResponseWriter, r *http.Request,
+	db *sql.DB, p httprouter.Params) {
 	scopes := r.URL.Query()["scope"]
 	if len(scopes) == 0 {
 		log.Errorf("change_selector Missing, Request Ignored")

@@ -31,10 +31,10 @@ import (
 )
 
 const (
-	jsonContent       = "application/json"
-	protoContent      = "application/transicator+protobuf"
-	textContent       = "text/plain"
-	lastSequenceKey   = "_ls"
+	jsonContent           = "application/json"
+	protoContent          = "application/transicator+protobuf"
+	textContent           = "text/plain"
+	lastSequenceKey       = "_ls"
 	defaultSelectorColumn = "_change_selector"
 )
 

@@ -1,3 +1,8 @@
+SUBDIRS = ./replication ./common ./storage ./pgclient ./snapshotserver ./changeserver
+
+%.checked: 
+	(cd $*; ../presubmit_tests.sh)
+
 all: ./bin/changeserver ./bin/snapshotserver
 
 ./bin/changeserver: ./bin ./*/*.go
@@ -18,10 +23,12 @@ rocksdb: ./bin/changeserver-rocksdb ./bin/snapshotserver
 	mkdir test-reports
 
 tests: ./test-reports
-	go test ./replication ./common ./storage ./pgclient ./snapshotserver ./changeserver
+	go test $(SUBDIRS) 
 
 dockerTests:
 	./test/dockertest.sh
+
+presubmit: $(foreach d, $(SUBDIRS), ./$d.checked)
 
 clean:
 	rm -f bin/changeserver
