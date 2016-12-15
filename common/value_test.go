@@ -175,7 +175,7 @@ var _ = Describe("Value conversion tests", func() {
 		var tss string
 		err = nv.Get(&tss)
 		Expect(err).Should(Succeed())
-		pts, err := time.Parse("2006-01-02 15:04:05.000000 -0700 MST", tss)
+		pts, err := time.Parse("2006-01-02 15:04:05.99999999 -0700 MST", tss)
 		Expect(err).Should(Succeed())
 		Expect(pts.UnixNano()).Should(BeNumerically("~", now.UnixNano(), 1000))
 	})

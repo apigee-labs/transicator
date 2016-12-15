@@ -20,7 +20,7 @@ PgOutputType represents the type of an output message to the server.
 */
 type PgOutputType int
 
-//go:generate stringer -type PgOutputType .
+//go:generate stringer -type PgOutputType messagetypes.go
 
 // Constants representing output message types.
 const (
@@ -43,7 +43,7 @@ PgInputType is the one-byte type of a postgres response from the server.
 */
 type PgInputType int
 
-//go:generate stringer -type PgInputType .
+//go:generate stringer -type PgInputType messagetypes.go
 
 // Various types of messages that represent one-byte message types.
 const (
@@ -72,4 +72,24 @@ const (
 	ParseComplete          PgInputType = '1'
 	BindComplete           PgInputType = '2'
 	CloseComplete          PgInputType = '3'
+)
+
+/*
+PgType represents a Postgres type OID.
+*/
+type PgType int
+
+//go:generate stringer -type PgType messagetypes.go
+
+// Constants for well-known OIDs that we care about
+const (
+	Bytea       PgType = 17
+	Int8        PgType = 20
+	Int2        PgType = 21
+	Int4        PgType = 23
+	OID         PgType = 26
+	Float4      PgType = 700
+	Float8      PgType = 701
+	Timestamp   PgType = 1114
+	TimestampTZ PgType = 1184
 )

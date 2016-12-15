@@ -27,23 +27,8 @@ import (
 	"github.com/apigee-labs/transicator/common"
 )
 
-/*
-PgType represents a Postgres type OID.
-*/
-type PgType int
-
-//go:generate stringer -type PgType .
-
-// Constants for well-known OIDs that we care about
 const (
-	Bytea       PgType = 17
-	Int8        PgType = 20
-	Int2        PgType = 21
-	Int4        PgType = 23
-	OID         PgType = 26
-	Float4      PgType = 700
-	Float8      PgType = 701
-	TimestampTZ PgType = 1184
+	pgTimeFormat = "2006-01-02 15:04:05-07"
 )
 
 /*
@@ -54,7 +39,7 @@ needs special handling in the other conversion functions below.
 */
 func (t PgType) isBinaryValue() bool {
 	switch t {
-	case Bytea, Int2, Int4, Int8, OID, TimestampTZ:
+	case Bytea, Int2, Int4, Int8, OID, Timestamp, TimestampTZ:
 		return true
 	default:
 		return false
@@ -69,7 +54,7 @@ func (t PgType) isBinaryParameter(a driver.Value) bool {
 	switch t {
 	case Bytea, Int2, Int4, Int8, OID:
 		return true
-	case TimestampTZ:
+	case Timestamp, TimestampTZ:
 		switch a.(type) {
 		case time.Time:
 			return true
@@ -95,7 +80,7 @@ func convertParameterValue(t PgType, v driver.Value) ([]byte, error) {
 		return convertInt4Param(convertIntParam(v))
 	case Int8:
 		return convertInt8Param(convertIntParam(v))
-	case TimestampTZ:
+	case Timestamp, TimestampTZ:
 		return convertTimestampParam(v)
 	default:
 		return convertStringParam(v)
@@ -245,7 +230,7 @@ func convertColumnValue(t PgType, b []byte) driver.Value {
 		var si8 int64
 		binary.Read(buf, networkByteOrder, &si8)
 		return si8
-	case TimestampTZ:
+	case Timestamp, TimestampTZ:
 		if b == nil {
 			return nil
 		}
