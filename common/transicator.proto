@@ -8,6 +8,7 @@ message ValuePb {
     double double = 4;
     bytes bytes = 5;
     bool bool = 6;
+    int64 timestamp = 7;
   }
 }
 

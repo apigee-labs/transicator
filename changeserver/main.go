@@ -84,7 +84,7 @@ func runMain() int {
 	cert := viper.GetString("cert")
 	key := viper.GetString("key")
 	prefix := viper.GetString("prefix")
-	scopeFieldParam := viper.GetString("scopeField")
+	selectorColumnParam := viper.GetString("selectorColumn")
 
 	debug := viper.GetBool("debug")
 
@@ -109,7 +109,7 @@ func runMain() int {
 	}
 
 	// Set the global scopeField from server.go to the user supplied value
-	scopeField = scopeFieldParam
+	selectorColumn = selectorColumnParam
 
 	if debug {
 		logrus.SetLevel(logrus.DebugLevel)

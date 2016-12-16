@@ -238,8 +238,8 @@ func (s *PgStmt) bind(args []driver.Value) error {
 
 	// Denote whether each argument is going to be sent in binary or string format
 	bindMsg.WriteInt16(int16(len(s.fields)))
-	for _, field := range s.fields {
-		if field.isBinary() {
+	for i, field := range s.fields {
+		if field.isBinaryParameter(args[i]) {
 			bindMsg.WriteInt16(1)
 		} else {
 			bindMsg.WriteInt16(0)
@@ -265,7 +265,7 @@ func (s *PgStmt) bind(args []driver.Value) error {
 	// Denote which result columns we want sent as a string versus binary
 	bindMsg.WriteInt16(int16(len(s.columns)))
 	for _, col := range s.columns {
-		if col.Type.isBinary() {
+		if col.Type.isBinaryValue() {
 			bindMsg.WriteInt16(1)
 		} else {
 			bindMsg.WriteInt16(0)

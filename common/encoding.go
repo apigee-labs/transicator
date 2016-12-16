@@ -352,6 +352,8 @@ func unwrapColumnVal(v *ValuePb) interface{} {
 		return v.GetBool()
 	case *ValuePb_Bytes:
 		return v.GetBytes()
+	case *ValuePb_Timestamp:
+		return PgTimestampToTime(v.GetTimestamp())
 	default:
 		panic("Invalid data type in protobuf")
 	}

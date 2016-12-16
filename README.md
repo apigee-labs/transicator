@@ -65,7 +65,7 @@ A scope is simply a unique identifier for a particular set of records in the
 database.
 
 In order for transicator to work, we need to identify records by scope. We do
-this by adding a "text" column named "_apid_scope" to every table that we
+this by adding a "text" column named "_change_selector" to every table that we
 wish to replicate using transicator.
 
 # API Specifications:
@@ -120,8 +120,8 @@ This API call will tell you that the database is empty:
 Now that the servers are running, you can test the API.
 
 To get started, imagine that we have a database that contains some tables
-that have an _apid_scope column, and that there are some rows in those tables
-that have the value "foo" for _apid_scope. For instance, let's create a table
+that have an _change_selector column, and that there are some rows in those tables
+that have the value "foo" for _change_selector. For instance, let's create a table
 and insert some values:
 
 ````
@@ -129,7 +129,7 @@ psql -W -h localhost postgres postgres
 postgres=# create table test
     (id varchar primary key,
     val integer,
-    _apid_scope varchar);
+    _change_selector varchar);
 CREATE TABLE
 postgres=# alter table test replica identity full;
 ALTER TABLE
@@ -150,11 +150,11 @@ $ curl -H "Accept: application/json" -L http://localhost:9001/snapshots?scope=fo
 
 {"snapshotInfo":"229444:229444:","timestamp":"2016-10-13T17:42:12.171306-07:00",
 "tables":[{"name":"public.snapshot_test","rows":[]},{"name":"scope","rows":[
-{"_apid_scope":{"value":"foo","type":1043},"val":{"value":"bar","type":1043}}]},
+{"_change_selector":{"value":"foo","type":1043},"val":{"value":"bar","type":1043}}]},
 {"name":"public.developer","rows":[]},{"name":"app","rows":[]},
-{"name":"public.test","rows":[{"_apid_scope":{"value":"foo","type":1043},
+{"name":"public.test","rows":[{"_change_selector":{"value":"foo","type":1043},
 "id":{"value":"one","type":1043},"val":{"value":"1","type":23}},
-{"_apid_scope":{"value":"foo","type":1043},"id":{"value":"three","type":1043},
+{"_change_selector":{"value":"foo","type":1043},"id":{"value":"three","type":1043},
 "val":{"value":"3","type":23}}]}]}
 ````
 
@@ -228,7 +228,7 @@ should come back from the API call.
       "commitIndex": 0,
       "txid": 229444,
       "newRow": {
-        "_apid_scope": {
+        "_change_selector": {
           "value": "foo",
           "type": 1043
         },
@@ -285,7 +285,7 @@ Should result in:
       "commitIndex": 0,
       "txid": 229449,
       "newRow": {
-        "_apid_scope": {
+        "_change_selector": {
           "value": "foo",
           "type": 1043
         },
@@ -299,7 +299,7 @@ Should result in:
         }
       },
       "oldRow": {
-        "_apid_scope": {
+        "_change_selector": {
           "value": "foo",
           "type": 1043
         },
@@ -333,7 +333,7 @@ and then another call should immediately give us:
       "commitIndex": 1,
       "txid": 229449,
       "oldRow": {
-        "_apid_scope": {
+        "_change_selector": {
           "value": "foo",
           "type": 1043
         },
@@ -360,7 +360,7 @@ right away.)
 If, in the example above, no information was delivered on the "delete"
 or "update" operations, it may be the replication settings for Postgres.
 By default, Postgres only delivers the primary key on a deleted or updated
-row, and that means that the change server does not see the "_apid_scope"
+row, and that means that the change server does not see the "_change_selector"
 column.
 
 The way to fix this is to change the table settings in Postgres so that

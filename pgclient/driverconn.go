@@ -26,10 +26,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
-const (
-	pgTimeFormat = "2006-01-02 15:04:05-07"
-)
-
 var registered = &sync.Once{}
 
 var _ = RegisterDriver()

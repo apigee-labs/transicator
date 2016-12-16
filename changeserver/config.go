@@ -45,9 +45,9 @@ func setConfigDefaults() {
 	pflag.String("key", "", "TLS key PEM file (must be unencrypted)")
 	viper.SetDefault("key", "")
 	pflag.StringP("prefix", "P", "", "Optional prefix URL for all API calls")
-	pflag.StringP("scopefield", "S", "", "Set the scopeField database column")
+	pflag.StringP("selectorcolumn", "S", "", "Set the selector column")
 	viper.SetDefault("prefix", "")
-	viper.SetDefault("scopeField", defaultScopeField)
+	viper.SetDefault("selectorColumn", defaultSelectorColumn)
 
 	pflag.BoolP("config", "C", false, fmt.Sprintf("Use a config file named '%s' located in either /etc/%s/, ~/.%s or ./)", appName, packageName, packageName))
 	pflag.BoolP("debug", "D", false, "Turn on debugging")
@@ -70,7 +70,7 @@ func getConfig() error {
 
 	viper.BindPFlag("configFile", pflag.Lookup("config"))
 	viper.BindPFlag("debug", pflag.Lookup("debug"))
-	viper.BindPFlag("scopeField", pflag.Lookup("scopefield"))
+	viper.BindPFlag("selectorColumn", pflag.Lookup("selectorcolumn"))
 
 	// Load config values from file
 	if viper.GetBool("configFile") {

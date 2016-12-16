@@ -84,11 +84,11 @@ var _ = Describe("Changes API Tests", func() {
 	})
 
 	It("Different scope", func() {
-		scopeField = "_different_scope"
-		defer func() { scopeField = "_apid_scope" }()
+		selectorColumn = "_different_selector"
+		defer func() { selectorColumn = defaultSelectorColumn }()
 		lastTestSequence++
 		fmt.Fprintf(GinkgoWriter, "Insert alternative scope sequence %d\n", lastTestSequence)
-		_, err := insertAlterativeScopeStmt.Exec(lastTestSequence, "boop")
+		_, err := insertAlterativeSelectorStmt.Exec(lastTestSequence, "boop")
 		Expect(err).Should(Succeed())
 
 		Eventually(func() bool {
@@ -377,7 +377,7 @@ var _ = Describe("Changes API Tests", func() {
 		lastChangeSequence = cl.Changes[0].GetSequence()
 	})
 
-	It("Long polling no scope", func() {
+	It("Long polling no selector", func() {
 		resultChan := make(chan *common.ChangeList, 1)
 
 		go func() {
@@ -402,7 +402,7 @@ var _ = Describe("Changes API Tests", func() {
 		lastChangeSequence = cl.Changes[0].GetSequence()
 	})
 
-	It("Long polling two scopes", func() {
+	It("Long polling two selectors", func() {
 		resultChan := make(chan *common.ChangeList, 1)
 
 		go func() {

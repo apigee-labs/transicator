@@ -71,6 +71,10 @@ static void setValue(Oid typ, Oid outputtyp, Datum val, Common__ValuePb* cv) {
       cv->bytes.len = VARSIZE(val) - 4;
       cv->bytes.data = (uint8_t*)VARDATA(val);
       break;
+    case TIMESTAMPOID:
+    case TIMESTAMPTZOID:
+      cv->value_case = COMMON__VALUE_PB__VALUE_TIMESTAMP;
+      cv->timestamp = DatumGetInt64(val);
     default:
       /* Convert everything else into a string */
       cv->value_case = COMMON__VALUE_PB__VALUE_STRING;

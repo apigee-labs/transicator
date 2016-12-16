@@ -46,7 +46,7 @@ var listener net.Listener
 var testServer *server
 var db *sql.DB
 var insertStmt *sql.Stmt
-var insertAlterativeScopeStmt *sql.Stmt
+var insertAlterativeSelectorStmt *sql.Stmt
 
 func TestServer(t *testing.T) {
 	if debugTests {
@@ -75,10 +75,10 @@ var _ = BeforeSuite(func() {
 	executeSQL(testTableSQL)
 	executeSQL(testAlternateScopeTableSQL)
 	insertStmt, err = db.Prepare(
-		"insert into changeserver_test (sequence, _apid_scope) values ($1, $2)")
+		"insert into changeserver_test (sequence, _change_selector) values ($1, $2)")
 	Expect(err).Should(Succeed())
 
-	insertAlterativeScopeStmt, err = db.Prepare("insert into changeserver_scope_test(sequence, _different_scope) values ($1, $2)")
+	insertAlterativeSelectorStmt, err = db.Prepare("insert into changeserver_scope_test(sequence, _different_selector) values ($1, $2)")
 	Expect(err).Should(Succeed())
 
 	// Start the server, which will be ready to respond to API calls
@@ -156,13 +156,13 @@ func executeGet(url string) []byte {
 const testTableSQL = `
   create table changeserver_test (
   sequence integer primary key,
-  _apid_scope varchar
+  _change_selector varchar
 )`
 
 const testAlternateScopeTableSQL = `
   create table changeserver_scope_test (
     sequence integer primary key,
-    _different_scope varchar
+    _different_selector varchar
   )
 `
 

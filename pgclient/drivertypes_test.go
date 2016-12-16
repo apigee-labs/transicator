@@ -112,7 +112,7 @@ var _ = Describe("Data type tests", func() {
 		testBytesType(ix, nil)
 	})
 
-	It("Time type", func() {
+	It("Timestamp", func() {
 		// Clamp down inputs to prevent generating dates that PG can't begin to imagine
 		timeCfg := &quick.Config{
 			Values: func(vals []reflect.Value, r *rand.Rand) {
@@ -124,9 +124,73 @@ var _ = Describe("Data type tests", func() {
 		ix := 0
 		err := quick.Check(func(secs, ns int64) bool {
 			ix++
-			return testTimeType(ix, secs, ns)
+			return testTimeType(ix, secs, ns, "ts")
 		}, timeCfg)
 		Expect(err).Should(Succeed())
+	})
+
+	It("Timestamp with time zone", func() {
+		// Clamp down inputs to prevent generating dates that PG can't begin to imagine
+		timeCfg := &quick.Config{
+			Values: func(vals []reflect.Value, r *rand.Rand) {
+				vals[0] = reflect.ValueOf(rand.Int63n(1 << 33))
+				//vals[1] = reflect.ValueOf(rand.Int63n(1000000000))
+				vals[1] = reflect.ValueOf(int64(0))
+			},
+		}
+		ix := 0
+		err := quick.Check(func(secs, ns int64) bool {
+			ix++
+			return testTimeType(ix, secs, ns, "timestamp")
+		}, timeCfg)
+		Expect(err).Should(Succeed())
+	})
+
+	It("Timestamps as string", func() {
+		testTime, err := time.Parse(pgTimeFormat, "2007-03-28 14:30:00-05")
+		Expect(err).Should(Succeed())
+		_, err =
+			driverTypeDB.Exec("insert into client_test (id, timestamp, ts) values(1, $1, $2)",
+				"2007-03-28 14:30:00-05", "2007-03-28 14:30:00")
+		Expect(err).Should(Succeed())
+
+		row := driverTypeDB.QueryRow("select timestamp, ts from client_test where id = 1")
+		var tsz string
+		var ts string
+		err = row.Scan(&tsz, &ts)
+		Expect(err).Should(Succeed())
+		tsst, err := time.Parse(time.RFC3339, tsz)
+		Expect(err).Should(Succeed())
+		Expect(tsst.UnixNano()).Should(Equal(testTime.UnixNano()))
+		fmt.Fprintf(GinkgoWriter, "tsz = %s ts = %s\n", tsz, ts)
+
+		row = driverTypeDB.QueryRow("select timestamp from client_test where id = 1")
+		var ttz time.Time
+		err = row.Scan(&ttz)
+		Expect(err).Should(Succeed())
+		Expect(ttz.UnixNano()).Should(Equal(testTime.UnixNano()))
+	})
+
+	It("Timestamps as Time", func() {
+		testTime, err := time.Parse(pgTimeFormat, "2007-03-28 14:30:00-05")
+		Expect(err).Should(Succeed())
+		_, err =
+			driverTypeDB.Exec("insert into client_test (id, timestamp) values(1, $1)", testTime)
+		Expect(err).Should(Succeed())
+
+		row := driverTypeDB.QueryRow("select timestamp from client_test where id = 1")
+		var tss string
+		err = row.Scan(&tss)
+		Expect(err).Should(Succeed())
+		tsst, err := time.Parse(time.RFC3339, tss)
+		Expect(err).Should(Succeed())
+		Expect(tsst.UnixNano()).Should(Equal(testTime.UnixNano()))
+
+		row = driverTypeDB.QueryRow("select timestamp from client_test where id = 1")
+		var ts time.Time
+		err = row.Scan(&ts)
+		Expect(err).Should(Succeed())
+		Expect(ts.UnixNano()).Should(Equal(testTime.UnixNano()))
 	})
 
 	It("String null", func() {
@@ -326,13 +390,15 @@ func testBytesType(ix int, val []byte) bool {
 	return true
 }
 
-func testTimeType(ix int, secs, ns int64) bool {
+func testTimeType(ix int, secs, ns int64, cn string) bool {
 	now := time.Unix(secs, ns)
-	_, err := driverTypeDB.Exec("insert into client_test (id, timestamp) values ($1, $2)",
+	_, err := driverTypeDB.Exec(
+		fmt.Sprintf("insert into client_test (id, %s) values ($1, $2)", cn),
 		ix, now)
 	Expect(err).Should(Succeed())
 
-	row := driverTypeDB.QueryRow("select timestamp from client_test where id = $1",
+	row := driverTypeDB.QueryRow(
+		fmt.Sprintf("select %s from client_test where id = $1", cn),
 		ix)
 	var ret time.Time
 	err = row.Scan(&ret)

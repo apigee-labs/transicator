@@ -31,8 +31,6 @@ import (
 )
 
 const (
-	// January 1, 2000, midnight UTC, in microseconds from Unix epoch
-	epoch2000 = 946717749000000000
 	// Make sure that we reply to the server at least this often
 	heartbeatTimeout = 10 * time.Second
 	// Make sure that we always reconnect eventually
@@ -607,10 +605,10 @@ func (r *Replicator) updateLSN(highLSN uint64, conn *pgclient.PgConnection) {
 	log.Debugf("Updating server with last LSN %d", highLSN)
 	om := pgclient.NewOutputMessage(pgclient.CopyDataOut)
 	om.WriteByte(byte(pgclient.StandbyStatusUpdate))
-	om.WriteUint64(highLSN + 1)                                          // last written to disk+1
-	om.WriteUint64(highLSN + 1)                                          // last flushed to disk+1
-	om.WriteUint64(highLSN + 1)                                          // last applied+1
-	om.WriteUint64((uint64)((time.Now().UnixNano() / 1000) - epoch2000)) // Timestamp, in microseconds
+	om.WriteUint64(highLSN + 1)                         // last written to disk+1
+	om.WriteUint64(highLSN + 1)                         // last flushed to disk+1
+	om.WriteUint64(highLSN + 1)                         // last applied+1
+	om.WriteInt64(common.TimeToPgTimestamp(time.Now())) // Timestamp, in microseconds
 	om.WriteByte(0)
 
 	conn.WriteMessage(om)

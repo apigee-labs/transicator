@@ -33,14 +33,14 @@ type trackerUpdate struct {
 	updateType int
 	key        int32
 	change     common.Sequence
-	scope      string
+	selector   string
 	waiter     changeWaiter
 }
 
 type changeWaiter struct {
-	change common.Sequence
-	scopes map[string]bool
-	rc     chan common.Sequence
+	change    common.Sequence
+	selectors map[string]bool
+	rc        chan common.Sequence
 }
 
 /*
@@ -81,11 +81,11 @@ func (t *changeTracker) close() {
 Update indicates that the current sequence has changed. Wake up any waiting
 waiters and tell them about it.
 */
-func (t *changeTracker) update(change common.Sequence, scope string) {
+func (t *changeTracker) update(change common.Sequence, selector string) {
 	u := trackerUpdate{
 		updateType: update,
 		change:     change,
-		scope:      scope,
+		selector:   selector,
 	}
 	t.updateChan <- u
 }
@@ -94,8 +94,8 @@ func (t *changeTracker) update(change common.Sequence, scope string) {
 Wait blocks the calling gorouting forever until the change tracker has reached a value at least as high as
 "curChange." Return the current value when that happens.
 */
-func (t *changeTracker) wait(curChange common.Sequence, scopes []string) common.Sequence {
-	_, resultChan := t.doWait(curChange, scopes)
+func (t *changeTracker) wait(curChange common.Sequence, selectors []string) common.Sequence {
+	_, resultChan := t.doWait(curChange, selectors)
 	return <-resultChan
 }
 
@@ -104,8 +104,8 @@ TimedWait blocks the current gorouting until either a new value higher than
 "curChange" has been reached, or "maxWait" has been exceeded.
 */
 func (t *changeTracker) timedWait(
-	curChange common.Sequence, maxWait time.Duration, scopes []string) common.Sequence {
-	key, resultChan := t.doWait(curChange, scopes)
+	curChange common.Sequence, maxWait time.Duration, selectors []string) common.Sequence {
+	key, resultChan := t.doWait(curChange, selectors)
 	timer := time.NewTimer(maxWait)
 	select {
 	case result := <-resultChan:
@@ -120,21 +120,21 @@ func (t *changeTracker) timedWait(
 	}
 }
 
-func (t *changeTracker) doWait(curChange common.Sequence, scopes []string) (int32, chan common.Sequence) {
+func (t *changeTracker) doWait(curChange common.Sequence, selectors []string) (int32, chan common.Sequence) {
 	key := atomic.AddInt32(&t.lastKey, 1)
 	resultChan := make(chan common.Sequence, 1)
-	scopeMap := make(map[string]bool)
-	for _, s := range scopes {
-		scopeMap[s] = true
+	selectorMap := make(map[string]bool)
+	for _, s := range selectors {
+		selectorMap[s] = true
 	}
 
 	u := trackerUpdate{
 		updateType: newWaiter,
 		key:        key,
 		waiter: changeWaiter{
-			change: curChange,
-			scopes: scopeMap,
-			rc:     resultChan,
+			change:    curChange,
+			selectors: selectorMap,
+			rc:        resultChan,
 		},
 	}
 	t.updateChan <- u
@@ -166,18 +166,18 @@ func (t *changeTracker) run() {
 
 	// Close out all waiting waiters
 	for _, w := range t.waiters {
-		w.rc <- t.getMaxChange(w.scopes)
+		w.rc <- t.getMaxChange(w.selectors)
 	}
 }
 
 func (t *changeTracker) handleUpdate(up trackerUpdate) {
 	// Changes might come out of order
-	if up.change.Compare(t.lastChanges[up.scope]) > 0 {
-		t.lastChanges[up.scope] = up.change
+	if up.change.Compare(t.lastChanges[up.selector]) > 0 {
+		t.lastChanges[up.selector] = up.change
 	}
 
 	for k, w := range t.waiters {
-		if up.change.Compare(w.change) >= 0 && w.scopes[up.scope] {
+		if up.change.Compare(w.change) >= 0 && w.selectors[up.selector] {
 			//log.Debugf("Waking up waiter waiting for change %d with change %d and tag %s",
 			//	w.change, up.change, up.tag)
 			w.rc <- up.change
@@ -187,7 +187,7 @@ func (t *changeTracker) handleUpdate(up trackerUpdate) {
 }
 
 func (t *changeTracker) handleWaiter(u trackerUpdate) {
-	maxAlready := t.getMaxChange(u.waiter.scopes)
+	maxAlready := t.getMaxChange(u.waiter.selectors)
 	if maxAlready.Compare(u.waiter.change) >= 0 {
 		u.waiter.rc <- maxAlready
 	} else {
@@ -199,11 +199,11 @@ func (t *changeTracker) handleCancel(key int32) {
 	delete(t.waiters, key)
 }
 
-func (t *changeTracker) getMaxChange(scopes map[string]bool) common.Sequence {
+func (t *changeTracker) getMaxChange(selectors map[string]bool) common.Sequence {
 	var max common.Sequence
-	for scope := range scopes {
-		if t.lastChanges[scope].Compare(max) > 0 {
-			max = t.lastChanges[scope]
+	for selector := range selectors {
+		if t.lastChanges[selector].Compare(max) > 0 {
+			max = t.lastChanges[selector]
 		}
 	}
 	return max

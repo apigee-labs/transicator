@@ -60,7 +60,7 @@ func GetTenants(tenantID []string) string {
 }
 
 /*
-GetScopes returns the set of scopes for a particular configuration ID.
+GetScopes returns the set of scopes for a particular cluster.
 */
 func GetScopes(
 	w http.ResponseWriter, r *http.Request,
@@ -68,7 +68,7 @@ func GetScopes(
 
 	cid := p[0].Value
 	if cid == "" {
-		log.Errorf("apidconfigId Missing, Request Ignored")
+		log.Errorf("apidclusterId Missing, Request Ignored")
 		return
 	}
 
@@ -111,26 +111,26 @@ func GetScopeData(cid string, db *sql.DB) (b []byte, err error) {
 	}
 	defer tx.Commit()
 
-	rows, err := tx.Query("select * from APID_CONFIG where id = $1", cid)
+	rows, err := tx.Query("select * from APID_CLUSTER where id = $1", cid)
 	if err != nil {
-		log.Errorf("Failed to query APID_CONFIG. Err: %s", err)
+		log.Errorf("Failed to query APID_CLUSTER. Err: %s", err)
 		return nil, err
 	}
 
-	err = fillTable(rows, &snapData, "APID_CONFIG")
+	err = fillTable(rows, &snapData, "APID_CLUSTER")
 	if err != nil {
 		log.Errorf("Failed to Insert rows, (Ignored) Err: %s", err)
 		return nil, err
 	}
 	rows.Close()
 
-	rows, err = tx.Query("select * from APID_CONFIG_SCOPE where apid_config_id = $1", cid)
+	rows, err = tx.Query("select * from DATA_SCOPE where apid_cluster_id = $1", cid)
 	if err != nil {
-		log.Errorf("Failed to query APID_CONFIG_SCOPE. Err: %s", err)
+		log.Errorf("Failed to query DATA_SCOPE. Err: %s", err)
 		return nil, err
 	}
 
-	err = fillTable(rows, &snapData, "APID_CONFIG_SCOPE")
+	err = fillTable(rows, &snapData, "DATA_SCOPE")
 	if err != nil {
 		log.Errorf("Failed to Insert rows, (Ignored) Err: %s", err)
 		return nil, err
@@ -250,11 +250,11 @@ func writeJSONSnapshot(
 		// Postgres won't let us parameterize the table name here, and we don't
 		// know how to parameterize the list in the "in" parameter
 		q := fmt.Sprintf("select * from %s where %s in %s",
-			tn, scopeField, GetTenants(tenantID))
+			tn, selectorColumn, GetTenants(tenantID))
 		rows, err := db.Query(q)
 		if err != nil {
 			if strings.Contains(err.Error(), "errorMissingColumn") {
-				log.Warnf("Skipping table %s: no %s column", tn, scopeField)
+				log.Warnf("Skipping table %s: no %s column", tn, selectorColumn)
 				continue
 			}
 			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, tn, err)
@@ -284,11 +284,11 @@ func writeProtoSnapshot(
 	}
 
 	for _, t := range tables {
-		q := fmt.Sprintf("select * from %s where %s in %s", t, scopeField, GetTenants(tenantID))
+		q := fmt.Sprintf("select * from %s where %s in %s", t, selectorColumn, GetTenants(tenantID))
 		rows, err := db.Query(q)
 		if err != nil {
 			if strings.Contains(err.Error(), "errorMissingColumn") {
-				log.Warnf("Skipping table %s: no %s column", scopeField, t)
+				log.Warnf("Skipping table %s: no %s column", t, selectorColumn)
 				continue
 			}
 			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
@@ -409,11 +409,11 @@ to get the snapshot - which is yet another SYNC operation
 */
 func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 
-	var scopequery string
+	var changeSelectorParam string
 
 	r.ParseForm()
-	scopes := r.URL.Query()["scope"]
-	if len(scopes) == 0 {
+	changeSelectorInput := r.URL.Query()["scope"]
+	if len(changeSelectorInput) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte("Must include at least one \"scope\" query parameter"))
@@ -432,10 +432,10 @@ func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnsupportedMediaType)
 		return
 	}
-	for _, scope := range scopes {
-		scopequery += "scope=" + scope + "&"
+	for _, selector := range changeSelectorInput {
+		changeSelectorParam += "scope=" + selector + "&"
 	}
-	redURL := "/data?" + scopequery + "type=" + typeParam
+	redURL := "/data?" + changeSelectorParam + "type=" + typeParam
 
 	http.Redirect(w, r, redURL, http.StatusSeeOther)
 
@@ -449,7 +449,7 @@ func DownloadSnapshot(
 	db *sql.DB, p httprouter.Params) {
 	scopes := r.URL.Query()["scope"]
 	if len(scopes) == 0 {
-		log.Errorf("snapshot Id Missing, Request Ignored")
+		log.Errorf("change_selector Missing, Request Ignored")
 		return
 	}
 
@@ -470,7 +470,7 @@ func DownloadSnapshot(
 
 	err := GetTenantSnapshotData(scopes, mediaType, db, w)
 	if err != nil {
-		log.Errorf("GetOrgSnapshot error: %v", err)
+		log.Errorf("GetTenantSnapshotData error: %v", err)
 		return
 	}
 

@@ -20,39 +20,26 @@ import (
 	"database/sql/driver"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"math"
 	"strconv"
 	"time"
+
+	"github.com/apigee-labs/transicator/common"
 )
 
-/*
-PgType represents a Postgres type OID.
-*/
-type PgType int
-
-//go:generate stringer -type PgType .
-
-// Constants for well-known OIDs that we care about
 const (
-	Bytea       PgType = 17
-	Int8        PgType = 20
-	Int2        PgType = 21
-	Int4        PgType = 23
-	OID         PgType = 26
-	Float4      PgType = 700
-	Float8      PgType = 701
-	TimestampTZ PgType = 1184
+	pgTimeFormat = "2006-01-02 15:04:05-07"
 )
 
 /*
-isBinary returns true if the type should be represented as a []byte,
+isBinaryValue returns true if the type should be represented as a []byte
+when returned from the driver,
 and not converted into a string. Anything that returns "true" here
 needs special handling in the other conversion functions below.
 */
-func (t PgType) isBinary() bool {
+func (t PgType) isBinaryValue() bool {
 	switch t {
-	case Bytea, Int2, Int4, Int8, OID:
+	case Bytea, Int2, Int4, Int8, OID, Timestamp, TimestampTZ:
 		return true
 	default:
 		return false
@@ -60,7 +47,27 @@ func (t PgType) isBinary() bool {
 }
 
 /*
-convertParameterValue is used to convert input values to a string so
+isBinaryParameter returns true if the type should be represented in a binary format
+when we send it as a parameter to Postgres, as opposed to a string.
+*/
+func (t PgType) isBinaryParameter(a driver.Value) bool {
+	switch t {
+	case Bytea, Int2, Int4, Int8, OID:
+		return true
+	case Timestamp, TimestampTZ:
+		switch a.(type) {
+		case time.Time:
+			return true
+		default:
+			return false
+		}
+	default:
+		return false
+	}
+}
+
+/*
+convertParameterValue is used to convert input values to a byte array so
 that they may be passed on to SQL.
 */
 func convertParameterValue(t PgType, v driver.Value) ([]byte, error) {
@@ -73,6 +80,8 @@ func convertParameterValue(t PgType, v driver.Value) ([]byte, error) {
 		return convertInt4Param(convertIntParam(v))
 	case Int8:
 		return convertInt8Param(convertIntParam(v))
+	case Timestamp, TimestampTZ:
+		return convertTimestampParam(v)
 	default:
 		return convertStringParam(v)
 	}
@@ -99,6 +108,19 @@ func convertStringParam(v driver.Value) ([]byte, error) {
 		return v.([]byte), nil
 	default:
 		return nil, errors.New("Invalid value type")
+	}
+}
+
+/*
+convertTimestamp will produce a binary-format timestamp if the input is a
+time.Time, and otherwise will produce a string.
+*/
+func convertTimestampParam(v driver.Value) ([]byte, error) {
+	switch v.(type) {
+	case time.Time:
+		return convertInt8Param(common.TimeToPgTimestamp(v.(time.Time)), nil)
+	default:
+		return convertStringParam(v)
 	}
 }
 
@@ -208,17 +230,14 @@ func convertColumnValue(t PgType, b []byte) driver.Value {
 		var si8 int64
 		binary.Read(buf, networkByteOrder, &si8)
 		return si8
-	case TimestampTZ:
+	case Timestamp, TimestampTZ:
 		if b == nil {
 			return nil
 		}
-		// Timestamps are returned as strings. Parse them into a Time value
-		// in case the user wants that instead of a string.
-		tm, err := time.Parse(pgTimeFormat, string(b))
-		if err == nil {
-			return tm
-		}
-		return []byte(fmt.Sprintf("Invalid timestamp %s", string(b)))
+		buf := bytes.NewBuffer(b)
+		var ts8 int64
+		binary.Read(buf, networkByteOrder, &ts8)
+		return common.PgTimestampToTime(ts8)
 	default:
 		// This may have been a "bytea" column, in which case we must return the
 		// raw bytes. Otherwise, the database returned a string or nil here, and

@@ -17,32 +17,32 @@ limitations under the License.
 package common
 
 import (
-	"net/http"
 	"encoding/json"
+	"net/http"
 )
 
 /*
 An APIError is an error returned, usually in JSON, from an API.
- */
+*/
 type APIError struct {
-  // Code is a short description of the error in symbolic form
+	// Code is a short description of the error in symbolic form
 	Code string `json:"code"`
-  // Error is one sentence describing the error
-  Error string `json:"error"`
-  // Description is longer, if you prefer that
-  Description string `json:"description,omitempty"`
+	// Error is one sentence describing the error
+	Error string `json:"error"`
+	// Description is longer, if you prefer that
+	Description string `json:"description,omitempty"`
 }
 
 /*
 SendAPIError sends a standard error response in JSON format.
- */
+*/
 func SendAPIError(code, error, description string,
-  statusCode int,
-  resp http.ResponseWriter, req *http.Request) {
+	statusCode int,
+	resp http.ResponseWriter, req *http.Request) {
 
 	em := &APIError{
-		Code: code,
-		Error: error,
+		Code:        code,
+		Error:       error,
 		Description: description,
 	}
 

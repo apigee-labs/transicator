@@ -78,6 +78,6 @@ var tableSQL = `
   create table combined_test(
     id integer primary key,
     value varchar,
-		_apid_scope varchar);
+    _change_selector varchar);
   alter table combined_test replica identity full;
 `

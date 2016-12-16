@@ -26,7 +26,7 @@ import (
 
 const (
 	acknowledgeDelay = 500 * time.Millisecond
-	maxBatchSize = 100
+	maxBatchSize     = 100
 )
 
 func (s *server) runReplication(firstChange common.Sequence) {
@@ -88,10 +88,10 @@ func (s *server) handleChanges(cb []*common.Change, firstChange common.Sequence)
 				c.Timestamp = time.Now().Unix()
 			}
 			e := storage.Entry{
-				Scope: getScope(c),
-				LSN: c.CommitSequence,
+				Scope: getSelector(c),
+				LSN:   c.CommitSequence,
 				Index: c.CommitIndex,
-				Data: encodeChangeProto(c),
+				Data:  encodeChangeProto(c),
 			}
 			entryBatch = append(entryBatch, e)
 			lastSeq = cs
@@ -105,16 +105,16 @@ func (s *server) handleChanges(cb []*common.Change, firstChange common.Sequence)
 		s.tracker.update(common.MakeSequence(e.LSN, e.Index), e.Scope)
 	}
 
- return lastSeq
+	return lastSeq
 }
 
-func getScope(c *common.Change) string {
-	var scope string
+func getSelector(c *common.Change) string {
+	var selector string
 	if c.NewRow != nil {
-		c.NewRow.Get(scopeField, &scope)
+		c.NewRow.Get(selectorColumn, &selector)
 	}
 	if c.OldRow != nil {
-		c.OldRow.Get(scopeField, &scope)
+		c.OldRow.Get(selectorColumn, &selector)
 	}
-	return scope
+	return selector
 }

@@ -50,7 +50,7 @@ var _ = Describe("Change tracker", func() {
 		Expect(behind.LSN).Should(BeEquivalentTo(2))
 	})
 
-	It("Behind with scopes", func() {
+	It("Behind with selectors", func() {
 		tracker.update(common.MakeSequence(3, 0), "foo")
 		tracker.update(common.MakeSequence(4, 0), "bar")
 		behind := tracker.wait(common.MakeSequence(1, 0), []string{"foo"})
@@ -68,7 +68,7 @@ var _ = Describe("Change tracker", func() {
 		Expect(behind.LSN).Should(BeEquivalentTo(2))
 	})
 
-	It("Caught up with scopes", func() {
+	It("Caught up with selectors", func() {
 		tracker.update(common.MakeSequence(3, 0), "foo")
 		tracker.update(common.MakeSequence(4, 0), "bar")
 		time.Sleep(time.Millisecond * 250)
@@ -177,7 +177,7 @@ var _ = Describe("Change tracker", func() {
 		Eventually(doneChan).Should(Receive(BeEquivalentTo(4)))
 	})
 
-	It("Update with scopes", func() {
+	It("Update with selectors", func() {
 		doneChan := make(chan uint64, 1)
 
 		go func() {
@@ -192,7 +192,7 @@ var _ = Describe("Change tracker", func() {
 		Eventually(doneChan).Should(Receive(BeEquivalentTo(4)))
 	})
 
-	It("Update with two scopes", func() {
+	It("Update with two selectors", func() {
 		doneChan := make(chan uint64, 1)
 
 		go func() {

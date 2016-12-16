@@ -63,6 +63,7 @@ var _ = BeforeSuite(func() {
 				iint int,
 				double float8,
 				timestamp timestamp with time zone,
+				ts timestamp,
 				yesno bool,
 				blob bytea
 			) with oids`)

@@ -49,7 +49,7 @@ var _ = Describe("Combined tests", func() {
 
 	It("Combined test", func() {
 		// Insert some data to PG
-		insert, err := db.Prepare("insert into combined_test (id, value, _apid_scope) values ($1, $2, $3)")
+		insert, err := db.Prepare("insert into combined_test (id, value, _change_selector) values ($1, $2, $3)")
 		Expect(err).Should(Succeed())
 		defer insert.Close()
 

@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"strconv"
 	"testing/quick"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -153,6 +154,32 @@ var _ = Describe("Value conversion tests", func() {
 		Expect(quick.Check(testBytes, nil)).Should(Succeed())
 	})
 
+	It("timestamp", func() {
+		now := time.Now()
+		c := &Change{
+			NewRow: Row{
+				"val": &ColumnVal{
+					Value: now,
+				},
+			},
+		}
+
+		nv := marshUnmarsh(c)
+
+		var rts time.Time
+		err := nv.Get(&rts)
+		Expect(err).Should(Succeed())
+		// Go timestamp has microseconds but not PG timestamp
+		Expect(rts.UnixNano()).Should(BeNumerically("~", now.UnixNano(), 1000))
+
+		var tss string
+		err = nv.Get(&tss)
+		Expect(err).Should(Succeed())
+		pts, err := time.Parse("2006-01-02 15:04:05.99999999 -0700 MST", tss)
+		Expect(err).Should(Succeed())
+		Expect(pts.UnixNano()).Should(BeNumerically("~", now.UnixNano(), 1000))
+	})
+
 	It("Get", func() {
 		c := &Change{
 			NewRow: Row{
@@ -202,6 +229,26 @@ var _ = Describe("Value conversion tests", func() {
 		err = c.NewRow.Get("val", &sv)
 		Expect(err).Should(Succeed())
 		Expect(sv).Should(Equal(""))
+	})
+
+	It("Timestamp sanity checks", func() {
+		unixEpoch, err :=
+			time.Parse("1/2/2006 15:04:05 -0700", "1/1/1970 00:00:00 -0000")
+		Expect(err).Should(Succeed())
+		Expect(unixEpoch.Unix()).Should(BeZero())
+
+		pgEpoch, err :=
+			time.Parse("1/2/2006 15:04:05 -0700", "1/1/2000 00:00:00 -0000")
+		Expect(err).Should(Succeed())
+		Expect(pgEpoch.UnixNano()).Should(BeEquivalentTo(postgresEpochNanos))
+	})
+
+	It("Timestamp conversion", func() {
+		now := time.Now()
+		nowRounded := time.Unix(0, now.UnixNano()-now.UnixNano()%1000)
+		r := PgTimestampToTime(TimeToPgTimestamp(nowRounded))
+		Expect(r.UnixNano()).Should(Equal(nowRounded.UnixNano()))
+		Expect(r).Should(Equal(nowRounded))
 	})
 })
 

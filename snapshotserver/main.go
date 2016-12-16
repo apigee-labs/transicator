@@ -34,11 +34,11 @@ const (
 	packageName string = "transicator"
 	appName     string = "snapshotserver"
 	// Default timeout for individual Postgres transactions
-	defaultPGTimeout  = 30 * time.Second
-	defaultScopeField = "_apid_scope"
+	defaultPGTimeout      = 30 * time.Second
+	defaultSelectorColumn = "_change_selector"
 )
 
-var scopeField = defaultScopeField
+var selectorColumn = defaultSelectorColumn
 
 func printUsage() {
 	fmt.Fprintln(os.Stderr, "Usage:")
@@ -83,7 +83,7 @@ func main() {
 	cert := viper.GetString("cert")
 
 	debug := viper.GetBool("debug")
-	scopeFieldParam := viper.GetString("scopeField")
+	selectorColumn = viper.GetString("selectorColumn")
 
 	if pgURL == "" {
 		printUsage()
@@ -97,8 +97,6 @@ func main() {
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
-
-	scopeField = scopeFieldParam
 
 	log.Infof("Connecting to Postgres DB %s\n", pgURL)
 	db, err := sql.Open("transicator", pgURL)
@@ -121,7 +119,7 @@ func main() {
 
 	router := httprouter.New()
 
-	router.GET("/scopes/:apidconfigId",
+	router.GET("/scopes/:apidclusterId",
 		func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 			GetScopes(w, r, db, p)
 		})

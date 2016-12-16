@@ -39,8 +39,8 @@ func setConfigDefaults() {
 	pflag.String("cert", "", "TLS certificate file")
 	viper.SetDefault("cert", "")
 
-	pflag.StringP("scopefield", "S", "", "Set scope field")
-	viper.SetDefault("scopeField", defaultScopeField)
+	pflag.StringP("selectorcolumn", "S", "", "Set selector column")
+	viper.SetDefault("selectorColumn", defaultSelectorColumn)
 
 	pflag.BoolP("config", "C", false, fmt.Sprintf("Use a config file named '%s' located in either /etc/%s/, ~/.%s or ./)", appName, packageName, packageName))
 	pflag.BoolP("debug", "D", false, "Turn on debugging")
@@ -59,7 +59,7 @@ func getConfig() error {
 	viper.BindPFlag("configFile", pflag.Lookup("config"))
 	viper.BindPFlag("debug", pflag.Lookup("debug"))
 	viper.BindPFlag("help", pflag.Lookup("help"))
-	viper.BindPFlag("scopeField", pflag.Lookup("scopefield"))
+	viper.BindPFlag("selectorColumn", pflag.Lookup("selectorcolumn"))
 
 	// Load config values from file
 	if viper.GetBool("configFile") {
