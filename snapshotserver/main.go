@@ -36,9 +36,16 @@ const (
 	// Default timeout for individual Postgres transactions
 	defaultPGTimeout      = 30 * time.Second
 	defaultSelectorColumn = "_change_selector"
+	defaultTempDir = ""
+	tempSnapshotPrefix = "transicatortmp"
+	tempSnapshotName = "snap"
 )
 
+// selectorColumn is the name of the database column that distinguishes a scope
 var selectorColumn = defaultSelectorColumn
+
+// tempSnapshotDir is where we'll put temporary sqlite files
+var tempSnapshotDir = defaultTempDir
 
 func printUsage() {
 	fmt.Fprintln(os.Stderr, "Usage:")
@@ -84,6 +91,7 @@ func main() {
 
 	debug := viper.GetBool("debug")
 	selectorColumn = viper.GetString("selectorColumn")
+	tempSnapshotDir = viper.GetString("tempdir")
 
 	if pgURL == "" {
 		printUsage()
