@@ -42,6 +42,9 @@ func setConfigDefaults() {
 	pflag.StringP("selectorcolumn", "S", "", "Set selector column")
 	viper.SetDefault("selectorColumn", defaultSelectorColumn)
 
+	pflag.StringP("tempdir", "T", "", "Set temporary directory for snapshot files")
+	viper.SetDefault("tempdir", defaultTempDir)
+
 	pflag.BoolP("config", "C", false, fmt.Sprintf("Use a config file named '%s' located in either /etc/%s/, ~/.%s or ./)", appName, packageName, packageName))
 	pflag.BoolP("debug", "D", false, "Turn on debugging")
 	viper.SetDefault("debug", false)
@@ -60,6 +63,7 @@ func getConfig() error {
 	viper.BindPFlag("debug", pflag.Lookup("debug"))
 	viper.BindPFlag("help", pflag.Lookup("help"))
 	viper.BindPFlag("selectorColumn", pflag.Lookup("selectorcolumn"))
+	viper.BindPFlag("tempdir", pflag.Lookup("tempdir"))
 
 	// Load config values from file
 	if viper.GetBool("configFile") {
