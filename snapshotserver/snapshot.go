@@ -35,8 +35,10 @@ import (
 const (
 	jsonType       = "json"
 	protoType      = "proto"
+	sqliteDataType = "sqlite"
 	jsonMediaType  = "application/json"
 	protoMediaType = "application/transicator+protobuf"
+	sqlMediaType   = "application/transicator+sqlite"
 )
 
 /*
@@ -414,22 +416,23 @@ func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	changeSelectorInput := r.URL.Query()["scope"]
 	if len(changeSelectorInput) == 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("Must include at least one \"scope\" query parameter"))
+		sendAPIError(missingScope, "", w, r)
 		return
 	}
 
-	mediaType := goscaffold.SelectMediaType(r, []string{jsonMediaType, protoMediaType})
+	mediaType := goscaffold.SelectMediaType(r,
+		[]string{jsonMediaType, sqlMediaType, protoMediaType})
 	typeParam := ""
 
 	switch mediaType {
 	case jsonMediaType:
 		typeParam = jsonType
+	case sqlMediaType:
+		typeParam = sqliteDataType
 	case protoMediaType:
 		typeParam = protoType
 	default:
-		w.WriteHeader(http.StatusUnsupportedMediaType)
+		sendAPIError(unsupportedMediaType, "", w, r)
 		return
 	}
 	for _, selector := range changeSelectorInput {
@@ -438,18 +441,17 @@ func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 	redURL := "/data?" + changeSelectorParam + "type=" + typeParam
 
 	http.Redirect(w, r, redURL, http.StatusSeeOther)
-
 }
 
 /*
-DownloadSnapshot downloads and resturns the JSON related to the scope
+DownloadSnapshot downloads and returns the JSON related to the scope
 */
 func DownloadSnapshot(
 	w http.ResponseWriter, r *http.Request,
 	db *sql.DB, p httprouter.Params) {
 	scopes := r.URL.Query()["scope"]
 	if len(scopes) == 0 {
-		log.Errorf("change_selector Missing, Request Ignored")
+		sendAPIError(missingScope, "", w, r)
 		return
 	}
 
@@ -461,6 +463,12 @@ func DownloadSnapshot(
 	switch mediaType {
 	case jsonType:
 		w.Header().Add("Content-Type", jsonMediaType)
+	case sqliteDataType:
+		err := WriteSqliteSnapshot(scopes, db, w, r)
+		if err != nil {
+			log.Errorf("GetTenantSnapshotData error: %v", err)
+		}
+		return
 	case protoType:
 		w.Header().Add("Content-Type", protoMediaType)
 	default:

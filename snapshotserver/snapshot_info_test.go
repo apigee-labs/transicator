@@ -47,7 +47,7 @@ var (
 func TestSnapshot(t *testing.T) {
 	dbURL = os.Getenv("TEST_PG_URL")
 	if dbURL == "" {
-		fmt.Println("Skipping replication tests because TEST_PG_URL not set")
+		fmt.Println("Skipping snapshot tests because TEST_PG_URL not set")
 		fmt.Println("  Example: postgres://user:password@host:port/database")
 	} else {
 		RegisterFailHandler(Fail)
