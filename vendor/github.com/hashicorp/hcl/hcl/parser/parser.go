@@ -256,10 +256,7 @@ func (p *Parser) objectKey() ([]*ast.ObjectKey, error) {
 			keyCount++
 			keys = append(keys, &ast.ObjectKey{Token: p.tok})
 		case token.ILLEGAL:
-			return keys, &PosError{
-				Pos: p.tok.Pos,
-				Err: fmt.Errorf("illegal character"),
-			}
+			fmt.Println("illegal")
 		default:
 			return keys, &PosError{
 				Pos: p.tok.Pos,

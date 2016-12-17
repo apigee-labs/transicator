@@ -317,23 +317,11 @@ func (s *HTTPScaffold) Open() error {
 }
 
 /*
-Listen should be called instead of using the standard "http" and "net"
+StartListen should be called instead of using the standard "http" and "net"
 libraries. It will open a port (or ports) and begin listening for
-HTTP traffic. It will block until the server is shut down by
-the various methods in this class.
-It will use the graceful shutdown logic to ensure that once marked down,
-the server will not exit until all the requests have completed,
-or until the shutdown timeout has expired.
-Like http.Serve, this function will block until we are done serving HTTP.
-If "SetInsecurePort" or "SetSecurePort" were not set, then it will listen on
-a dynamic port.
-Listen will block until the server is shutdown using "Shutdown" or one of
-the other shutdown mechanisms. It must not be called until after "Open"
-has been called.
-If shut down, Listen will return the error that was passed to the "shutdown"
-method.
+HTTP traffic.
 */
-func (s *HTTPScaffold) Listen(baseHandler http.Handler) error {
+func (s *HTTPScaffold) StartListen(baseHandler http.Handler) error {
 	if !s.open {
 		err := s.Open()
 		if err != nil {
@@ -366,7 +354,24 @@ func (s *HTTPScaffold) Listen(baseHandler http.Handler) error {
 	if s.secureListener != nil {
 		go http.Serve(s.secureListener, mainHandler)
 	}
+	return nil
+}
 
+/*
+WaitForShutdown blocks until we are shut down.
+It will use the graceful shutdown logic to ensure that once marked down,
+the server will not exit until all the requests have completed,
+or until the shutdown timeout has expired.
+Like http.Serve, this function will block until we are done serving HTTP.
+If "SetInsecurePort" or "SetSecurePort" were not set, then it will listen on
+a dynamic port.
+This method will block until the server is shutdown using "Shutdown" or one of
+the other shutdown mechanisms. It must not be called until after
+"StartListenen"
+When shut down, this method will return the error that was passed to the "shutdown"
+method.
+*/
+func (s *HTTPScaffold) WaitForShutdown() error {
 	err := <-s.tracker.C
 
 	if s.insecureListener != nil {
@@ -380,6 +385,19 @@ func (s *HTTPScaffold) Listen(baseHandler http.Handler) error {
 	}
 
 	return err
+}
+
+/*
+Listen is a convenience function that first calls "StartListen" and then
+calls "WaitForShutdown."
+*/
+func (s *HTTPScaffold) Listen(baseHandler http.Handler) error {
+	err := s.StartListen(baseHandler)
+	if err != nil {
+		return err
+	}
+
+	return s.WaitForShutdown()
 }
 
 /*
