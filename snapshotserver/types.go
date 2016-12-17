@@ -1,4 +1,4 @@
-package main
+package snapshotserver
 
 import (
 	"github.com/apigee-labs/transicator/pgclient"

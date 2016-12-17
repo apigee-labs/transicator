@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package main
+package snapshotserver
 
 import (
 	"bytes"
@@ -26,12 +26,13 @@ import (
 	"github.com/apigee-labs/transicator/common"
 	"github.com/apigee-labs/transicator/pgclient"
 
-	"strconv"
-	"strings"
+	"time"
 
+	"github.com/30x/goscaffold"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -41,7 +42,10 @@ const (
 var (
 	dbURL string
 
-	db *sql.DB
+	db           *sql.DB
+	testStop     chan bool
+	testBase     string
+	testListener *goscaffold.HTTPScaffold
 )
 
 func TestSnapshot(t *testing.T) {
@@ -57,6 +61,7 @@ func TestSnapshot(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	testStop = make(chan bool)
 	if debugTests {
 		logrus.SetLevel(logrus.DebugLevel)
 		logrus.Debug("Debug on")
@@ -77,19 +82,38 @@ var _ = BeforeSuite(func() {
 
 	_, err = db.Exec(testTableSQL)
 	Expect(err).Should(Succeed())
+
+	SetConfigDefaults()
+	viper.Set("port", 0)
+	viper.Set("pgURL", dbURL)
+	viper.Set("debug", debugTests)
+
+	testListener, err = Run()
+	Expect(err).Should(Succeed())
+
+	fmt.Fprintf(GinkgoWriter, "Listening on %s\n", testListener.InsecureAddress())
+	testBase = fmt.Sprintf("http://%s", testListener.InsecureAddress())
+
+	go func() {
+		serr := testListener.WaitForShutdown()
+		fmt.Fprintf(GinkgoWriter, "Server shut down: %s\n", serr)
+		testStop <- (serr == nil)
+	}()
 })
 
 var _ = AfterSuite(func() {
+	fmt.Fprintf(GinkgoWriter, "Stopping listener\n")
+	testListener.Shutdown(nil)
+
+	for _, table := range allTables {
+		dropTable(table)
+	}
 	if db != nil {
 		db.Close()
 	}
-})
 
-func tableExists(name string) bool {
-	fmt.Fprintf(GinkgoWriter, "Checking for %s\n", name)
-	_, err := db.Query(fmt.Sprintf("select * from %s limit 0", name))
-	return err == nil
-}
+	Eventually(testStop, 20*time.Second).Should(Receive())
+})
 
 func truncateTable(name string) error {
 	// Deleting all the rows of the table does not lock as much and does not block tests
@@ -106,28 +130,6 @@ type SnapInfo struct {
 	xmin    int32
 	xmax    int32
 	xipList []int32
-}
-
-func getCurrentSnapshotInfo() *SnapInfo {
-	row := db.QueryRow("select txid_current_snapshot()")
-	var s string
-	err := row.Scan(&s)
-	Expect(err).Should(Succeed())
-
-	a := strings.Split(s, ":")
-	si := new(SnapInfo)
-	xmin, _ := strconv.Atoi(a[0])
-	si.xmin = int32(xmin)
-	xmax, _ := strconv.Atoi(a[1])
-	si.xmax = int32(xmax)
-	xips := strings.Split(a[2], ",")
-	for _, xip := range xips {
-		if xip != "" {
-			v, _ := strconv.Atoi(xip)
-			si.xipList = append(si.xipList, int32(v))
-		}
-	}
-	return si
 }
 
 var allTables = []string{
@@ -216,15 +218,6 @@ CREATE TABLE transicator_tests.schema_table (
 );
 alter table transicator_tests.schema_table replica identity full;
 `
-
-func getCurrentTxid() int32 {
-	row := db.QueryRow("select txid_current()")
-	var s string
-	err := row.Scan(&s)
-	Expect(err).Should(Succeed())
-	txid, _ := strconv.Atoi(s)
-	return int32(txid)
-}
 
 var _ = Describe("Taking a snapshot", func() {
 

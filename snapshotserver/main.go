@@ -13,20 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package main
+package snapshotserver
 
 import (
 	"database/sql"
-	"fmt"
+	"errors"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/30x/goscaffold"
 	log "github.com/Sirupsen/logrus"
 	"github.com/apigee-labs/transicator/pgclient"
 	"github.com/julienschmidt/httprouter"
-	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -36,9 +34,9 @@ const (
 	// Default timeout for individual Postgres transactions
 	defaultPGTimeout      = 30 * time.Second
 	defaultSelectorColumn = "_change_selector"
-	defaultTempDir = ""
-	tempSnapshotPrefix = "transicatortmp"
-	tempSnapshotName = "snap"
+	defaultTempDir        = ""
+	tempSnapshotPrefix    = "transicatortmp"
+	tempSnapshotName      = "snap"
 )
 
 // selectorColumn is the name of the database column that distinguishes a scope
@@ -47,37 +45,18 @@ var selectorColumn = defaultSelectorColumn
 // tempSnapshotDir is where we'll put temporary sqlite files
 var tempSnapshotDir = defaultTempDir
 
-func printUsage() {
-	fmt.Fprintln(os.Stderr, "Usage:")
-	pflag.PrintDefaults()
-	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, "Postgres URL must be specified.")
-	fmt.Fprintln(os.Stderr, "Either one of the \"port\" or \"secureport\" must be specified")
-	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintln(os.Stderr,
-		"snapshotserver -p 9090 -u postgres://user@host/postgres")
-}
+var UsageError = errors.New("Invalid arguments")
 
 /*
- * Main entry point
+ * Start the snapshot server. It will listen on an HTTP port as directed
+ * by the Viper configuration. This method will block until either there
+ * is an error, or the server is stopped, so a goroutine is recommended
+ * if running this as part of a unit test.
  */
-func main() {
-	help := false
-
-	setConfigDefaults()
-	pflag.BoolVarP(&help, "help", "h", false, "Print help message")
-
-	pflag.Parse()
-	if !pflag.Parsed() || help {
-		printUsage()
-		os.Exit(2)
-	}
-
+func Run() (*goscaffold.HTTPScaffold, error) {
 	err := getConfig()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		os.Exit(1)
+		return nil, err
 	}
 
 	// Fetch config values from Viper
@@ -94,12 +73,10 @@ func main() {
 	tempSnapshotDir = viper.GetString("tempdir")
 
 	if pgURL == "" {
-		printUsage()
-		os.Exit(3)
+		return nil, UsageError
 	}
 	if port < 0 && securePort < 0 {
-		printUsage()
-		os.Exit(3)
+		return nil, UsageError
 	}
 
 	if debug {
@@ -109,8 +86,7 @@ func main() {
 	log.Infof("Connecting to Postgres DB %s\n", pgURL)
 	db, err := sql.Open("transicator", pgURL)
 	if err != nil {
-		log.Warnf("Unable to connect to Postgres. Err : %v\n", err)
-		return
+		return nil, errors.New("Unable to initialize database connection")
 	}
 	err = db.Ping()
 	if err != nil {
@@ -150,7 +126,6 @@ func main() {
 	}
 	scaf.SetKeyFile(key)
 	scaf.SetCertFile(cert)
-	scaf.CatchSignals()
 	scaf.SetHealthPath("/health")
 	scaf.SetReadyPath("/ready")
 	scaf.SetHealthChecker(func() (goscaffold.HealthStatus, error) {
@@ -158,9 +133,8 @@ func main() {
 	})
 	scaf.SetMarkdown("GET", "/markdown", nil)
 
-	log.Infof("Listening on port %d", port)
-	err = scaf.Listen(router)
-	log.Infof("Shutting down: %s", err)
+	err = scaf.StartListen(router)
+	return scaf, err
 }
 
 func checkHealth(db *sql.DB) (goscaffold.HealthStatus, error) {
