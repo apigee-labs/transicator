@@ -23,6 +23,9 @@ import (
 	"github.com/spf13/viper"
 )
 
+/*
+SetConfigDefaults sets up Viper for command-line and other processing.
+*/
 func SetConfigDefaults() {
 	pflag.IntP("port", "p", -1, "HTTP Binding port")
 	viper.SetDefault("port", -1)

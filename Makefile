@@ -1,4 +1,5 @@
-SUBDIRS = ./replication ./common ./storage ./pgclient ./snapshotserver ./changeserver 
+SUBDIRS = ./replication ./common ./storage ./pgclient \
+	./snapshotserver ./changeserver 
 
 %.checked: 
 	(cd $*; ../presubmit_tests.sh)
