@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package main
+package snapshotserver
 
 import (
 	"fmt"
@@ -23,7 +23,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-func setConfigDefaults() {
+func SetConfigDefaults() {
 	pflag.IntP("port", "p", -1, "HTTP Binding port")
 	viper.SetDefault("port", -1)
 	pflag.IntP("secureport", "t", -1, "HTTPS listen port")
