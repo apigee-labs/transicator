@@ -50,7 +50,7 @@ func GetTenants(tenantID []string) string {
 
 	str.WriteString("(")
 	for idx, tid := range tenantID {
-		log.Debugf("Get table id: ", tid, idx)
+		log.Debugf("Get table id: %s %d", tid, idx)
 		str.WriteString("'" + tid + "'")
 		if idx != len(tenantID)-1 {
 			str.WriteString(",")

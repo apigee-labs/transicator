@@ -113,6 +113,7 @@ var _ = AfterSuite(func() {
 	}
 
 	Eventually(testStop, 20*time.Second).Should(Receive())
+	Close()
 })
 
 func truncateTable(name string) error {
@@ -155,6 +156,7 @@ const testTableSQL = `
     double float8,
     date date,
     time time with time zone,
+    blob bytea,
     _change_selector varchar(255),
     timestamp timestamp with time zone,
     timestampp timestamp
@@ -164,7 +166,7 @@ const testTableSQL = `
 	id varchar(255),
 	username varchar(255),
 	firstname varchar(255),
-	created_at integer,
+	created_at timestamp,
 	created_by varchar(255),
  	_change_selector varchar(255),
 	PRIMARY KEY (id, _change_selector)
@@ -176,7 +178,7 @@ alter table public.developer replica identity full;
 	dev_id varchar(255) null,
 	display_name varchar(255),
 	name varchar(255),
-	created_at integer,
+	created_at timestamp,
 	created_by varchar(255),
  	_change_selector varchar(255),
 	PRIMARY KEY (id, _change_selector)
@@ -213,7 +215,7 @@ alter table public.DATA_SCOPE replica identity full;
 
 CREATE TABLE transicator_tests.schema_table (
   id character varying primary key,
-	created_at integer,
+	created_at timestamp,
 	_change_selector character varying
 );
 alter table transicator_tests.schema_table replica identity full;
@@ -248,12 +250,12 @@ var _ = Describe("Taking a snapshot", func() {
 			_, err := db.Exec(`
 				insert into APP (org, id, dev_id, display_name, created_at, _change_selector)
 				values
-				('Pepsi', 'aaa-bbb-ccc', 'xxx-yyy-zzz', 'Oracle', 9859348, 'pepsi__dev')
+				('Pepsi', 'aaa-bbb-ccc', 'xxx-yyy-zzz', 'Oracle', now(), 'pepsi__dev')
 				`)
 			Expect(err).Should(Succeed())
 			_, err = db.Exec(`
 				insert into transicator_tests.schema_table (id, created_at, _change_selector)
-			 values ('aaa-bbb-ccc', 9859348, 'pepsi__dev')
+			 values ('aaa-bbb-ccc', now(), 'pepsi__dev')
 			`)
 			Expect(err).Should(Succeed())
 
@@ -276,9 +278,6 @@ var _ = Describe("Taking a snapshot", func() {
 						if l == "id" {
 							Expect(col.Value).Should(Equal("aaa-bbb-ccc"))
 							Expect(col.Type).Should(BeEquivalentTo(1043))
-						} else if l == "created_at" {
-							Expect(col.Value).Should(Equal("9859348"))
-							Expect(col.Type).Should(BeEquivalentTo(23))
 						}
 					}
 				}
@@ -307,12 +306,11 @@ var _ = Describe("Taking a snapshot", func() {
 						var id string
 						err = row.Get("id", &id)
 						Expect(err).Should(Succeed())
-						var timestamp int64
+						var timestamp time.Time
 						err = row.Get("created_at", &timestamp)
 						Expect(err).Should(Succeed())
 
 						Expect(id).Should(Equal("aaa-bbb-ccc"))
-						Expect(timestamp).Should(BeEquivalentTo(9859348))
 						rowCount++
 					}
 				case error:
@@ -348,13 +346,13 @@ var _ = Describe("Taking a snapshot", func() {
 
 			tx, err := db.Begin()
 			Expect(err).Should(Succeed())
-			_, err = tx.Exec("insert into DEVELOPER (org, id, username, created_at, _change_selector) values ('Pepsi', 'xxx-yyy-zzz', 'sundar', 3231231, 'pepsi__dev')")
+			_, err = tx.Exec("insert into DEVELOPER (org, id, username, created_at, _change_selector) values ('Pepsi', 'xxx-yyy-zzz', 'sundar', now(), 'pepsi__dev')")
 			Expect(err).Should(Succeed())
-			_, err = tx.Exec("insert into DEVELOPER (org, id, username, created_at, _change_selector) values ('Pepsi', 'xxy-yyy-zzz', 'sundar', 3221231, 'pepsi__dev')")
+			_, err = tx.Exec("insert into DEVELOPER (org, id, username, created_at, _change_selector) values ('Pepsi', 'xxy-yyy-zzz', 'sundar', now(), 'pepsi__dev')")
 			Expect(err).Should(Succeed())
-			_, err = tx.Exec("insert into DEVELOPER (org, id, username, created_at, _change_selector) values ('Pepsi', 'xxz-yyy-zzz', 'sundar', 3231231, 'pepsi__test')")
+			_, err = tx.Exec("insert into DEVELOPER (org, id, username, created_at, _change_selector) values ('Pepsi', 'xxz-yyy-zzz', 'sundar', now(), 'pepsi__test')")
 			Expect(err).Should(Succeed())
-			_, err = tx.Exec("insert into APP (org, id, dev_id, display_name, created_at, _change_selector) values ('Pepsi', 'aaa-bbb-ccc', 'xxx-yyy-zzz', 'Oracle', 9859348, 'pepsi__dev')")
+			_, err = tx.Exec("insert into APP (org, id, dev_id, display_name, created_at, _change_selector) values ('Pepsi', 'aaa-bbb-ccc', 'xxx-yyy-zzz', 'Oracle', now(), 'pepsi__dev')")
 			Expect(err).Should(Succeed())
 			err = tx.Commit()
 			Expect(err).Should(Succeed())

@@ -10,10 +10,13 @@
 
 FROM golang:1.7.3-alpine
 
+RUN \
+  apk add --no-cache gcc linux-headers musl-dev
+
 COPY . /go/src/github.com/apigee-labs/transicator
 
 RUN \
-    (cd /go/src/github.com/apigee-labs/transicator/snapshotserver; go build -o /snapshotserver) \
+    (cd /go/src/github.com/apigee-labs/transicator; go build -o /snapshotserver ./cmd/snapshotserver) \
  && mkdir /keys \
  && rm -r /go
 
