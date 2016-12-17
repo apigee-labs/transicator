@@ -1,17 +1,17 @@
-SUBDIRS = ./replication ./common ./storage ./pgclient ./snapshotserver ./changeserver
+SUBDIRS = ./replication ./common ./storage ./pgclient ./snapshotserver ./changeserver 
 
 %.checked: 
 	(cd $*; ../presubmit_tests.sh)
 
 all: ./bin/changeserver ./bin/snapshotserver
 
-./bin/changeserver: ./bin ./*/*.go
+./bin/changeserver: ./bin ./*/*.go ./cmd/*/*.go
 	go build -o $@ ./changeserver
 
-./bin/snapshotserver: ./bin ./*/*.go
-	go build -o $@ ./snapshotserver
+./bin/snapshotserver: ./bin ./*/*.go ./cmd/*/*.go
+	go build -o $@ ./cmd/snapshotserver
 
-./bin/changeserver-rocksdb: ./bin ./*/*.go
+./bin/changeserver-rocksdb: ./bin ./*/*.go ./cmd/*/*.go
 	go build -tags rocksdb -o $@ ./changeserver
 
 rocksdb: ./bin/changeserver-rocksdb ./bin/snapshotserver
@@ -29,6 +29,7 @@ dockerTests:
 	./test/dockertest.sh
 
 presubmit: $(foreach d, $(SUBDIRS), ./$d.checked) pgoutput.checked
+	(cd ./cmd/snapshotserver; ../../presubmit_tests.sh)
 
 clean:
 	rm -f bin/changeserver
