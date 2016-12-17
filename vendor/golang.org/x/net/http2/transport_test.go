@@ -2073,10 +2073,11 @@ func TestTransportHandlerBodyClose(t *testing.T) {
 
 // https://golang.org/issue/15930
 func TestTransportFlowControl(t *testing.T) {
-	const (
-		total  = 100 << 20 // 100MB
-		bufLen = 1 << 16
-	)
+	const bufLen = 64 << 10
+	var total int64 = 100 << 20 // 100MB
+	if testing.Short() {
+		total = 10 << 20
+	}
 
 	var wrote int64 // updated atomically
 	st := newServerTester(t, func(w http.ResponseWriter, r *http.Request) {
@@ -2889,6 +2890,27 @@ func TestTransportRetryAfterGOAWAY(t *testing.T) {
 			c.Close()
 		default:
 			return
+		}
+	}
+}
+
+func TestAuthorityAddr(t *testing.T) {
+	tests := []struct {
+		scheme, authority string
+		want              string
+	}{
+		{"http", "foo.com", "foo.com:80"},
+		{"https", "foo.com", "foo.com:443"},
+		{"https", "foo.com:1234", "foo.com:1234"},
+		{"https", "1.2.3.4:1234", "1.2.3.4:1234"},
+		{"https", "1.2.3.4", "1.2.3.4:443"},
+		{"https", "[::1]:1234", "[::1]:1234"},
+		{"https", "[::1]", "[::1]:443"},
+	}
+	for _, tt := range tests {
+		got := authorityAddr(tt.scheme, tt.authority)
+		if got != tt.want {
+			t.Errorf("authorityAddr(%q, %q) = %q; want %q", tt.scheme, tt.authority, got, tt.want)
 		}
 	}
 }
