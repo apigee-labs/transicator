@@ -45,14 +45,17 @@ var selectorColumn = defaultSelectorColumn
 // tempSnapshotDir is where we'll put temporary sqlite files
 var tempSnapshotDir = defaultTempDir
 
-var UsageError = errors.New("Invalid arguments")
+// ErrUsage is returned when the user passes incorrect command-line arguments.
+var ErrUsage = errors.New("Invalid arguments")
+
+var mainDB *sql.DB
 
 /*
- * Start the snapshot server. It will listen on an HTTP port as directed
- * by the Viper configuration. This method will block until either there
- * is an error, or the server is stopped, so a goroutine is recommended
- * if running this as part of a unit test.
- */
+Run starts the snapshot server. It will listen on an HTTP port as directed
+by the Viper configuration. This method will block until either there
+is an error, or the server is stopped, so a goroutine is recommended
+if running this as part of a unit test.
+*/
 func Run() (*goscaffold.HTTPScaffold, error) {
 	err := getConfig()
 	if err != nil {
@@ -73,10 +76,10 @@ func Run() (*goscaffold.HTTPScaffold, error) {
 	tempSnapshotDir = viper.GetString("tempdir")
 
 	if pgURL == "" {
-		return nil, UsageError
+		return nil, ErrUsage
 	}
 	if port < 0 && securePort < 0 {
-		return nil, UsageError
+		return nil, ErrUsage
 	}
 
 	if debug {
@@ -84,28 +87,26 @@ func Run() (*goscaffold.HTTPScaffold, error) {
 	}
 
 	log.Infof("Connecting to Postgres DB %s\n", pgURL)
-	db, err := sql.Open("transicator", pgURL)
+	mainDB, err = sql.Open("transicator", pgURL)
 	if err != nil {
 		return nil, errors.New("Unable to initialize database connection")
 	}
-	err = db.Ping()
+	err = mainDB.Ping()
 	if err != nil {
 		log.Warnf("Warning: Postgres DB Err: %v\n", err)
 		log.Warn("Continuing anyway...")
 	}
 
 	log.Info("Connection to Postgres succeeded.\n")
-	pgdriver := db.Driver().(*pgclient.PgDriver)
+	pgdriver := mainDB.Driver().(*pgclient.PgDriver)
 	pgdriver.SetIsolationLevel("repeatable read")
 	pgdriver.SetExtendedColumnNames(true)
 	pgdriver.SetReadTimeout(defaultPGTimeout)
-	defer db.Close()
-
 	router := httprouter.New()
 
 	router.GET("/scopes/:apidclusterId",
 		func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-			GetScopes(w, r, db, p)
+			GetScopes(w, r, mainDB, p)
 		})
 
 	router.GET("/snapshots",
@@ -115,7 +116,7 @@ func Run() (*goscaffold.HTTPScaffold, error) {
 
 	router.GET("/data",
 		func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-			DownloadSnapshot(w, r, db, p)
+			DownloadSnapshot(w, r, mainDB, p)
 		})
 
 	scaf := goscaffold.CreateHTTPScaffold()
@@ -129,12 +130,21 @@ func Run() (*goscaffold.HTTPScaffold, error) {
 	scaf.SetHealthPath("/health")
 	scaf.SetReadyPath("/ready")
 	scaf.SetHealthChecker(func() (goscaffold.HealthStatus, error) {
-		return checkHealth(db)
+		return checkHealth(mainDB)
 	})
 	scaf.SetMarkdown("GET", "/markdown", nil)
 
 	err = scaf.StartListen(router)
 	return scaf, err
+}
+
+/*
+Close closes the database and does other necessary cleanup.
+*/
+func Close() {
+	if mainDB != nil {
+		mainDB.Close()
+	}
 }
 
 func checkHealth(db *sql.DB) (goscaffold.HealthStatus, error) {

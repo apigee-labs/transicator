@@ -1,3 +1,18 @@
+/*
+Copyright 2016 The Transicator Authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package snapshotserver
 
 import (
@@ -11,8 +26,15 @@ import (
 	"bytes"
 	"fmt"
 
+	"time"
+
 	log "github.com/Sirupsen/logrus"
+	// Blank import to ensure SQLite driver is linked with binary
 	_ "github.com/mattn/go-sqlite3"
+)
+
+const (
+	sqliteTimestampFormat = "2006-01-02T15:04:05.000Z"
 )
 
 /*
@@ -73,7 +95,8 @@ func WriteSqliteSnapshot(scopes []string, db *sql.DB, w http.ResponseWriter, r *
 
 	pgTx.Commit()
 
-	// Close the database
+	// Close the database. Checkpoint the WAL so that the result
+	// is a single file, with no additional .wal or .shm file.
 	_, err = tdb.Exec("pragma wal_checkpoint(TRUNCATE)")
 	if err != nil {
 		sendAPIError(serverError, err.Error(), w, r)
@@ -115,7 +138,7 @@ func makeSqliteTable(tdb *sql.DB, t *pgTable) error {
 func makeSqliteTableSQL(t *pgTable) string {
 	s := &bytes.Buffer{}
 
-	s.WriteString(fmt.Sprintf("create table %s.%s (", t.schema, t.name))
+	s.WriteString(fmt.Sprintf("create table %s (", t.name))
 	first := true
 
 	for _, col := range t.columns {
@@ -142,8 +165,8 @@ func makeSqliteTableSQL(t *pgTable) string {
 
 func copyData(pgTx *sql.Tx, tdb *sql.DB, scopes []string, pgTable *pgTable) error {
 
-	sql := fmt.Sprintf("select * from %s where %s in %s",
-		pgTable, selectorColumn, GetTenants(scopes))
+	sql := fmt.Sprintf("select * from %s.%s where %s in %s",
+		pgTable.schema, pgTable.name, selectorColumn, GetTenants(scopes))
 	log.Debugf("Postgres query: %s", sql)
 
 	pgRows, err := pgTx.Query(sql)
@@ -154,12 +177,12 @@ func copyData(pgTx *sql.Tx, tdb *sql.DB, scopes []string, pgTable *pgTable) erro
 
 	// Use column names from the query and not from the table definition.
 	// That way we are sure that we are getting them in the right order.
-	colNames, _, err := parseColumnNames(pgRows)
+	colNames, colTypes, err := parseColumnNames(pgRows)
 	if err != nil {
 		return err
 	}
 
-	sql = makeInsertSql(pgTable, colNames)
+	sql = makeInsertSQL(pgTable, colNames)
 	log.Debugf("Sqlite insert: %s", sql)
 
 	stmt, err := tdb.Prepare(sql)
@@ -171,15 +194,32 @@ func copyData(pgTx *sql.Tx, tdb *sql.DB, scopes []string, pgTable *pgTable) erro
 	for pgRows.Next() {
 		cols := make([]interface{}, len(colNames))
 		for i := range cols {
-			cols[i] = new(interface{})
+			switch pgToSqliteType(int(colTypes[i])) {
+			case sqlInteger:
+				cols[i] = new(*int64)
+			case sqlReal:
+				cols[i] = new(*float64)
+			case sqlBlob:
+				cols[i] = new([]byte)
+			case sqlText:
+				cols[i] = new(*string)
+			case sqlTimestamp:
+				cols[i] = new(*time.Time)
+			default:
+				panic(fmt.Sprintf("Invalid type code %d", pgToSqliteType(int(colTypes[i]))))
+			}
 		}
 		err = pgRows.Scan(cols...)
 		if err != nil {
+			log.Errorf("Postgres scan error %s. cols = %s", err, debugColTypes(cols))
 			return err
 		}
 
-		_, err := stmt.Exec(cols)
+		patchColTypes(cols)
+
+		_, err := stmt.Exec(cols...)
 		if err != nil {
+			log.Errorf("SQLite insert error %s. SQL = %s. cols = %s", err, sql, debugColTypes(cols))
 			return err
 		}
 	}
@@ -187,9 +227,36 @@ func copyData(pgTx *sql.Tx, tdb *sql.DB, scopes []string, pgTable *pgTable) erro
 	return nil
 }
 
-func makeInsertSql(pgTable *pgTable, colNames []string) string {
+func debugColTypes(cols []interface{}) string {
 	s := &bytes.Buffer{}
-	s.WriteString(fmt.Sprintf("insert into %s.%s (", pgTable.schema, pgTable.name))
+	for i, c := range cols {
+		if i > 0 {
+			s.WriteString(",")
+		}
+		s.WriteString(fmt.Sprintf("%T", c))
+	}
+	return s.String()
+}
+
+// patchColTypes looks for column types that are different between PG
+// and SQLite.
+func patchColTypes(cols []interface{}) {
+	for i, c := range cols {
+		switch c.(type) {
+		case **time.Time:
+			ts := *(c.(**time.Time))
+			if ts == nil {
+				cols[i] = ""
+			} else {
+				cols[i] = ts.UTC().Format(sqliteTimestampFormat)
+			}
+		}
+	}
+}
+
+func makeInsertSQL(pgTable *pgTable, colNames []string) string {
+	s := &bytes.Buffer{}
+	s.WriteString(fmt.Sprintf("insert into %s (", pgTable.name))
 
 	for i, cn := range colNames {
 		if i > 0 {
@@ -198,7 +265,7 @@ func makeInsertSql(pgTable *pgTable, colNames []string) string {
 		s.WriteString(cn)
 	}
 
-	s.WriteString(" values(")
+	s.WriteString(") values(")
 
 	for i := range colNames {
 		if i > 0 {

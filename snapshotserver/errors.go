@@ -24,9 +24,9 @@ import (
 type errorCode int
 
 const (
-	missingScope errorCode = iota
+	missingScope         errorCode = iota
 	unsupportedMediaType errorCode = iota
-	serverError  errorCode = iota
+	serverError          errorCode = iota
 )
 
 func sendAPIError(code errorCode, description string,
