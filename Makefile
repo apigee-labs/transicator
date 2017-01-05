@@ -3,13 +3,17 @@ SUBDIRS = ./replication ./common ./storage ./pgclient ./snapshotserver ./changes
 %.checked: 
 	(cd $*; ../presubmit_tests.sh)
 
+.PHONY : ./bin/changeserver ./bin/snapshotserver
+
 all: ./bin/changeserver ./bin/snapshotserver
 
-./bin/changeserver: ./bin ./*/*.go
-	go build -o $@ ./changeserver
+./bin/changeserver: 
+	bazel build //changeserver:server
+	cp ./bazel-bin/changeserver/server bin/changeserver
 
 ./bin/snapshotserver: ./bin ./*/*.go
-	go build -o $@ ./snapshotserver
+	bazel build //snapshotserver:server
+	cp ./bazel-bin/snapshotserver/server bin/snapshotserver
 
 ./bin/changeserver-rocksdb: ./bin ./*/*.go
 	go build -tags rocksdb -o $@ ./changeserver
@@ -23,7 +27,7 @@ rocksdb: ./bin/changeserver-rocksdb ./bin/snapshotserver
 	mkdir test-reports
 
 tests: ./test-reports
-	go test $(SUBDIRS) 
+	bazel test ...
 
 dockerTests:
 	./test/dockertest.sh
