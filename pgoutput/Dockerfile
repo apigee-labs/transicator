@@ -1,4 +1,4 @@
-FROM postgres:9.5.4
+FROM postgres:9.6.1
 
 RUN mkdir /src
 COPY . /src/pgoutput
@@ -9,7 +9,7 @@ COPY scripts /docker-entrypoint-initdb.d
 # images, and not have to re-install the build tools after the first build
 RUN \
      apt-get update \
-  && apt-get install -y wget gcc make pkg-config libprotobuf-dev postgresql-server-dev-9.5
+  && apt-get install -y wget gcc make pkg-config libprotobuf-dev postgresql-server-dev-9.6
 
 # Debian archives don't have current version of protobuf-c, so build it.
 # Then build the output plugin,
@@ -22,7 +22,7 @@ RUN \
  && rm -rf /src
 
 # Remove the build systems to reduce security surface area
-RUN apt-get purge -y --auto-remove  gcc make postgresql-server-dev-9.5
+RUN apt-get purge -y --auto-remove  gcc make postgresql-server-dev-9.6
 
 # Add VOLUMEs to allow backup of config, logs and databases
 VOLUME  ["/var/log/postgresql", "/var/lib/postgresql"]

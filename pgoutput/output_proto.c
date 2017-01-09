@@ -15,10 +15,12 @@ limitations under the License.
 */
 #include <postgres.h>
 #include <catalog/pg_type.h>
+#include <catalog/pg_type.h>
 #include <access/xlogdefs.h>
 #include <access/xlog.h>
 #include <utils/builtins.h>
 #include <utils/lsyscache.h>
+#include <utils/rel.h>
 #include <replication/output_plugin.h>
 #include <replication/logical.h>
 #include <transicator.h>
