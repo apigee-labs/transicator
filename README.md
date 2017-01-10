@@ -575,9 +575,17 @@ up, and eventually fail.
     docker run --rm -it snapshotserver -u POSTGRES_URL
 ```
 
+## To see all replication slot:
+
+    select * from pg_replication_slots;
+
 ## To delete a replication slot:
 
     select * from pg_drop_replication_slot('SLOT_NAME');
+
+## To delete all inactive replication slots:
+
+    select pg_drop_replication_slot(slot_name) from pg_replication_slots where active is false;
 
 ## Storage Engines
 
