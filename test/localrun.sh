@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# This script runs the tests in "dockerTest" on the local box without
+# Docker. It's handy for debugging the test itself.
+
 if [ -z  ${TEST_PG_URL} ]
 then
   echo "TEST_PG_URL" must be set
