@@ -164,6 +164,35 @@ var _ = Describe("Snapshot API Tests", func() {
 		Expect(org).Should(Equal("testorg"))
 		Expect(id).Should(Equal("sqlSnap"))
 		Expect(devID).Should(Equal("sqlSnap"))
+
+		rows, err := sdb.Query(`
+			select columnName, primaryKey from _transicator_tables
+			where tableName = 'app'
+		`)
+		Expect(err).Should(Succeed())
+		defer rows.Close()
+
+		r := make(map[string]int)
+		for rows.Next() {
+			var cn string
+			var pk bool
+			err = rows.Scan(&cn, &pk)
+			Expect(err).Should(Succeed())
+			if pk {
+				r[cn] = 2
+			} else {
+				r[cn] = 1
+			}
+		}
+
+		Expect(r["org"]).Should(Equal(1))
+		Expect(r["dev_id"]).Should(Equal(1))
+		Expect(r["display_name"]).Should(Equal(1))
+		Expect(r["name"]).Should(Equal(1))
+		Expect(r["created_at"]).Should(Equal(1))
+		Expect(r["created_by"]).Should(Equal(1))
+		Expect(r["id"]).Should(Equal(2))
+		Expect(r["_change_selector"]).Should(Equal(2))
 	})
 
 	It("SQLite types", func() {
@@ -308,6 +337,12 @@ func getSqliteSnapshot(dbDir, scope string) (*sql.DB, string) {
 	resp, err := http.DefaultClient.Do(req)
 	Expect(err).Should(Succeed())
 	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		var buf []byte
+		buf, err = ioutil.ReadAll(resp.Body)
+		Expect(err).Should(Succeed())
+		fmt.Fprintf(GinkgoWriter, "Error on response: %s\n", string(buf))
+	}
 	Expect(resp.StatusCode).Should(Equal(200))
 	Expect(resp.Header.Get("Content-Type")).Should(Equal("application/transicator+sqlite"))
 

@@ -19,8 +19,9 @@ import "database/sql"
 
 // A pgColumn describes a single column in a table
 type pgColumn struct {
-	name  string
-	typid int
+	name       string
+	typid      int
+	primaryKey bool
 }
 
 // A pgTable describes a table
@@ -43,7 +44,17 @@ func enumeratePgTables(tx *sql.Tx) (map[string]*pgTable, error) {
 		return nil, err
 	}
 
-	ps, err := tx.Prepare(enumeratePrimaryKeysSQL)
+	ps, err := tx.Prepare(`
+	select a.attname
+	from pg_namespace n, pg_class c, pg_index i, pg_attribute a
+	where n.oid = c.relnamespace and c.oid = i.indrelid and a.attrelid = c.oid
+	and c.relkind='r'
+	and a.attnum = any(i.indkey)
+	and a.attnum > 0
+	and n.nspname = $1
+	and c.relname = $2
+	order by a.attnum
+	`)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +70,15 @@ func enumeratePgTables(tx *sql.Tx) (map[string]*pgTable, error) {
 }
 
 func mapPgTables(tx *sql.Tx) (map[string]*pgTable, error) {
-	rows, err := tx.Query(enumerateTablesSQL)
+	rows, err := tx.Query(`
+	select n.nspname, c.relname, a.attname, a.atttypid
+	from pg_namespace n, pg_class c, pg_attribute a
+	where n.oid = c.relnamespace and a.attrelid = c.oid
+	and c.relkind = 'r'
+	and n.nspname not in ('information_schema', 'pg_catalog')
+	and a.attnum > 0
+	order by n.nspname, c.relname, a.attnum
+	`)
 	if err != nil {
 		return nil, err
 	}
@@ -112,28 +131,13 @@ func mapPrimaryKeys(s *sql.Stmt, t *pgTable) error {
 			return err
 		}
 		t.primaryKeys = append(t.primaryKeys, name)
+
+		for i, c := range t.columns {
+			if c.name == name {
+				c.primaryKey = true
+				t.columns[i] = c
+			}
+		}
 	}
 	return nil
 }
-
-const enumerateTablesSQL = `
-select n.nspname, c.relname, a.attname, a.atttypid
-from pg_namespace n, pg_class c, pg_attribute a
-where n.oid = c.relnamespace and a.attrelid = c.oid
-and c.relkind = 'r'
-and n.nspname not in ('information_schema', 'pg_catalog')
-and a.attnum > 0
-order by n.nspname, c.relname, a.attnum
-`
-
-const enumeratePrimaryKeysSQL = `
-select a.attname
-from pg_namespace n, pg_class c, pg_index i, pg_attribute a
-where n.oid = c.relnamespace and c.oid = i.indrelid and a.attrelid = c.oid
-and c.relkind='r'
-and a.attnum = any(i.indkey)
-and a.attnum > 0
-and n.nspname = $1
-and c.relname = $2
-order by a.attnum
-`
