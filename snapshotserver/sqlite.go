@@ -71,13 +71,13 @@ func WriteSqliteSnapshot(scopes []string, db *sql.DB, w http.ResponseWriter, r *
 	}
 	defer pgTx.Commit()
 
-	err = writeMetadata(pgTx, tdb)
+	tables, err := enumeratePgTables(pgTx)
 	if err != nil {
 		sendAPIError(http.StatusInternalServerError, err.Error(), w, r)
 		return err
 	}
 
-	tables, err := enumeratePgTables(pgTx)
+	err = writeMetadata(pgTx, tdb, tables)
 	if err != nil {
 		sendAPIError(http.StatusInternalServerError, err.Error(), w, r)
 		return err
@@ -114,15 +114,54 @@ func WriteSqliteSnapshot(scopes []string, db *sql.DB, w http.ResponseWriter, r *
 	return streamFile(dbFileName, w)
 }
 
-func writeMetadata(pgTx *sql.Tx, tdb *sql.DB) error {
-	row := pgTx.QueryRow("select txid_current_snapshot()")
-	var snap string
-	err := row.Scan(&snap)
+func writeMetadata(pgTx *sql.Tx, tdb *sql.DB, tables map[string]*pgTable) error {
+	_, err := tdb.Exec(`
+		create table _transicator_metadata
+		(key varchar primary key,
+		 value varchar)
+	 `)
 	if err == nil {
 		_, err = tdb.Exec(`
+			create table _transicator_tables
+			(tableName varchar not null,
+			 columnName varchar not null,
+			 typid integer,
+			 primaryKey bool)
+		`)
+	}
+
+	if err == nil {
+		row := pgTx.QueryRow("select txid_current_snapshot()")
+		var snap string
+		err = row.Scan(&snap)
+		if err == nil {
+			_, err = tdb.Exec(`
 			insert into _transicator_metadata (key, value) values('snapshot', ?)
 			`, snap)
+		}
 	}
+
+	var st *sql.Stmt
+	if err == nil {
+		st, err = tdb.Prepare(`
+			insert into _transicator_tables
+			(tableName, columnName, typid, primaryKey)
+			values (?, ?, ?, ?)
+		`)
+		defer st.Close()
+	}
+
+	if err == nil {
+		for _, table := range tables {
+			for _, col := range table.columns {
+				_, err = st.Exec(table.name, col.name, col.typid, col.primaryKey)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 	return err
 }
 
@@ -137,15 +176,6 @@ func createDatabase(fileName string) (*sql.DB, error) {
 	}
 
 	_, err = tdb.Exec("pragma journal_mode = WAL")
-
-	if err == nil {
-		_, err = tdb.Exec(`
-		create table _transicator_metadata
-		(key varchar primary key,
-		 value varchar)
-	 `)
-	}
-
 	if err != nil {
 		tdb.Close()
 		return nil, err
