@@ -176,7 +176,7 @@ var _ = Describe("Snapshot API Tests", func() {
 		Expect(err).Should(Succeed())
 		testTime := time.Now()
 		testTimestampStr := testTime.UTC().Format(sqliteTimestampFormat)
-		testDateStr := testTime.UTC().Format("2006-01-02")
+		testDateStr := testTime.Format("2006-01-02")
 		testTimeStr := testTime.Format("15:04:05-07")
 		testBuf := []byte("Hello, World!")
 
@@ -193,7 +193,7 @@ var _ = Describe("Snapshot API Tests", func() {
 		Expect(err).Should(Succeed())
 		defer os.RemoveAll(dbDir)
 
-		sdb := getSqliteSnapshot(dbDir, "typetest")
+		sdb, _ := getSqliteSnapshot(dbDir, "typetest")
 		defer sdb.Close()
 
 		query := `
@@ -298,7 +298,7 @@ func getRowByID(t *common.Table, id string) common.Row {
 	return nil
 }
 
-func getSqliteSnapshot(dbDir, scope string) *sql.DB {
+func getSqliteSnapshot(dbDir, scope string) (*sql.DB, string) {
 	req, err := http.NewRequest("GET",
 		fmt.Sprintf("%s/snapshots?scope=%s", testBase, scope), nil)
 	Expect(err).Should(Succeed())
@@ -320,5 +320,12 @@ func getSqliteSnapshot(dbDir, scope string) *sql.DB {
 
 	sdb, err := sql.Open("sqlite3", dbFileName)
 	Expect(err).Should(Succeed())
-	return sdb
+
+	row := sdb.QueryRow(
+		"select value from _transicator_metadata where key = 'snapshot'")
+	var snap string
+	err = row.Scan(&snap)
+	Expect(err).Should(Succeed())
+
+	return sdb, snap
 }
