@@ -32,29 +32,31 @@ const (
 
 type sender struct {
 	ackChan  chan bool
-	stopChan chan *sync.WaitGroup
+	stopChan chan bool
 }
 
-func startSender(selector string, db *sql.DB, windowSize, batchSize int) *sender {
+func startSender(selector string, db *sql.DB, windowSize, batchSize int, done *sync.WaitGroup) *sender {
 	s := &sender{
 		ackChan:  make(chan bool, 1000),
-		stopChan: make(chan *sync.WaitGroup, 1),
+		stopChan: make(chan bool, 1),
 	}
-	go s.run(selector, db, windowSize, batchSize)
+	go s.run(selector, db, windowSize, batchSize, done)
 	return s
 }
 
-func (s *sender) stop(done *sync.WaitGroup) {
-	s.stopChan <- done
+func (s *sender) stop() {
+	s.stopChan <- true
 }
 
 func (s *sender) acknowledge() {
 	s.ackChan <- true
 }
 
-func (s *sender) run(selector string, db *sql.DB, windowSize, batchSize int) {
+func (s *sender) run(selector string, db *sql.DB, windowSize, batchSize int, done *sync.WaitGroup) {
 	var is, us, ds *sql.Stmt
 	var err error
+
+	defer done.Done()
 
 	is, err = db.Prepare(`
   insert into stress_table
@@ -145,10 +147,9 @@ func (s *sender) run(selector string, db *sql.DB, windowSize, batchSize int) {
 		case <-s.ackChan:
 			openWindow--
 			fmt.Printf("Ack. Window = %d\n", openWindow)
-		case wg := <-s.stopChan:
+		case <-s.stopChan:
 			ticks.Stop()
 			fmt.Printf("Send thread stopping.\n")
-			wg.Done()
 			return
 		}
 	}

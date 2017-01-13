@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"bytes"
 	"database/sql"
 	"fmt"
 	"io"
@@ -57,6 +56,8 @@ func (r *receiver) canStop() {
 func (r *receiver) run(selector, dbFile, ssURL, csURL string,
 	sender *sender, done *sync.WaitGroup) {
 
+	defer done.Done()
+
 	db, err := getSnapshot(selector, dbFile, ssURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting snapshot: %s\n", err)
@@ -72,11 +73,15 @@ func (r *receiver) run(selector, dbFile, ssURL, csURL string,
 		return
 	}
 
+	tables, err := scanTableInfo(db)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Can't scan table info: %s\n", err)
+		return
+	}
+
 	url := fmt.Sprintf("%s/changes?scope=%s&snapshot=%s&block=%d",
 		csURL, selector, snap, pollTimeout)
-	r.runPoller(url, sender)
-
-	done.Done()
+	r.runPoller(tables, url, sender)
 }
 
 func getSnapshot(selector, dbFile, ssURL string) (*sql.DB, error) {
@@ -114,7 +119,7 @@ func getSnapshot(selector, dbFile, ssURL string) (*sql.DB, error) {
 	return nil, err
 }
 
-func (r *receiver) runPoller(baseURL string, sender *sender) {
+func (r *receiver) runPoller(tables map[string]*tableInfo, baseURL string, sender *sender) {
 	lastSequence := ""
 	for {
 		url := fmt.Sprintf("%s&since=%s", baseURL, lastSequence)
@@ -143,10 +148,8 @@ func (r *receiver) runPoller(baseURL string, sender *sender) {
 							return
 						}
 					} else {
-						lastSequence = r.applyChanges(cl)
+						lastSequence = r.applyChanges(tables, cl, sender)
 					}
-
-					sender.acknowledge()
 
 				} else {
 					fmt.Fprintf(os.Stderr, "Invalid response reading body: %s\n", err)
@@ -166,62 +169,37 @@ func (r *receiver) runPoller(baseURL string, sender *sender) {
 	}
 }
 
-func (r *receiver) applyChanges(cl *common.ChangeList) (lastSequence string) {
+func (r *receiver) applyChanges(tables map[string]*tableInfo, cl *common.ChangeList, sender *sender) (lastSequence string) {
 	for _, change := range cl.Changes {
-		switch change.Operation {
-		case common.Insert:
-			stmt, cols := makeInsertSQL(&change)
-			args := makeArgs(cols, change.NewRow)
-			_, err := r.db.Exec(stmt, args...)
-			if err == nil {
-				lastSequence = change.Sequence
-			} else {
-				fmt.Fprintf(os.Stderr, "Error on database insert: %s\n", err)
+		tns := strings.Split(change.Table, ".")
+		ti := tables[tns[len(tns)-1]]
+
+		if ti == nil {
+			fmt.Fprintf(os.Stderr, "Change for uknown table %s\n", change.Table)
+		} else {
+
+			var err error
+			switch change.Operation {
+			case common.Insert:
+				var last bool
+				change.NewRow.Get("last", &last)
+				if last {
+					fmt.Printf("Acknowledging batch\n")
+					sender.acknowledge()
+				}
+				err = ti.applyInsert(change.NewRow)
+			case common.Update:
+				err = ti.applyUpdate(change.NewRow)
+			case common.Delete:
+				err = ti.applyDelete(change.OldRow)
 			}
 
-		case common.Update:
-			fmt.Printf("Didn't do update yet\n")
-		case common.Delete:
-			fmt.Printf("Didn't do delete yet\n")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error handling %s: %s\n", change.Operation, err)
+			} else {
+				lastSequence = change.Sequence
+			}
 		}
-	}
-	return
-}
-
-func makeInsertSQL(c *common.Change) (sql string, cols []string) {
-	tns := strings.Split(c.Table, ".")
-	buf := &bytes.Buffer{}
-	buf.WriteString("insert into ")
-	buf.WriteString(tns[len(tns)-1])
-	buf.WriteString(" (")
-
-	first := true
-	for k := range c.NewRow {
-		if first {
-			first = false
-		} else {
-			buf.WriteString(", ")
-		}
-		buf.WriteString(k)
-		cols = append(cols, k)
-	}
-	buf.WriteString(") values (")
-
-	for i := 0; i < len(c.NewRow); i++ {
-		if i > 0 {
-			buf.WriteString(", ")
-		}
-		buf.WriteString("?")
-	}
-	buf.WriteString(")")
-
-	sql = buf.String()
-	return
-}
-
-func makeArgs(cols []string, r common.Row) (args []interface{}) {
-	for _, cn := range cols {
-		args = append(args, r[cn].Value)
 	}
 	return
 }

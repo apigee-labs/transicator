@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"flag"
 	"fmt"
@@ -102,20 +103,20 @@ func main() {
 	wg := &sync.WaitGroup{}
 	wg.Add(numSenders * 2)
 
+	selectors := make([]string, numSenders)
 	senders := make([]*sender, numSenders)
 	receivers := make([]*receiver, numSenders)
 
 	for i := 0; i < numSenders; i++ {
 		selector := strconv.Itoa(rand.Int())
+		selectors[i] = selector
 		sender := startSender(
 			selector, db,
-			defaultWindowSize, defaultBatchSize)
+			defaultWindowSize, defaultBatchSize, wg)
 		senders[i] = sender
 
-		dbFileName := path.Join(dataDir, strconv.Itoa(i))
-
 		receiver := startReceiver(
-			selector, dbFileName,
+			selector, getDataDir(dataDir, i),
 			ssURL, csURL,
 			sender, wg)
 		receivers[i] = receiver
@@ -124,10 +125,14 @@ func main() {
 	time.Sleep(testDuration)
 
 	for i := 0; i < numSenders; i++ {
-		senders[i].stop(wg)
+		senders[i].stop()
 		receivers[i].canStop()
 	}
 	wg.Wait()
+
+	for i := 0; i < numSenders; i++ {
+		verifyTables(i, selectors[i], db, dataDir)
+	}
 }
 
 func makeTables(db *sql.DB) error {
@@ -139,6 +144,68 @@ func makeTables(db *sql.DB) error {
 func cleanTables(db *sql.DB) error {
 	_, err := db.Exec("drop table stress_table")
 	return err
+}
+
+func verifyTables(i int, selector string, pgDB *sql.DB, dataDir string) {
+	liteDB, err := sql.Open("sqlite3", getDataDir(dataDir, i))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Can't open SQLite: %s\n", err)
+		return
+	}
+	defer liteDB.Close()
+
+	pgRows, err := pgDB.Query(`
+		select content from stress_table where _change_selector = $1 order by id, grp
+	`, selector)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Can't select from Postgres: %s\n", err)
+		return
+	}
+	defer pgRows.Close()
+
+	liteRows, err := liteDB.Query(`
+		select content from stress_table order by id, grp
+	`)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Can't select from SQLite: %s\n", err)
+		return
+	}
+	defer liteRows.Close()
+
+	rc := 0
+	for pgRows.Next() {
+		if !liteRows.Next() {
+			fmt.Fprintf(os.Stderr, "** More Postgres rows than SQLite rows\n")
+			break
+		}
+
+		var pgBuf, sBuf []byte
+		err = pgRows.Scan(&pgBuf)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "** Error scanning PG row: %s\n", err)
+			continue
+		}
+
+		err = liteRows.Scan(&sBuf)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "** Error scanning SQLite row: %s\n", err)
+			continue
+		}
+
+		if !bytes.Equal(pgBuf, sBuf) {
+			fmt.Fprintf(os.Stderr, "** Postgres and SQLite content does not match\n")
+			continue
+		}
+		rc++
+	}
+	if liteRows.Next() {
+		fmt.Fprintf(os.Stderr, "** More SQLite rows than Postgres rows\n")
+	}
+	fmt.Printf("Done verifying sender. Verified %d rows\n", rc)
+}
+
+func getDataDir(base string, i int) string {
+	return path.Join(base, strconv.Itoa(i))
 }
 
 const testTable = `
