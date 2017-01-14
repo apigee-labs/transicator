@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/pprof"
 )
 
 /*
@@ -49,6 +50,15 @@ func (s *HTTPScaffold) createManagementHandler() *managementHandler {
 		s:   s,
 		mux: http.NewServeMux(),
 	}
+
+	// Manually register paths from "pprof" package because we are
+	// not using a standard HTTP handler here.
+	h.mux.HandleFunc("/debug/pprof/", pprof.Index)
+	h.mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	h.mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	h.mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	h.mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
 	if s.healthPath != "" {
 		h.mux.HandleFunc(s.healthPath, s.handleHealth)
 	}
