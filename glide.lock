@@ -1,8 +1,8 @@
 hash: bcddc87691b59c9b684ca222ba35984a22fa98b07d38f2e68d06381695ed4002
-updated: 2016-12-16T16:27:18.387468963-08:00
+updated: 2017-01-13T16:30:21.527442583-08:00
 imports:
 - name: github.com/30x/goscaffold
-  version: 96cdf64fed74d06bdde413a60b66ceed44f2875c
+  version: a05e1bd923f57ef322a9e0b65b6b5688e27648b1
 - name: github.com/fsnotify/fsnotify
   version: bd2828f9f176e52d7222e565abb2d338d3f3c103
 - name: github.com/golang/protobuf
@@ -69,7 +69,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 25f8b5b07aece3207895bf19f7ab517eb3b22a40
 - name: github.com/spf13/viper
-  version: 651d9d916abc3c3d6a91a12549495caba5edffd2
+  version: 5ed0fc31f7f453625df314d8e66b9791e8d13003
 - name: github.com/tecbot/gorocksdb
   version: f2a0b10f7228cff360e2d9efa081a15a8cbd68b7
 - name: golang.org/x/crypto
@@ -80,7 +80,7 @@ imports:
   - ed25519/internal/edwards25519
   - ssh
 - name: golang.org/x/net
-  version: 45e771701b814666a7eb299e6c7a57d0b1799e91
+  version: 0ab64c594a6a5489089faa1e7b2b541110f31eb5
   subpackages:
   - context
 - name: golang.org/x/sys

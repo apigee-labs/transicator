@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -83,6 +84,7 @@ type HTTPScaffold struct {
 	securePort         int
 	managementPort     int
 	open               bool
+	ipAddr             net.IP
 	tracker            *requestTracker
 	insecureListener   net.Listener
 	secureListener     net.Listener
@@ -106,8 +108,17 @@ func CreateHTTPScaffold() *HTTPScaffold {
 		insecurePort:   0,
 		securePort:     -1,
 		managementPort: -1,
+		ipAddr:         []byte{0, 0, 0, 0},
 		open:           false,
 	}
+}
+
+/*
+SetlocalBindIPAddressV4 seta the IP address (IP V4) for the service to
+bind on to listen on. If none set, all IP addesses would be accepted.
+*/
+func (s *HTTPScaffold) SetlocalBindIPAddressV4(ip net.IP) {
+	s.ipAddr = ip
 }
 
 /*
@@ -115,8 +126,8 @@ SetInsecurePort sets the port number to listen on in regular "HTTP" mode.
 It may be set to zero, which indicates to listen on an ephemeral port.
 It must be called before "listen".
 */
-func (s *HTTPScaffold) SetInsecurePort(ip int) {
-	s.insecurePort = ip
+func (s *HTTPScaffold) SetInsecurePort(port int) {
+	s.insecurePort = port
 }
 
 /*
@@ -126,8 +137,8 @@ It must be called before Listen. It is an error to call
 Listen if this port is set and if the key and secret files are not also
 set.
 */
-func (s *HTTPScaffold) SetSecurePort(ip int) {
-	s.securePort = ip
+func (s *HTTPScaffold) SetSecurePort(port int) {
+	s.securePort = port
 }
 
 /*
@@ -259,6 +270,7 @@ func (s *HTTPScaffold) Open() error {
 
 	if s.insecurePort >= 0 {
 		il, err := net.ListenTCP("tcp", &net.TCPAddr{
+			IP:   s.ipAddr,
 			Port: s.insecurePort,
 		})
 		if err != nil {
@@ -284,6 +296,7 @@ func (s *HTTPScaffold) Open() error {
 			Certificates: []tls.Certificate{cert},
 		}
 		sl, err := net.ListenTCP("tcp", &net.TCPAddr{
+			IP:   s.ipAddr,
 			Port: s.securePort,
 		})
 		if err != nil {
@@ -299,6 +312,7 @@ func (s *HTTPScaffold) Open() error {
 
 	if s.managementPort >= 0 {
 		ml, err := net.ListenTCP("tcp", &net.TCPAddr{
+			IP:   s.ipAddr,
 			Port: s.managementPort,
 		})
 		if err != nil {
@@ -420,9 +434,19 @@ three signals. SIGINT (aka control-C) and SIGTERM (what "kill" sends by default)
 will cause the program to be marked down, and "SignalCaught" will be returned
 by the "Listen" method. SIGHUP ("kill -1" or "kill -HUP") will cause the
 stack trace of all the threads to be printed to stderr, just like a Java program.
+This method is very simplistic -- it starts listening every time that
+you call it. So a program should only call it once.
 */
 func (s *HTTPScaffold) CatchSignals() {
-	sigChan := make(chan os.Signal, 1)
+	s.CatchSignalsTo(os.Stderr)
+}
+
+/*
+CatchSignalsTo is just like CatchSignals, but it captures the stack trace
+to the specified writer rather than to os.Stderr. This is handy for testing.
+*/
+func (s *HTTPScaffold) CatchSignalsTo(out io.Writer) {
+	sigChan := make(chan os.Signal, 10)
 	signal.Notify(sigChan, syscall.SIGINT)
 	signal.Notify(sigChan, syscall.SIGTERM)
 	signal.Notify(sigChan, syscall.SIGHUP)
@@ -436,24 +460,26 @@ func (s *HTTPScaffold) CatchSignals() {
 				signal.Reset()
 				return
 			case syscall.SIGHUP:
-				dumpStack()
+				dumpStack(out)
 			}
 		}
 	}()
 }
 
-func dumpStack() {
-	stackSize := 32767
+func dumpStack(out io.Writer) {
+	stackSize := 4096
 	stackBuf := make([]byte, stackSize)
 	var w int
 
-	for w < stackSize {
+	for {
 		w = runtime.Stack(stackBuf, true)
 		if w == stackSize {
 			stackSize *= 2
 			stackBuf = make([]byte, stackSize)
+		} else {
+			break
 		}
 	}
 
-	fmt.Fprint(os.Stderr, string(stackBuf[:w]))
+	fmt.Fprint(out, string(stackBuf[:w]))
 }
