@@ -26,8 +26,9 @@ import (
 )
 
 const (
-	perfTick    = 500 * time.Millisecond
-	contentSize = 100000
+	perfTick     = 500 * time.Millisecond
+	failureDelay = 2 * time.Second
+	contentSize  = 100000
 )
 
 type sender struct {
@@ -101,8 +102,8 @@ func (s *sender) run(selector string, db *sql.DB, windowSize, batchSize int, don
 				idMap[id] = true
 				_, err = is.Exec(rand.Int63(), groupNum, i, buf, false, selector)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Fatal error on SQL insert: %s\n", err)
-					return
+					fmt.Fprintf(os.Stderr, "Fatal error on SQL insert: %s. Retrying.\n", err)
+					time.Sleep(failureDelay)
 				}
 			}
 
@@ -111,8 +112,8 @@ func (s *sender) run(selector string, db *sql.DB, windowSize, batchSize int, don
 				if idMap[di] {
 					_, err = ds.Exec(di)
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "Fatal error on SQL delete: %s\n", err)
-						return
+						fmt.Fprintf(os.Stderr, "Fatal error on SQL delete: %s. Retrying.\n", err)
+						time.Sleep(failureDelay)
 					}
 					delete(idMap, di)
 				}
@@ -125,16 +126,19 @@ func (s *sender) run(selector string, db *sql.DB, windowSize, batchSize int, don
 					rand.Read(buf)
 					_, err = us.Exec(buf, ui)
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "Fatal error on SQL update: %s\n", err)
-						return
+						fmt.Fprintf(os.Stderr, "Fatal error on SQL update: %s. Retrying.\n", err)
+						time.Sleep(failureDelay)
 					}
 				}
 			}
 
-			_, err = is.Exec(rand.Int63(), groupNum, toSend, nil, true, selector)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Fatal error on last SQL insert: %s\n", err)
-				return
+			for {
+				_, err = is.Exec(rand.Int63(), groupNum, toSend, nil, true, selector)
+				if err == nil {
+					break
+				}
+				fmt.Fprintf(os.Stderr, "Fatal error on last SQL insert: %s. Retrying.\n", err)
+				time.Sleep(failureDelay)
 			}
 			ticks.Reset(0)
 		} else {
