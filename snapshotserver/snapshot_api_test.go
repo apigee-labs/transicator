@@ -31,6 +31,8 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+const roundedTimestampFormat = "2006-01-02 15:04:05.999999-07:00"
+
 var _ = Describe("Snapshot API Tests", func() {
 	It("Default snapshot", func() {
 		insertApp("jsonSnap", "jsonSnap", "snaptests")
@@ -204,7 +206,7 @@ var _ = Describe("Snapshot API Tests", func() {
 		`)
 		Expect(err).Should(Succeed())
 		testTime := time.Now()
-		testTimestampStr := testTime.UTC().Format(sqliteTimestampFormat)
+		testTimestampStr := testTime.UTC().Format(roundedTimestampFormat)
 		testDateStr := testTime.Format("2006-01-02")
 		testTimeStr := testTime.Format("15:04:05-07")
 		testBuf := []byte("Hello, World!")
