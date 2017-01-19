@@ -28,7 +28,7 @@ import (
 const (
 	perfTick     = 500 * time.Millisecond
 	failureDelay = 2 * time.Second
-	contentSize  = 100000
+	contentSize  = 2500
 )
 
 type sender struct {

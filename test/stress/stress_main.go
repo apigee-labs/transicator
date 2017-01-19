@@ -107,6 +107,8 @@ func main() {
 	senders := make([]*sender, numSenders)
 	receivers := make([]*receiver, numSenders)
 
+	startTime := time.Now()
+
 	for i := 0; i < numSenders; i++ {
 		selector := strconv.Itoa(rand.Int())
 		selectors[i] = selector
@@ -130,9 +132,18 @@ func main() {
 	}
 	wg.Wait()
 
+	endTime := time.Now()
+
+	totalRows := 0
 	for i := 0; i < numSenders; i++ {
-		verifyTables(i, selectors[i], db, dataDir)
+		totalRows += verifyTables(i, selectors[i], db, dataDir)
 	}
+
+	elapsed := float64(endTime.Sub(startTime)) / float64(time.Second)
+
+	fmt.Printf("%d\trows processed\n", totalRows)
+	fmt.Printf("%.3f\tseconds\n", elapsed)
+	fmt.Printf("%.3f\trecords / second\n", float64(totalRows)/elapsed)
 }
 
 func makeTables(db *sql.DB) error {
@@ -146,11 +157,11 @@ func cleanTables(db *sql.DB) error {
 	return err
 }
 
-func verifyTables(i int, selector string, pgDB *sql.DB, dataDir string) {
+func verifyTables(i int, selector string, pgDB *sql.DB, dataDir string) int {
 	liteDB, err := sql.Open("sqlite3", getDataDir(dataDir, i))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't open SQLite: %s\n", err)
-		return
+		return 0
 	}
 	defer liteDB.Close()
 
@@ -159,7 +170,7 @@ func verifyTables(i int, selector string, pgDB *sql.DB, dataDir string) {
 	`, selector)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't select from Postgres: %s\n", err)
-		return
+		return 0
 	}
 	defer pgRows.Close()
 
@@ -168,7 +179,7 @@ func verifyTables(i int, selector string, pgDB *sql.DB, dataDir string) {
 	`)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't select from SQLite: %s\n", err)
-		return
+		return 0
 	}
 	defer liteRows.Close()
 
@@ -202,6 +213,7 @@ func verifyTables(i int, selector string, pgDB *sql.DB, dataDir string) {
 		fmt.Fprintf(os.Stderr, "** More SQLite rows than Postgres rows\n")
 	}
 	fmt.Printf("Done verifying sender. Verified %d rows\n", rc)
+	return rc
 }
 
 func getDataDir(base string, i int) string {
