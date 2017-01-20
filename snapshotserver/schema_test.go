@@ -45,11 +45,7 @@ var _ = Describe("Schema tests", func() {
 		Expect(st.columns[14].primaryKey).Should(BeFalse())
 		Expect(st.primaryKeys[0]).Should(Equal("id"))
 		Expect(st.hasSelector).Should(BeTrue())
-<<<<<<< HEAD
-		fmt.Printf("SQL: %s\n", makeSqliteTableSQL(st))
-=======
 		fmt.Fprintf(GinkgoWriter, "SQL: %s\n", makeSqliteTableSQL(st))
->>>>>>> master
 
 		a := s["public.app"]
 		Expect(a).ShouldNot(BeNil())
@@ -59,43 +55,11 @@ var _ = Describe("Schema tests", func() {
 		Expect(a.columns[7].primaryKey).Should(BeTrue())
 		Expect(a.primaryKeys[0]).Should(Equal("id"))
 		Expect(a.primaryKeys[1]).Should(Equal("_change_selector"))
-<<<<<<< HEAD
-		fmt.Printf("SQL: %s\n", makeSqliteTableSQL(a))
-=======
 		fmt.Fprintf(GinkgoWriter, "SQL: %s\n", makeSqliteTableSQL(a))
->>>>>>> master
 	})
 
 	It("Check timestamp format", func() {
 		// Just make sure that timestamp formatting works the way that we expect
-<<<<<<< HEAD
-		now := time.Now()
-		fmt.Fprintf(GinkgoWriter, "Time is now %s\n", now)
-
-		// Need to round down to millisecond granularity
-		nowRoundUTC := roundTime(now).UTC()
-
-		nowStr := now.UTC().Format(sqliteTimestampFormat)
-		fmt.Fprintf(GinkgoWriter, "  rounded = %s\n", nowRoundUTC)
-		fmt.Fprintf(GinkgoWriter, "          = %s\n", nowStr)
-
-		nowParsed, err := time.Parse(sqliteTimestampFormat, nowStr)
-		Expect(err).Should(Succeed())
-		Expect(nowParsed).Should(Equal(nowRoundUTC))
-
-		nowParsed, err = time.Parse(time.RFC3339Nano, nowStr)
-		Expect(err).Should(Succeed())
-		Expect(nowParsed).Should(Equal(nowRoundUTC))
-	})
-})
-
-// roundTime rounds a timestamp down to millisecond granularity,
-// because that's what SQLite will use.
-func roundTime(t time.Time) time.Time {
-	unixTime := (t.UnixNano() / 1000000) * 1000000
-	return time.Unix(0, unixTime)
-}
-=======
 		now := time.Now().UTC()
 		fmt.Fprintf(GinkgoWriter, "Time is now %s\n", now)
 
@@ -108,4 +72,3 @@ func roundTime(t time.Time) time.Time {
 		Expect(nowParsed.UnixNano()).Should(Equal(now.UnixNano()))
 	})
 })
->>>>>>> master
