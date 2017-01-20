@@ -29,13 +29,10 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-	// Blank import to ensure SQLite driver is linked with binary
-	_ "github.com/mattn/go-sqlite3"
+	sqlite "github.com/mattn/go-sqlite3"
 )
 
-const (
-	sqliteTimestampFormat = "2006-01-02T15:04:05.000Z"
-)
+var sqliteTimestampFormat = sqlite.SQLiteTimestampFormats[0]
 
 /*
 WriteSqliteSnapshot is responsible for generating the SQLite format of

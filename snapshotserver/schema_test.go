@@ -45,7 +45,11 @@ var _ = Describe("Schema tests", func() {
 		Expect(st.columns[14].primaryKey).Should(BeFalse())
 		Expect(st.primaryKeys[0]).Should(Equal("id"))
 		Expect(st.hasSelector).Should(BeTrue())
+<<<<<<< HEAD
 		fmt.Printf("SQL: %s\n", makeSqliteTableSQL(st))
+=======
+		fmt.Fprintf(GinkgoWriter, "SQL: %s\n", makeSqliteTableSQL(st))
+>>>>>>> master
 
 		a := s["public.app"]
 		Expect(a).ShouldNot(BeNil())
@@ -55,11 +59,16 @@ var _ = Describe("Schema tests", func() {
 		Expect(a.columns[7].primaryKey).Should(BeTrue())
 		Expect(a.primaryKeys[0]).Should(Equal("id"))
 		Expect(a.primaryKeys[1]).Should(Equal("_change_selector"))
+<<<<<<< HEAD
 		fmt.Printf("SQL: %s\n", makeSqliteTableSQL(a))
+=======
+		fmt.Fprintf(GinkgoWriter, "SQL: %s\n", makeSqliteTableSQL(a))
+>>>>>>> master
 	})
 
 	It("Check timestamp format", func() {
 		// Just make sure that timestamp formatting works the way that we expect
+<<<<<<< HEAD
 		now := time.Now()
 		fmt.Fprintf(GinkgoWriter, "Time is now %s\n", now)
 
@@ -86,3 +95,17 @@ func roundTime(t time.Time) time.Time {
 	unixTime := (t.UnixNano() / 1000000) * 1000000
 	return time.Unix(0, unixTime)
 }
+=======
+		now := time.Now().UTC()
+		fmt.Fprintf(GinkgoWriter, "Time is now %s\n", now)
+
+		nowStr := now.Format(sqliteTimestampFormat)
+		fmt.Fprintf(GinkgoWriter, "          = %s\n", nowStr)
+
+		nowParsed, err := time.Parse(sqliteTimestampFormat, nowStr)
+
+		Expect(err).Should(Succeed())
+		Expect(nowParsed.UnixNano()).Should(Equal(now.UnixNano()))
+	})
+})
+>>>>>>> master
