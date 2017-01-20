@@ -45,7 +45,7 @@ var _ = Describe("Schema tests", func() {
 		Expect(st.columns[14].primaryKey).Should(BeFalse())
 		Expect(st.primaryKeys[0]).Should(Equal("id"))
 		Expect(st.hasSelector).Should(BeTrue())
-		fmt.Printf("SQL: %s\n", makeSqliteTableSQL(st))
+		fmt.Fprintf(GinkgoWriter, "SQL: %s\n", makeSqliteTableSQL(st))
 
 		a := s["public.app"]
 		Expect(a).ShouldNot(BeNil())
@@ -55,7 +55,7 @@ var _ = Describe("Schema tests", func() {
 		Expect(a.columns[7].primaryKey).Should(BeTrue())
 		Expect(a.primaryKeys[0]).Should(Equal("id"))
 		Expect(a.primaryKeys[1]).Should(Equal("_change_selector"))
-		fmt.Printf("SQL: %s\n", makeSqliteTableSQL(a))
+		fmt.Fprintf(GinkgoWriter, "SQL: %s\n", makeSqliteTableSQL(a))
 	})
 
 	It("Check timestamp format", func() {

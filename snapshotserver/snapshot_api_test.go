@@ -17,6 +17,7 @@ package snapshotserver
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -82,7 +83,14 @@ var _ = Describe("Snapshot API Tests", func() {
 		insertApp("jsonSnap2", "jsonSnap2", "snaptests2")
 		insertApp("jsonSnap3", "jsonSnap3", "snaptests2")
 
-		resp, err := http.Get(fmt.Sprintf("%s/snapshots?scope=snaptests2&scope=snaptests3", testBase))
+		req, err := http.NewRequest("GET",
+			fmt.Sprintf("%s/snapshots?scope=snaptests2&scope=snaptests3", testBase),
+			nil)
+		Expect(err).Should(Succeed())
+		req.Header = http.Header{}
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := http.DefaultClient.Do(req)
 		Expect(err).Should(Succeed())
 		defer resp.Body.Close()
 		Expect(resp.StatusCode).Should(Equal(200))
@@ -195,6 +203,85 @@ var _ = Describe("Snapshot API Tests", func() {
 		Expect(r["created_by"]).Should(Equal(1))
 		Expect(r["id"]).Should(Equal(2))
 		Expect(r["_change_selector"]).Should(Equal(2))
+	})
+
+	It("SQLite snapshot empty scope", func() {
+		dbDir, err := ioutil.TempDir("", "snaptest")
+		Expect(err).Should(Succeed())
+		defer os.RemoveAll(dbDir)
+
+		req, err := http.NewRequest("GET",
+			fmt.Sprintf("%s/snapshots?scope=wrong_scope_you_dope", testBase), nil)
+		Expect(err).Should(Succeed())
+		req.Header = http.Header{}
+		req.Header.Set("Accept", "application/transicator+sqlite")
+
+		resp, err := http.DefaultClient.Do(req)
+		Expect(err).Should(Succeed())
+		defer resp.Body.Close()
+		Expect(resp.StatusCode).Should(Equal(200))
+		Expect(resp.Header.Get("Content-Type")).Should(Equal("application/transicator+sqlite"))
+
+		dbFileName := path.Join(dbDir, "snapdb")
+		outFile, err := os.OpenFile(dbFileName, os.O_RDWR|os.O_CREATE, 0666)
+		Expect(err).Should(Succeed())
+		_, err = io.Copy(outFile, resp.Body)
+		outFile.Close()
+		Expect(err).Should(Succeed())
+
+		sdb, err := sql.Open("sqlite3", dbFileName)
+		Expect(err).Should(Succeed())
+		defer sdb.Close()
+
+		row := sdb.QueryRow("select count(*) from app")
+		var count int
+		err = row.Scan(&count)
+		Expect(err).Should(Succeed())
+		Expect(count).Should(BeZero())
+	})
+
+	It("SQLite snapshot missing scope", func() {
+		req, err := http.NewRequest("GET",
+			fmt.Sprintf("%s/snapshots", testBase), nil)
+		Expect(err).Should(Succeed())
+		req.Header = http.Header{}
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := http.DefaultClient.Do(req)
+		Expect(err).Should(Succeed())
+		defer resp.Body.Close()
+		Expect(resp.StatusCode).Should(Equal(400))
+		Expect(resp.Header.Get("Content-Type")).Should(Equal("application/json"))
+
+		bod, err := ioutil.ReadAll(resp.Body)
+		Expect(err).Should(Succeed())
+
+		var errMsg common.APIError
+		err = json.Unmarshal(bod, &errMsg)
+		Expect(err).Should(Succeed())
+		Expect(errMsg.Code).Should(Equal("MISSING_SCOPE"))
+	})
+
+	It("SQLite snapshot bad accept header", func() {
+		req, err := http.NewRequest("GET",
+			fmt.Sprintf("%s/snapshots?scope=nope_not_the_scope", testBase), nil)
+		Expect(err).Should(Succeed())
+		req.Header = http.Header{}
+		req.Header.Set("Accept", "text/plain")
+
+		resp, err := http.DefaultClient.Do(req)
+		Expect(err).Should(Succeed())
+		defer resp.Body.Close()
+		Expect(resp.StatusCode).Should(Equal(415))
+		Expect(resp.Header.Get("Content-Type")).Should(Equal("application/json"))
+
+		bod, err := ioutil.ReadAll(resp.Body)
+		Expect(err).Should(Succeed())
+
+		var errMsg common.APIError
+		err = json.Unmarshal(bod, &errMsg)
+		Expect(err).Should(Succeed())
+		Expect(errMsg.Code).Should(Equal("UNSUPPORTED_MEDIA_TYPE"))
 	})
 
 	It("SQLite types", func() {

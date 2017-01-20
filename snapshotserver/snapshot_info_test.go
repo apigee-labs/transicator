@@ -51,8 +51,9 @@ var (
 func TestSnapshot(t *testing.T) {
 	dbURL = os.Getenv("TEST_PG_URL")
 	if dbURL == "" {
-		fmt.Println("Skipping snapshot tests because TEST_PG_URL not set")
-		fmt.Println("  Example: postgres://user:password@host:port/database")
+		t.Logf("Cannot run snapshot tests because TEST_PG_URL not set\n")
+		t.Logf("  Example: postgres://user:password@host:port/database\n")
+		t.Fatal("Aborting snapshot tests because they depend on Postgres.")
 	} else {
 		RegisterFailHandler(Fail)
 		junitReporter := reporters.NewJUnitReporter("../test-reports/snapshot.xml")
