@@ -1,7 +1,7 @@
 MODULE_big = transicator_output
 OBJS = transicator_output.o output_string.o output_proto.o transicator.pb-c.o
 
-PG_CONFIG = pg_config
+PG_CONFIG ?= pg_config
 PG_CPPFLAGS=-I/usr/local/include -I$(HOME)/homebrew/include
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
