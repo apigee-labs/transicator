@@ -6,24 +6,34 @@ ignore:
 - github.com/cockroachdb/c-rocksdb
 - github.com/cockroachdb/c-snappy
 import:
+- name: github.com/fsnotify/fsnotify
+  version: bd2828f9f176e52d7222e565abb2d338d3f3c103
+  repo: https://edge.googlesource.com/third_party/fsnotify/fsnotify.git
 - package: github.com/Sirupsen/logrus
   version: ~0.10.0
+  repo: https://edge.googlesource.com/third_party/Sirupsen/logrus.git
 - package: github.com/julienschmidt/httprouter
   version: ~1.1.0
+  repo: https://edge.googlesource.com/third_party/julienschmidt/httprouter.git
 - package: github.com/golang/protobuf
+  repo: https://edge.googlesource.com/third_party/golang/protobuf.git
   subpackages:
   - proto
 - package: github.com/30x/goscaffold
   version: master
+  repo: https://edge.googlesource.com/goscaffold.git
 - package: github.com/tecbot/gorocksdb
   version: f2a0b10f7228cff360e2d9efa081a15a8cbd68b7
 - package: github.com/spf13/viper
   version: master
+  repo: https://edge.googlesource.com/third_party/spf13/viper.git
 - package: github.com/spf13/pflag
   version: master
+  repo: https://edge.googlesource.com/third_party/spf13/pflag.git
 - package: github.com/onsi/ginkgo
 - package: github.com/mattn/go-sqlite3
   version: ^1.2.0
 testImport:
 - package: github.com/onsi/gomega
+  repo: https://edge.googlesource.com/third_party/onsi/gomega.git
 - package: github.com/onsi/ginkgo
