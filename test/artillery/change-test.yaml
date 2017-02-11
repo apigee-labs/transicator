@@ -1,0 +1,40 @@
+config:
+  target: 'http:/'
+  tls:
+    rejectUnauthorized: false
+  timeout: 30
+  variables:
+  payload:
+    path: "./csv/data1.csv"
+    order: "sequence"
+    fields:
+      - "column1"
+      - "column2"
+
+  phases:
+    - colum2: 'load'
+      duration: 1
+      arrivalRate: 1
+
+  processor: "./changehandler.js"
+
+scenarios:
+  - flow:
+    - loop:
+      - post:
+          url: "/localhost:9441/table1"
+          beforeRequest: "InsertBulkDataToDB"
+      - log: "Post Insert Request in to Postgres Database"
+      count: 1
+    - think: 1
+    - loop:
+      - get:
+          url: "/localhost:9443/changes"
+          beforeRequest: "InsertScopeInRequest"
+          afterResponse: "ValidateScopeFromCS"
+          match : # N - 1 row count 
+            json: "$.changes[999].newRow.column2.value"
+            value: "Value999"
+      count: 1
+
+

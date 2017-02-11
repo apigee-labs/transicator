@@ -1,0 +1,96 @@
+config:
+  target: 'http:/'
+  tls:
+    rejectUnauthorized: false
+  timeout: 30
+  phases:
+    - name: 'Light load'
+      duration: 30
+      arrivalRate: 1
+    - name: 'Medium load'
+      duration: 30
+      arrivalRate: 5
+      rampTo: 10
+    - name: 'High load'
+      duration: 60
+      arrivalRate: 10
+      rampTo: 20
+
+scenarios:
+  - flow:
+    - loop:
+      - get:
+          url: "/localhost:9444/data?scope=scope_1"
+          match:
+            json: "$.tables[0].rows[0]._change_selector.value"
+            value: "scope_1"
+          match:
+            json: "$.tables[0].rows[1]._change_selector.value"
+            value: "scope_1"
+          match:
+            json: "$.tables[0].rows[2]._change_selector.value"
+            value: "scope_1"
+          match:
+            json: "$.tables[0].rows[3]._change_selector.value"
+            value: "scope_1"
+          match:
+            json: "$.tables[0].rows[4]._change_selector.value"
+            value: "scope_1"
+      count: 10
+    - loop:
+      - get:
+          url: "/localhost:9444/data?scope=scope_1&scope=scope_2"
+          match:
+            json: "$.tables[0].rows[0].column2.type"
+            value: 1043
+          match:
+            json: "$.tables[0].rows[1].column2.type"
+            value: 1043
+          match:
+            json: "$.tables[0].rows[2].column2.type"
+            value: 1043
+          match:
+            json: "$.tables[0].rows[3].column2.type"
+            value: 1043
+          match:
+            json: "$.tables[0].rows[4].column2.type"
+            value: 1043
+      count: 20
+    - loop:
+      - get:
+          url: "/localhost:9444/data?scope=scope_1&scope=scope_2&scope=scope_3"
+          match:
+            json: "$.tables[0].rows[0].column2.type"
+            value: 1043
+          match:
+            json: "$.tables[0].rows[1].column2.type"
+            value: 1043
+          match:
+            json: "$.tables[0].rows[2].column2.type"
+            value: 1043
+          match:
+            json: "$.tables[0].rows[3].column2.type"
+            value: 1043
+          match:
+            json: "$.tables[0].rows[4].column2.type"
+            value: 1043
+      count: 40
+    - loop:
+      - get:
+          url: "/localhost:9444/data?scope=scope_1&scope=scope_2&scope=scope_3&scope=scope4&scope=scope5&scope=scope6&scope=scope7&scope=scope8&scope=scope9"
+          match:
+            json: "$.tables[0].rows[0].column2.type"
+            value: 1043
+          match:
+            json: "$.tables[0].rows[1].column2.type"
+            value: 1043
+          match:
+            json: "$.tables[0].rows[2].column2.type"
+            value: 1043
+          match:
+            json: "$.tables[0].rows[3].column2.type"
+            value: 1043
+          match:
+            json: "$.tables[0].rows[4].column2.type"
+            value: 1043
+      count: 80
