@@ -1,0 +1,72 @@
+config:
+  target: 'http:/'
+  tls:
+    rejectUnauthorized: false
+  timeout: 30
+  phases:
+    - name: 'Light load'
+      duration: 30
+      arrivalRate: 1
+    - name: 'Medium load'
+      duration: 20
+      arrivalRate: 3
+      rampTo: 5
+    - name: 'High load'
+      duration: 10
+      arrivalRate: 5
+      rampTo: 10
+
+  processor: "./changehandler.js"
+
+# 
+# The scenario here is that 5 tables are inserted with 100 rows each via JS.
+# A sleep of 3 seconds is given to ensure, all the INSERTS are commited.
+# The Changeserver is queried for that very scope, and a sample of the last
+# dataset in the change is validated to ensure all data have been retrieved
+# successfully.
+#
+scenarios:
+  - flow:
+    - loop:
+      - post:
+          url: "/localhost:9441/table1"
+          beforeRequest: "InsertBulkDataToDBScope"
+      - log: "Post Insert Request in to Postgres Database"
+      count: 1
+    - loop:
+      - post:
+          url: "/localhost:9441/table2"
+          beforeRequest: "InsertBulkDataToDB"
+      - log: "Post Insert Request in to Postgres Database"
+      count: 1
+    - loop:
+      - post:
+          url: "/localhost:9441/table3"
+          beforeRequest: "InsertBulkDataToDB"
+      - log: "Post Insert Request in to Postgres Database"
+      count: 1
+    - loop:
+      - post:
+          url: "/localhost:9441/table4"
+          beforeRequest: "InsertBulkDataToDB"
+      - log: "Post Insert Request in to Postgres Database"
+      count: 1
+    - loop:
+      - post:
+          url: "/localhost:9441/table5"
+          beforeRequest: "InsertBulkDataToDB"
+      - log: "Post Insert Request in to Postgres Database"
+      count: 1
+    - think: 3
+    - loop:
+      - get:
+          url: "/localhost:9443/changes"
+          beforeRequest: "InsertScopeInRequest"
+          afterResponse: "ValidateScopeFromCS"
+          match : # N - 1 row count 
+            json: "$.changes[499].newRow.column2.value"
+            value: "Value99"
+      - log: "Get Request in to Postgres Database"
+      count: 1
+
+
