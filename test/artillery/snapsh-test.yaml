@@ -8,13 +8,13 @@ config:
       duration: 30
       arrivalRate: 1
     - name: 'Medium load'
-      duration: 30
+      duration: 20
+      arrivalRate: 3
+      rampTo: 5
+    - name: 'High load'
+      duration: 10
       arrivalRate: 5
       rampTo: 10
-    - name: 'High load'
-      duration: 60
-      arrivalRate: 10
-      rampTo: 20
 
 scenarios:
   - flow:
@@ -36,7 +36,27 @@ scenarios:
           match:
             json: "$.tables[0].rows[4]._change_selector.value"
             value: "scope_1"
-      count: 10
+          match:
+            json: "$.tables[0].rows[0]._change_selector.value"
+            value: "scope_1"
+          match:
+            json: "$.tables[0].name"
+            value: "public.table1"
+          match:
+            json: "$.tables[1].name"
+            value: "public.table2"
+          match:
+            json: "$.tables[2].name"
+            value: "public.table3"
+          match:
+            json: "$.tables[3].name"
+            value: "public.table4"
+          match:
+            json: "$.tables[4].name"
+            value: "public.table5"
+
+
+      count: 1
     - loop:
       - get:
           url: "/localhost:9444/data?scope=scope_1&scope=scope_2"
@@ -55,7 +75,22 @@ scenarios:
           match:
             json: "$.tables[0].rows[4].column2.type"
             value: 1043
-      count: 20
+          match:
+            json: "$.tables[0].name"
+            value: "public.table1"
+          match:
+            json: "$.tables[1].name"
+            value: "public.table2"
+          match:
+            json: "$.tables[2].name"
+            value: "public.table3"
+          match:
+            json: "$.tables[3].name"
+            value: "public.table4"
+          match:
+            json: "$.tables[4].name"
+            value: "public.table5"
+      count: 2
     - loop:
       - get:
           url: "/localhost:9444/data?scope=scope_1&scope=scope_2&scope=scope_3"
@@ -74,7 +109,22 @@ scenarios:
           match:
             json: "$.tables[0].rows[4].column2.type"
             value: 1043
-      count: 40
+          match:
+            json: "$.tables[0].name"
+            value: "public.table1"
+          match:
+            json: "$.tables[1].name"
+            value: "public.table2"
+          match:
+            json: "$.tables[2].name"
+            value: "public.table3"
+          match:
+            json: "$.tables[3].name"
+            value: "public.table4"
+          match:
+            json: "$.tables[4].name"
+            value: "public.table5"
+      count: 4
     - loop:
       - get:
           url: "/localhost:9444/data?scope=scope_1&scope=scope_2&scope=scope_3&scope=scope4&scope=scope5&scope=scope6&scope=scope7&scope=scope8&scope=scope9"
@@ -93,4 +143,19 @@ scenarios:
           match:
             json: "$.tables[0].rows[4].column2.type"
             value: 1043
-      count: 80
+          match:
+            json: "$.tables[0].name"
+            value: "public.table1"
+          match:
+            json: "$.tables[1].name"
+            value: "public.table2"
+          match:
+            json: "$.tables[2].name"
+            value: "public.table3"
+          match:
+            json: "$.tables[3].name"
+            value: "public.table4"
+          match:
+            json: "$.tables[4].name"
+            value: "public.table5"
+      count: 8

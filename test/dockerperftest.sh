@@ -31,11 +31,14 @@ postgrestName=postgrest-test-$$
 # Build postgresql image
 docker build --tag ${dbName} ../pgoutput
 
+# Build Postgrest server
+docker build --tag ${postgrestName} -f ./Dockerfile.postgrest .
+
 # Build Snapshot server
-docker build --tag ${ssName} -f ../Dockerfile.snapshotserver .
+docker build --tag ${ssName} -f ../Dockerfile.snapshotserver ../
 
 # Build Change server
-docker build --tag ${csName} -f ../Dockerfile.changeserver .
+docker build --tag ${csName} -f ../Dockerfile.changeserver ../
 
 POSTGRES_URL=postgres://postgres:${TEST_PG_PW}@${dbName}/postgres
 
@@ -52,7 +55,7 @@ docker build -t ${testName} -f ./Dockerfile.dbdatagen .
 # Launch Postgres Data generator (DB url, rows in table, scopes in table)
 docker run --link ${dbName}:postgres ${testName} $TEST_PG_URL 100 10
 
-# Launch Snapshot server
+# Launch change server
 docker run -d \
   --name ${csName} \
   --link ${dbName}:postgres \
@@ -69,4 +72,15 @@ docker run -d \
   ${ssName} \
   -p 9444 \
   -u $POSTGRES_URL
+
+docker run -d \
+  --name ${postgrestName} \
+  --link ${dbName}:postgres \
+  -p 9441:9441 \
+  ${postgrestName} \
+  $POSTGRES_URL
+
+#docker rm ${testName}
+
+
 

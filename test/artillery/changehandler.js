@@ -2,20 +2,24 @@
 // changehandler.js
 //
 module.exports = {
+  InsertBulkDataToDBScope : InsertBulkDataToDBScope,
   InsertBulkDataToDB: InsertBulkDataToDB,
   InsertScopeInRequest: InsertScopeInRequest,
   ValidateScopeFromCS: ValidateScopeFromCS
 }
 
-function InsertBulkDataToDB(requestParams, context, ee, next) {
+function InsertBulkDataToDBScope(requestParams, context, ee, next) {
    var statusArray = [];
 
    var scope = makeid()
    // Add some rows (values)
-   for (var i = 0; i< 1000; i++) {
+   for (var i = 0; i< 100; i++) {
         var status = {
             "column1": makeid(),
             "column2": "Value" + i,
+            "column3": "Value" + i,
+            "column4": "Value" + i,
+            "column5": "Value" + i,
             "_change_selector": scope
         };
         statusArray.push(status);
@@ -23,6 +27,26 @@ function InsertBulkDataToDB(requestParams, context, ee, next) {
    requestParams.body = statusArray;
    requestParams.json = true;
    context.vars.scope = scope
+   return next(); // MUST be called for the scenario to continue
+}
+
+function InsertBulkDataToDB(requestParams, context, ee, next) {
+   var statusArray = [];
+
+   // Add some rows (values)
+   for (var i = 0; i< 100; i++) {
+        var status = {
+            "column1": makeid(),
+            "column2": "Value" + i,
+            "column3": "Value" + i,
+            "column4": "Value" + i,
+            "column5": "Value" + i,
+            "_change_selector": context.vars.scope
+        };
+        statusArray.push(status);
+   }
+   requestParams.body = statusArray;
+   requestParams.json = true;
    return next(); // MUST be called for the scenario to continue
 }
 
@@ -35,7 +59,7 @@ function InsertScopeInRequest(requestParams, context, ee, next) {
 }
 
 function ValidateScopeFromCS(requestParams, response, context, ee, next) {
-   console.log(response.body);
+   //console.log(response.body);
    return next(); // MUST be called for the scenario to continue
 }
 
