@@ -40,7 +40,8 @@ docker build --tag ${ssName} -f ../Dockerfile.snapshotserver ../
 # Build Change server
 docker build --tag ${csName} -f ../Dockerfile.changeserver ../
 
-POSTGRES_URL=postgres://postgres:${TEST_PG_PW}@${dbName}/postgres
+# Build Snapshot data generator
+docker build -t ${testName} -f ./Dockerfile.dbdatagen .
 
 # Launch Postgress DB
 docker run -d \
@@ -48,13 +49,12 @@ docker run -d \
   -e POSTGRES_PASSWORD=${TEST_PG_PW} \
   -p 9442:5432 \
   ${dbName}
-# Build Snapshot data generator
+
 TEST_PG_URL=postgres://postgres:${TEST_PG_PW}@${dbName}/postgres?sslmode=disable
-docker build -t ${testName} -f ./Dockerfile.dbdatagen .
+POSTGRES_URL=postgres://postgres:${TEST_PG_PW}@${dbName}/postgres
 
 # Launch Postgres Data generator (DB url, rows in table, scopes in table)
 docker run --link ${dbName}:postgres ${testName} $TEST_PG_URL 100 10
-
 # Launch change server
 docker run -d \
   --name ${csName} \
@@ -73,6 +73,7 @@ docker run -d \
   -p 9444 \
   -u $POSTGRES_URL
 
+# Launch Postgrest server
 docker run -d \
   --name ${postgrestName} \
   --link ${dbName}:postgres \
@@ -80,7 +81,10 @@ docker run -d \
   ${postgrestName} \
   $POSTGRES_URL
 
-#docker rm ${testName}
+# TBD: Start another docker container, run the artillery tests in the docker
+# container. Copy results and clean all docker containers.
 
+artillery run artillery/snapsh-test.yaml
+artillery run artillery/change-test.yaml
 
 

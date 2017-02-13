@@ -1,5 +1,5 @@
 config:
-  target: 'http:/'
+  target: 'http://localhost:9444'
   tls:
     rejectUnauthorized: false
   timeout: 30
@@ -20,7 +20,7 @@ scenarios:
   - flow:
     - loop:
       - get:
-          url: "/localhost:9444/data?scope=scope_1"
+          url: "/data?scope=scope_1"
           match:
             json: "$.tables[0].rows[0]._change_selector.value"
             value: "scope_1"
@@ -59,7 +59,7 @@ scenarios:
       count: 1
     - loop:
       - get:
-          url: "/localhost:9444/data?scope=scope_1&scope=scope_2"
+          url: "/data?scope=scope_1&scope=scope_2"
           match:
             json: "$.tables[0].rows[0].column2.type"
             value: 1043
@@ -93,7 +93,7 @@ scenarios:
       count: 2
     - loop:
       - get:
-          url: "/localhost:9444/data?scope=scope_1&scope=scope_2&scope=scope_3"
+          url: "/data?scope=scope_1&scope=scope_2&scope=scope_3"
           match:
             json: "$.tables[0].rows[0].column2.type"
             value: 1043
@@ -127,7 +127,7 @@ scenarios:
       count: 4
     - loop:
       - get:
-          url: "/localhost:9444/data?scope=scope_1&scope=scope_2&scope=scope_3&scope=scope4&scope=scope5&scope=scope6&scope=scope7&scope=scope8&scope=scope9"
+          url: "/data?scope=scope_1&scope=scope_2&scope=scope_3&scope=scope4&scope=scope5&scope=scope6&scope=scope7&scope=scope8&scope=scope9"
           match:
             json: "$.tables[0].rows[0].column2.type"
             value: 1043
