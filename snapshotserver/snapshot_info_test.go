@@ -235,10 +235,18 @@ var _ = Describe("Taking a snapshot", func() {
 
 	AfterEach(func() {
 		fmt.Fprintln(GinkgoWriter, "AfterEach: truncate tables")
-		for table := range tables {
-			err := truncateTable(table)
-			Expect(err).Should(Succeed())
-		}
+		err := truncateTable("public.app")
+		Expect(err).Should(Succeed())
+		err = truncateTable("public.developer")
+		Expect(err).Should(Succeed())
+		err = truncateTable("public.snapshot_test")
+		Expect(err).Should(Succeed())
+		err = truncateTable("public.DATA_SCOPE")
+		Expect(err).Should(Succeed())
+		err = truncateTable("public.APID_CLUSTER")
+		Expect(err).Should(Succeed())
+		err = truncateTable("transicator_tests.schema_table")
+		Expect(err).Should(Succeed())
 	})
 
 	Context("Insert Tables (App & Developer), Get JSON data for ONE scope", func() {
