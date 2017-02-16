@@ -62,7 +62,7 @@ docker build --tag ${ssName} -f ../Dockerfile.snapshotserver ../
 docker build --tag ${csName} -f ../Dockerfile.changeserver ../
 
 # Build Snapshot data generator
-docker build -t ${testName} -f ./Dockerfile.dbdatagen .
+docker build -t ${testName} -f ./loadgen/Dockerfile.dbdatagen .
 
 # Launch Postgress DB
 docker run -d \
