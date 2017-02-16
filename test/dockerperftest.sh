@@ -14,9 +14,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+if [ ! $ARTILLERY_BIN ]; then
+   echo "Error: Set ARTILLERY_BIN with artillery location" >&2
+   exit 1
+fi
+
+if ! [ -f "./artillery/change-test.yaml" ]; then
+   echo "File ./artillery/change-test.yaml not found." >&2
+   exit 1
+fi
+
+if ! [ -f "./artillery/snapsh-test-sing.yaml" ]; then
+   echo "File ./artillery/snapsh-test-sing.yaml not found." >&2
+   exit 1
+fi
+
+if ! [ -f "./artillery/snapsh-test-mult.yaml" ]; then
+   echo "File ./artillery/snapsh-test-mult.yaml not found." >&2
+   exit 1
+fi
+
 if [ ! $TEST_PG_PW ]
 then
-TEST_PG_PW=password
+   echo " TEST_PG_PW not set, default is password"
+   TEST_PG_PW=password
 fi
 
 netName=transicator-tests-$$
@@ -54,15 +75,7 @@ TEST_PG_URL=postgres://postgres:${TEST_PG_PW}@${dbName}/postgres?sslmode=disable
 POSTGRES_URL=postgres://postgres:${TEST_PG_PW}@${dbName}/postgres
 
 # Launch Postgres Data generator (DB url, rows in table, scopes in table)
-docker run --link ${dbName}:postgres ${testName} $TEST_PG_URL 100 10
-# Launch change server
-docker run -d \
-  --name ${csName} \
-  --link ${dbName}:postgres \
-  -p 9443:9443 \
-  ${csName} \
-  -p 9443 \
-  -s ${slotName} -u $POSTGRES_URL
+docker run --name ${testName} --link ${dbName}:postgres ${testName} $TEST_PG_URL 100 10
 
 # Launch Snapshot server
 docker run -d \
@@ -73,6 +86,15 @@ docker run -d \
   -p 9444 \
   -u $POSTGRES_URL
 
+# Launch change server
+docker run -d \
+  --name ${csName} \
+  --link ${dbName}:postgres \
+  -p 9443:9443 \
+  ${csName} \
+  -p 9443 \
+  -s ${slotName} -u $POSTGRES_URL
+
 # Launch Postgrest server
 docker run -d \
   --name ${postgrestName} \
@@ -81,10 +103,22 @@ docker run -d \
   ${postgrestName} \
   $POSTGRES_URL
 
-# TBD: Start another docker container, run the artillery tests in the docker
-# container. Copy results and clean all docker containers.
+# Run the artillery related performance tests
+$ARTILLERY_BIN run ./artillery/snapsh-test-sing.yaml
+$ARTILLERY_BIN run ./artillery/snapsh-test-mult.yaml
+$ARTILLERY_BIN run ./artillery/change-test.yaml
 
-artillery run artillery/snapsh-test.yaml
-artillery run artillery/change-test.yaml
+
+# Clean up
+docker rm -f ${csName}
+docker rm -f ${ssName}
+docker rm -f ${dbName}
+docker rm -f ${postgrestName}
+docker rm -f ${testName}
+
+# Remove images
+RMCMD="docker rmi "
+${RMCMD} ${testName} ${ssName} ${csName} ${dbName} ${postgrestName}
+
 
 

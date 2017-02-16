@@ -7,6 +7,7 @@ import (
 	_ "github.com/lib/pq"
 	"os"
 	"strconv"
+	"time"
 )
 
 var dbURL, trowss, tscopess string
@@ -26,6 +27,12 @@ func main() {
 	}
 	trows, _ = strconv.Atoi(trowss)
 	tscopes, _ = strconv.Atoi(tscopess)
+
+	/*
+	 * Give some time before connecting to the DB. DB just got installed.
+	 */
+
+	time.Sleep(5 * time.Second)
 
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
@@ -69,6 +76,8 @@ func main() {
 			fmt.Printf("Inserted %d rows in table %s for %s\n", trows, tname, "scope_"+s1)
 		}
 	}
+	db.Close()
+
 }
 
 var tableSQL = `

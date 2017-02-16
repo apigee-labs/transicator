@@ -59,7 +59,7 @@ function InsertScopeInRequest(requestParams, context, ee, next) {
 }
 
 function ValidateScopeFromCS(requestParams, response, context, ee, next) {
-   //console.log(response.body);
+   // console.log(response.body);
    return next(); // MUST be called for the scenario to continue
 }
 
