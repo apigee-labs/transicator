@@ -1,6 +1,6 @@
 FROM golang:latest 
-RUN mkdir /app 
-ADD loadgen.go /app/ 
+RUN mkdir /app
+ADD loadgen/loadgen.go /app/
 WORKDIR /app 
 RUN go get github.com/lib/pq
 RUN go build -o loadgen . 
