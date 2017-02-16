@@ -1,0 +1,54 @@
+config:
+  target: 'http://localhost:9444'
+  tls:
+    rejectUnauthorized: false
+  timeout: 30
+  phases:
+    - name: 'Light load'
+      duration: 30
+      arrivalRate: 1
+    - name: 'Medium load'
+      duration: 20
+      arrivalRate: 3
+      rampTo: 5
+    - name: 'High load'
+      duration: 10
+      arrivalRate: 5
+      rampTo: 10
+
+scenarios:
+  - flow:
+    - loop:
+      - get:
+          url: "/data?scope=scope_1&scope=scope_2&scope=scope_3&scope=scope4&scope=scope5&scope=scope6&scope=scope7&scope=scope8&scope=scope9"
+          match:
+            json: "$.tables[0].rows[0].column2.type"
+            value: 1043
+          match:
+            json: "$.tables[0].rows[1].column2.type"
+            value: 1043
+          match:
+            json: "$.tables[0].rows[2].column2.type"
+            value: 1043
+          match:
+            json: "$.tables[0].rows[3].column2.type"
+            value: 1043
+          match:
+            json: "$.tables[0].rows[4].column2.type"
+            value: 1043
+          match:
+            json: "$.tables[0].name"
+            value: "public.table1"
+          match:
+            json: "$.tables[1].name"
+            value: "public.table2"
+          match:
+            json: "$.tables[2].name"
+            value: "public.table3"
+          match:
+            json: "$.tables[3].name"
+            value: "public.table4"
+          match:
+            json: "$.tables[4].name"
+            value: "public.table5"
+      count: 1
