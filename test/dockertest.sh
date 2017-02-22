@@ -14,16 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+export script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+export working_dir="$( cd "${script_dir}"/.. && pwd)"
+
 if [ ! $TEST_PG_PW ]
 then
   echo "TEST_PG_PW not set. Enter Postgres password:"
   read -s TEST_PG_PW
 fi
 
-if [ ! -d ./docker-test-reports ]
-then
-  mkdir ./docker-test-reports
-fi
+rm -rf ${working_dir}/docker-test-reports
+mkdir ${working_dir}/docker-test-reports
 
 netName=transicator-tests-$$
 dbName=transicator-test-pg-$$
@@ -42,7 +43,7 @@ docker run -d \
   ${dbName}
 
 # Build a test container
-docker build --tag ${testName} -f ./test/Dockerfile .
+docker build --tag ${testName} -f ${working_dir}/test/Dockerfile ${working_dir}
 
 # Run the unit tests in it
 docker run -i \
@@ -60,8 +61,8 @@ docker cp ${testName}:/go/src/github.com/apigee-labs/transicator/test-reports/. 
 docker rm ${testName}
 
 # Build changeserver and snapshot server images
-docker build --tag ${ssName} -f ./Dockerfile.snapshotserver .
-docker build --tag ${csName} -f ./Dockerfile.changeserver .
+docker build --tag ${ssName} -f ${working_dir}/Dockerfile.snapshotserver ${working_dir}
+docker build --tag ${csName} -f ${working_dir}/Dockerfile.changeserver ${working_dir}
 
 if [[ -z "$TEST_PG_PW" ]]; then
     POSTGRES_URL=postgres://postgres@${dbName}/postgres
