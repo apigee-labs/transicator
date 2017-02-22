@@ -50,6 +50,8 @@ docker run -i \
   --link ${dbName}:postgres \
   -e PGPASSWORD=${TEST_PG_PW} \
   -e DBHOST=postgres \
+  -e TEST_COVERAGE=true \
+  -e TEST_COVERAGE_FILENAME=coverage_container_test.txt \
   ${testName} \
   /go/src/github.com/apigee-labs/transicator/test/container_test_script.sh
 
@@ -96,11 +98,18 @@ docker run -i \
   -e SNAPSHOT_HOST=snapshotserver \
   -e CHANGE_PORT=9443 \
   -e SNAPSHOT_PORT=9444 \
+  -e TEST_COVERAGE=true \
+  -e TEST_COVERAGE_FILENAME=coverage_combined_test.txt \
   ${testName} \
   /go/src/github.com/apigee-labs/transicator/test/combined_test_script.sh
 
-docker cp ${testName}:/go/src/github.com/apigee-labs/transicator/test-reports/. ./docker-test-reports
+# No test-reports to get. Combined tests are black box and won't show coverage
+
 docker rm ${testName}
+
+# make coverage report
+(cd docker-test-reports \
+ && go tool cover -html=coverage_container_test.txt -o coverage_container_test.html)
 
 echo "*** changeserver logs ***"
 docker logs ${csName}
