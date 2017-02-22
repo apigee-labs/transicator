@@ -109,8 +109,11 @@ docker run -i \
 docker rm ${testName}
 
 # make coverage report
+go get github.com/axw/gocov/gocov
+go get github.com/AlekSi/gocov-xml
 (cd docker-test-reports \
- && go tool cover -html=coverage_container_test.txt -o coverage_container_test.html)
+ && mkdir -p coverage \
+ && gocov convert coverage_container_test.txt | gocov-xml > coverage/coverage_container_test.xml)
 
 echo "*** changeserver logs ***"
 docker logs ${csName}
