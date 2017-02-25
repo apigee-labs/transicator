@@ -113,7 +113,7 @@ go get github.com/axw/gocov/gocov
 go get github.com/AlekSi/gocov-xml
 (cd docker-test-reports \
  && mkdir -p coverage \
- && gocov convert coverage_container_test.txt | gocov-xml > coverage/coverage_container_test.xml)
+ && $GOPATH/bin/gocov convert coverage_container_test.txt | $GOPATH/bin/gocov-xml > coverage/coverage_container_test.xml)
 
 echo "*** changeserver logs ***"
 docker logs ${csName}
