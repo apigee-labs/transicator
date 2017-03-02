@@ -27,9 +27,15 @@ import (
 
 	"time"
 
+	"net/http/httptest"
+
+	"database/sql/driver"
+
 	"github.com/apigee-labs/transicator/common"
+	"github.com/julienschmidt/httprouter"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/pkg/errors"
 )
 
 const roundedTimestampFormat = "2006-01-02 15:04:05.999999-07:00"
@@ -131,6 +137,29 @@ var _ = Describe("Snapshot API Tests", func() {
 		err = r.Get("id", &devID)
 		Expect(err).Should(Succeed())
 		Expect(devID).Should(Equal("jsonSnap2"))
+	})
+
+	It("should return error if DB error", func() {
+
+		router := httprouter.New()
+		router.GET("/snapshots", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+			defer GinkgoRecover()
+			GenSnapshot(w, r)
+		})
+		router.GET("/data", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+			defer GinkgoRecover()
+			sql.Register("badDriver", badDriver{})
+			db, err := sql.Open("badDriver", "badDriver")
+			Expect(err).NotTo(HaveOccurred())
+			DownloadSnapshot(w, r, db, p)
+		})
+
+		ts := httptest.NewServer(router)
+
+		resp, err := http.Get(fmt.Sprintf("%s/snapshots?scope=snaptests", ts.URL))
+		Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+		Expect(resp.StatusCode).Should(Equal(500))
 	})
 
 	It("SQLite snapshot", func() {
@@ -452,4 +481,10 @@ func getSqliteSnapshot(dbDir, scope string) (*sql.DB, string) {
 	Expect(err).Should(Succeed())
 
 	return sdb, snap
+}
+
+type badDriver struct{}
+
+func (d badDriver) Open(name string) (driver.Conn, error) {
+	return nil, errors.New("intentional failure for testing")
 }

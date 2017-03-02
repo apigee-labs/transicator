@@ -479,6 +479,7 @@ func DownloadSnapshot(
 	err := GetTenantSnapshotData(scopes, mediaType, db, w)
 	if err != nil {
 		log.Errorf("GetTenantSnapshotData error: %v", err)
+		sendAPIError(http.StatusInternalServerError, err.Error(), w, r)
 		return
 	}
 
