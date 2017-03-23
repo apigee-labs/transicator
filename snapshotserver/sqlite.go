@@ -79,6 +79,13 @@ func WriteSqliteSnapshot(scopes []string, db *sql.DB, w http.ResponseWriter, r *
 		sendAPIError(http.StatusInternalServerError, err.Error(), w, r)
 		return err
 	}
+	// put tx id into header
+	row := pgTx.QueryRow("select txid_current_snapshot()")
+	var txId string
+	err = row.Scan(&txId)
+	if err == nil {
+		w.Header().Set("transicator-snapshot-txid", txId)
+	}
 
 	// For each table, update the DB
 	for tid, pgTable := range tables {
