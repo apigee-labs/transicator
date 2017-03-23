@@ -20,12 +20,13 @@ import (
 	"time"
 
 	"encoding/json"
-	"github.com/apigee-labs/transicator/common"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"io"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/apigee-labs/transicator/common"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 const (
@@ -299,6 +300,28 @@ var _ = Describe("Changes API Tests", func() {
 			"%s/changes?since=%s&scope=foo&scope=bar&limit=5", baseURL, origLastSequence))
 		Expect(len(cl.Changes)).Should(Equal(5))
 		Expect(cl.LastSequence).Should(Equal(cl.Changes[4].Sequence))
+
+		// Requests that return no data should return the highest change
+		// index in the system to indicate that there is nothing to look for.
+		cl = getChanges(fmt.Sprintf(
+			"%s/changes?since=%s&scope=notfound", baseURL, origLastSequence))
+		Expect(cl.Changes).Should(BeEmpty())
+		Expect(cl.LastSequence).Should(Equal(highestSequence))
+
+		cl = getChanges(fmt.Sprintf(
+			"%s/changes?since=%s&scope=notfound&block1=1", baseURL, origLastSequence))
+		Expect(cl.Changes).Should(BeEmpty())
+		Expect(cl.LastSequence).Should(Equal(highestSequence))
+
+		cl = getChanges(fmt.Sprintf(
+			"%s/changes?since=%s&scope=foo&scope=bar", baseURL, highestSequence))
+		Expect(cl.Changes).Should(BeEmpty())
+		Expect(cl.LastSequence).Should(Equal(highestSequence))
+
+		cl = getChanges(fmt.Sprintf(
+			"%s/changes?since=%s&scope=foo&scope=bar&block=1", baseURL, highestSequence))
+		Expect(cl.Changes).Should(BeEmpty())
+		Expect(cl.LastSequence).Should(Equal(highestSequence))
 	})
 
 	It("Long polling empty", func() {
