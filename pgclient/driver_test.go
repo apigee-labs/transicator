@@ -342,6 +342,7 @@ var _ = Describe("Driver tests", func() {
 		defer idb.Close()
 
 		idb.Driver().(*PgDriver).SetIsolationLevel("serializable")
+		defer idb.Driver().(*PgDriver).SetIsolationLevel("")
 
 		tx, err := idb.Begin()
 		Expect(err).Should(Succeed())

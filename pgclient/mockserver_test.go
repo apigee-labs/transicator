@@ -28,9 +28,8 @@ var _ = Describe("Mock server tests", func() {
 	var server *MockServer
 
 	BeforeEach(func() {
-		var err error
-
-		server, err = NewMockServer(0)
+		server = NewMockServer()
+		err := server.Start(0)
 		Expect(err).Should(Succeed())
 	})
 
@@ -62,7 +61,7 @@ var _ = Describe("Mock server tests", func() {
 		url := fmt.Sprintf("postgres://mock@%s/turtle", server.Address())
 		db, err := sql.Open("transicator", url)
 		Expect(err).Should(Succeed())
-		_, err = db.Exec("insert into mock values('foo', 'bar')")
+		_, err = db.Exec("insert into mock values ('foo', 'bar')")
 		Expect(err).Should(Succeed())
 		err = db.Close()
 		Expect(err).Should(Succeed())

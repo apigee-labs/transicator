@@ -17,16 +17,20 @@ package pgclient
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/tls"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
+	"regexp"
 
 	log "github.com/Sirupsen/logrus"
 )
 
 const (
 	mockUserName     = "mock"
+	mockPassword     = "mocketty"
 	mockDatabaseName = "turtle"
 )
 
@@ -36,34 +40,79 @@ const (
 	mockIdle mockState = 1
 )
 
+// MockAuth specifies what type of authentication the server supports
+type MockAuth int
+
+// Different auth types
+const (
+	MockTrust MockAuth = 0
+	MockClear MockAuth = 1
+	MockMD5   MockAuth = 2
+)
+
+var insertRE = regexp.MustCompile("insert into mock values \\('([\\w]+)', '([\\w]+)'\\)")
+
 /*
-A MockServer is a server that implements much of the Postgres wire protocol.
-It is used for unit testing of the postgres client, especially where
-we are testing the many different SSL connection options.
+A MockServer is a server that implements a little bit of the Postgres wire
+protocol. We can use it for testing of the wire protocol client. In particular,
+we can use it to test the myriad of password authentication and TLS options
+without having to start and stop a real Postgres server in the test suite.
 */
 type MockServer struct {
-	listener net.Listener
+	listener  net.Listener
+	mockTable map[string]string
+	authType  MockAuth
+	tlsConfig *tls.Config
 }
 
 /*
 NewMockServer starts a new server in the current process, listening on the
 specified port.
 */
-func NewMockServer(port int) (s *MockServer, err error) {
-	var listener net.Listener
-	listener, err = net.ListenTCP("tcp", &net.TCPAddr{
+func NewMockServer() *MockServer {
+	return &MockServer{
+		mockTable: make(map[string]string),
+		authType:  MockTrust,
+	}
+}
+
+/*
+SetAuthType sets what kind of password authentication to require
+*/
+func (m *MockServer) SetAuthType(auth MockAuth) {
+	m.authType = auth
+}
+
+/*
+SetTLSInfo sets the cert and key file and makes it possible for the server
+to support TLS.
+*/
+func (m *MockServer) SetTLSInfo(certFile, keyFile string) error {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return err
+	}
+	m.tlsConfig = &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+	return nil
+}
+
+/*
+Start listening for stuff.
+*/
+func (m *MockServer) Start(port int) (err error) {
+	listener, err := net.ListenTCP("tcp", &net.TCPAddr{
 		Port: port,
 	})
+
 	if err != nil {
-		return
+		return err
 	}
 
-	s = &MockServer{
-		listener: listener,
-	}
-	go s.acceptLoop()
-
-	return
+	m.listener = listener
+	go m.acceptLoop()
+	return nil
 }
 
 /*
@@ -77,9 +126,14 @@ func (m *MockServer) Address() string {
 Stop stops the server listening for new connections.
 */
 func (m *MockServer) Stop() {
-	m.listener.Close()
+	if m.listener != nil {
+		m.listener.Close()
+	}
 }
 
+/*
+acceptLoop sits and accepts new connections.
+*/
 func (m *MockServer) acceptLoop() {
 	for {
 		conn, err := m.listener.Accept()
@@ -90,6 +144,10 @@ func (m *MockServer) acceptLoop() {
 	}
 }
 
+/*
+connectLoop responds to a new connection by handling the Postgres
+authentication and startup protocol.
+*/
 func (m *MockServer) connectLoop(c net.Conn) {
 	defer c.Close()
 
@@ -99,11 +157,27 @@ func (m *MockServer) connectLoop(c net.Conn) {
 		return
 	}
 
-	protoVersion, err := startup.ReadInt32()
-	if err != nil {
-		log.Error("Can't read protocol version")
-		return
+	protoVersion, _ := startup.ReadInt32()
+
+	if protoVersion == sslMagicNumber {
+		// SSL startup attempt. Respond with "S" or "N"
+		if m.tlsConfig == nil {
+			c.Write([]byte{'N'})
+		} else {
+			// Respond with the appropriate byte and upgrade to TLS
+			c.Write([]byte{'S'})
+			c = tls.Server(c, m.tlsConfig)
+		}
+
+		// Look for a new startup packet now.
+		startup, err = readMockMessage(c, true)
+		if err != nil {
+			// This might happen if TLS handshake failed, which is a valid test case
+			return
+		}
+		protoVersion, _ = startup.ReadInt32()
 	}
+
 	if protoVersion != protocolVersion {
 		sendError(c, fmt.Sprintf("Invalid read protocol version %d\n", protoVersion))
 		return
@@ -111,17 +185,11 @@ func (m *MockServer) connectLoop(c net.Conn) {
 
 	var paramName, paramVal string
 	for {
-		paramName, err = startup.ReadString()
-		if err != nil {
-			return
-		}
+		paramName, _ = startup.ReadString()
 		if paramName == "" {
 			break
 		}
-		paramVal, err = startup.ReadString()
-		if err != nil {
-			return
-		}
+		paramVal, _ = startup.ReadString()
 
 		if paramName == "user" {
 			if paramVal != mockUserName {
@@ -137,14 +205,60 @@ func (m *MockServer) connectLoop(c net.Conn) {
 		}
 	}
 
-	out := NewOutputMessage(AuthenticationResponse)
-	out.WriteInt32(0)
-	c.Write(out.Encode())
-	sendReady(c)
+	authOK := m.authLoop(c)
 
-	m.readLoop(c)
+	if authOK {
+		sendAuthResponse(c, 0)
+		sendReady(c)
+		m.readLoop(c)
+	}
 }
 
+/*
+authLoop runs the various Postgres authentication options.
+*/
+func (m *MockServer) authLoop(c net.Conn) bool {
+	switch m.authType {
+	case MockTrust:
+		return true
+
+	case MockClear:
+		sendAuthResponse(c, 3)
+		return m.readPassword(c, mockPassword)
+
+	case MockMD5:
+		salt := make([]byte, 4)
+		rand.Read(salt)
+		out := NewServerOutputMessage(AuthenticationResponse)
+		out.WriteInt32(5)
+		out.WriteBytes(salt)
+		c.Write(out.Encode())
+		return m.readPassword(c, passwordMD5(mockUserName, mockPassword, salt))
+
+	default:
+		return false
+	}
+}
+
+func (m *MockServer) readPassword(c net.Conn, expected string) bool {
+	msg, _ := readMockMessage(c, false)
+	if msg.ServerType() != PasswordMessage {
+		sendError(c, "Expected PasswordMessage")
+		return false
+	}
+
+	pwd, _ := msg.ReadString()
+	if pwd == expected {
+		return true
+	}
+	sendError(c, "Invalid password")
+	return false
+}
+
+/*
+readLoop now reads and parses SQL commands until it's time to shut the
+connection down.
+*/
 func (m *MockServer) readLoop(c net.Conn) {
 	state := mockIdle
 
@@ -162,12 +276,24 @@ func (m *MockServer) readLoop(c net.Conn) {
 }
 
 func (m *MockServer) readIdle(c net.Conn, msg *InputMessage) {
-	switch msg.Type() {
+	switch msg.ServerType() {
 	case Query:
-		sendError(c, "Invalid SQL")
-		sendReady(c)
+		sql, _ := msg.ReadString()
+		match := insertRE.FindStringSubmatch(sql)
+		if match != nil {
+			m.mockTable[match[1]] = match[2]
+			out := NewServerOutputMessage(CommandComplete)
+			out.WriteString("INSERT 1")
+			c.Write(out.Encode())
+			sendReady(c)
+
+		} else {
+			sendError(c, fmt.Sprintf("Invalid SQL \"%s\"", sql))
+			sendReady(c)
+		}
+
 	default:
-		sendError(c, fmt.Sprintf("Invalid message %s", msg.Type()))
+		sendError(c, fmt.Sprintf("Invalid message %s", msg.ServerType()))
 		sendReady(c)
 	}
 }
@@ -186,7 +312,7 @@ func readMockMessage(c net.Conn, isStartup bool) (msg *InputMessage, err error) 
 	}
 
 	hdrBuf := bytes.NewBuffer(hdr)
-	var msgType PgMessageType
+	var msgType PgOutputType
 
 	if !isStartup {
 		var msgTypeVal byte
@@ -194,7 +320,7 @@ func readMockMessage(c net.Conn, isStartup bool) (msg *InputMessage, err error) 
 		if err != nil {
 			return
 		}
-		msgType = PgMessageType(msgTypeVal)
+		msgType = PgOutputType(msgTypeVal)
 	}
 
 	var msgLen int32
@@ -214,21 +340,28 @@ func readMockMessage(c net.Conn, isStartup bool) (msg *InputMessage, err error) 
 		return
 	}
 
-	msg = NewInputMessage(msgType, bodBuf)
+	msg = NewServerInputMessage(msgType, bodBuf)
 	return
 }
 
 func sendError(c net.Conn, msg string) {
-	out := NewOutputMessage(ErrorResponse)
+	out := NewServerOutputMessage(ErrorResponse)
 	out.WriteByte('S')
 	out.WriteString("FATAL")
 	out.WriteByte('M')
 	out.WriteString(msg)
+	out.WriteByte(0)
+	c.Write(out.Encode())
+}
+
+func sendAuthResponse(c net.Conn, code int32) {
+	out := NewServerOutputMessage(AuthenticationResponse)
+	out.WriteInt32(code)
 	c.Write(out.Encode())
 }
 
 func sendReady(c net.Conn) {
-	out := NewOutputMessage(ReadyForQuery)
+	out := NewServerOutputMessage(ReadyForQuery)
 	out.WriteByte('I')
 	c.Write(out.Encode())
 }

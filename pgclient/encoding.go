@@ -29,7 +29,7 @@ length.
 */
 type OutputMessage struct {
 	buf     *bytes.Buffer
-	msgType PgOutputType
+	msgType int
 	hasType bool
 }
 
@@ -39,7 +39,18 @@ NewOutputMessage constructs a new message with the given type byte
 func NewOutputMessage(msgType PgOutputType) *OutputMessage {
 	return &OutputMessage{
 		buf:     &bytes.Buffer{},
-		msgType: msgType,
+		msgType: int(msgType),
+		hasType: true,
+	}
+}
+
+/*
+NewServerOutputMessage constructs a new message with the given type byte
+*/
+func NewServerOutputMessage(msgType PgInputType) *OutputMessage {
+	return &OutputMessage{
+		buf:     &bytes.Buffer{},
+		msgType: int(msgType),
 		hasType: true,
 	}
 }
@@ -59,7 +70,15 @@ Type returns the message type byte from the message that was passed in to
 the "NewOutputMessage" function.
 */
 func (m *OutputMessage) Type() PgOutputType {
-	return m.msgType
+	return PgOutputType(m.msgType)
+}
+
+/*
+ServerType returns the message type byte from the message that was passed in to
+the "NewOutputMessage" function if we're a server
+*/
+func (m *OutputMessage) ServerType() PgInputType {
+	return PgInputType(m.msgType)
 }
 
 /*
@@ -160,7 +179,7 @@ message.
 */
 type InputMessage struct {
 	buf     *bytes.Buffer
-	msgType PgInputType
+	msgType int
 }
 
 /*
@@ -170,7 +189,18 @@ which must be the correct length for the message.
 func NewInputMessage(msgType PgInputType, b []byte) *InputMessage {
 	return &InputMessage{
 		buf:     bytes.NewBuffer(b),
-		msgType: msgType,
+		msgType: int(msgType),
+	}
+}
+
+/*
+NewServerInputMessage generates a new input message from the specified byte array,
+which must be the correct length for the message.
+*/
+func NewServerInputMessage(msgType PgOutputType, b []byte) *InputMessage {
+	return &InputMessage{
+		buf:     bytes.NewBuffer(b),
+		msgType: int(msgType),
 	}
 }
 
@@ -179,7 +209,15 @@ Type returns the message type byte from the message that was passed in to
 the "NewInputMessage" function.
 */
 func (m *InputMessage) Type() PgInputType {
-	return m.msgType
+	return PgInputType(m.msgType)
+}
+
+/*
+ServerType returns the message type byte from the message that was passed in to
+the "NewInputMessage" function when we're a server.
+*/
+func (m *InputMessage) ServerType() PgOutputType {
+	return PgOutputType(m.msgType)
 }
 
 /*
