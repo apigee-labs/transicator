@@ -66,15 +66,52 @@ var _ = Describe("Connection Tests", func() {
 		failToConnect(fmt.Sprintf("postgres://mock:notthepassword@%s/turtle", mock.Address()))
 	})
 
-	It("Connect with TLS", func() {
+	It("Connect to non-TLS server", func() {
+		mock.SetAuthType(MockMD5)
+		err := mock.Start(0)
+		Expect(err).Should(Succeed())
+
+		// disable -- should work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=disable", mock.Address()))
+		// allow -- should work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=allow", mock.Address()))
+		// prefer -- should still work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=prefer", mock.Address()))
+		// require -- should fail
+		failToConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=require", mock.Address()))
+	})
+
+	It("Connect to TLS server", func() {
 		mock.SetAuthType(MockMD5)
 		mock.SetTLSInfo("../test/keys/clearcert.pem", "../test/keys/clearkey.pem")
 		err := mock.Start(0)
 		Expect(err).Should(Succeed())
-		// Connect with no TLS -- should still work
-		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle", mock.Address()))
-		// Connect with TLS required -- should also still work
-		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?ssl=true", mock.Address()))
+
+		// disable -- should work because server doesn't care
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=disable", mock.Address()))
+		// allow -- should work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=allow", mock.Address()))
+		// prefer -- should still work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=prefer", mock.Address()))
+		// require -- should work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=require", mock.Address()))
+	})
+
+	It("Connect to force TLS server", func() {
+		mock.SetAuthType(MockMD5)
+		mock.SetTLSInfo("../test/keys/clearcert.pem", "../test/keys/clearkey.pem")
+		mock.SetForceTLS()
+		err := mock.Start(0)
+		Expect(err).Should(Succeed())
+
+		// disable -- should fail
+		failToConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=disable", mock.Address()))
+		// allow -- should work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=allow", mock.Address()))
+		// prefer -- should still work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=prefer", mock.Address()))
+		// require -- should work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=require", mock.Address()))
 	})
 })
 

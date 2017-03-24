@@ -30,6 +30,7 @@ var _ = Describe("Connect string", func() {
 		Expect(i.user).Should(BeEmpty())
 		Expect(i.creds).Should(BeEmpty())
 		Expect(i.options).Should(BeEmpty())
+		Expect(i.ssl).Should(Equal(sslPrefer))
 	})
 
 	It("Empty URI Postgres", func() {
@@ -63,7 +64,7 @@ var _ = Describe("Connect string", func() {
 		Expect(i.user).Should(BeEmpty())
 		Expect(i.creds).Should(BeEmpty())
 		Expect(i.options).Should(BeEmpty())
-		Expect(i.ssl).ShouldNot(BeTrue())
+		Expect(i.ssl).Should(Equal(sslPrefer))
 	})
 
 	It("Database", func() {
@@ -129,19 +130,84 @@ var _ = Describe("Connect string", func() {
 		Expect(i.database).Should(Equal("postgres"))
 		Expect(i.user).Should(Equal("user"))
 		Expect(i.creds).Should(Equal("secret"))
-		Expect(i.ssl).Should(BeTrue())
+		Expect(i.ssl).Should(Equal(sslRequire))
 		Expect(i.options).Should(BeEmpty())
 	})
 
-	It("User Host Port Override", func() {
-		i, err := parseConnectString("postgresql://user:secret@myhost:9999?user=foo&password=bar")
+	It("User Host Port DB Override", func() {
+		i, err := parseConnectString("postgresql://user:secret@myhost:9999/wrongdb?user=foo&password=bar&host=yourhost&port=9998&dbname=rightdb")
 		Expect(err).Should(Succeed())
-		Expect(i.host).Should(Equal("myhost"))
-		Expect(i.port).Should(Equal(9999))
-		Expect(i.database).Should(Equal("postgres"))
+		Expect(i.host).Should(Equal("yourhost"))
+		Expect(i.port).Should(Equal(9998))
+		Expect(i.database).Should(Equal("rightdb"))
 		Expect(i.user).Should(Equal("foo"))
 		Expect(i.creds).Should(Equal("bar"))
 		Expect(i.options).Should(BeEmpty())
+	})
+
+	It("SSL Disable", func() {
+		i, err := parseConnectString("postgresql://localhost?sslmode=disable")
+		Expect(err).Should(Succeed())
+		Expect(i.ssl).Should(Equal(sslDisable))
+	})
+
+	It("SSL Allow", func() {
+		i, err := parseConnectString("postgresql://localhost?sslmode=allow")
+		Expect(err).Should(Succeed())
+		Expect(i.ssl).Should(Equal(sslAllow))
+	})
+
+	It("SSL Prefer", func() {
+		i, err := parseConnectString("postgresql://localhost?sslmode=prefer")
+		Expect(err).Should(Succeed())
+		Expect(i.ssl).Should(Equal(sslPrefer))
+	})
+
+	It("SSL Require", func() {
+		i, err := parseConnectString("postgresql://localhost?sslmode=require")
+		Expect(err).Should(Succeed())
+		Expect(i.ssl).Should(Equal(sslRequire))
+	})
+
+	It("SSL Verify CA", func() {
+		i, err := parseConnectString("postgresql://localhost?sslmode=verify-ca")
+		Expect(err).Should(Succeed())
+		Expect(i.ssl).Should(Equal(sslVerifyCA))
+	})
+
+	It("SSL Verify Full", func() {
+		i, err := parseConnectString("postgresql://localhost?sslmode=verify-full")
+		Expect(err).Should(Succeed())
+		Expect(i.ssl).Should(Equal(sslVerifyFull))
+	})
+
+	It("SSL Unknown", func() {
+		_, err := parseConnectString("postgresql://localhost?sslmode=notsupported")
+		Expect(err).ShouldNot(Succeed())
+	})
+
+	It("SSL true", func() {
+		i, err := parseConnectString("postgresql://localhost?ssl=true")
+		Expect(err).Should(Succeed())
+		Expect(i.ssl).Should(Equal(sslRequire))
+	})
+
+	It("SSL false", func() {
+		i, err := parseConnectString("postgresql://localhost?ssl=false")
+		Expect(err).Should(Succeed())
+		Expect(i.ssl).Should(Equal(sslPrefer))
+	})
+
+	It("Require SSL 1", func() {
+		i, err := parseConnectString("postgresql://localhost?requiressl=1")
+		Expect(err).Should(Succeed())
+		Expect(i.ssl).Should(Equal(sslRequire))
+	})
+
+	It("Require SSL 0", func() {
+		i, err := parseConnectString("postgresql://localhost?requiressl=0")
+		Expect(err).Should(Succeed())
+		Expect(i.ssl).Should(Equal(sslPrefer))
 	})
 
 	It("Params", func() {
@@ -154,7 +220,7 @@ var _ = Describe("Connect string", func() {
 		Expect(i.creds).Should(BeEmpty())
 		Expect(i.options["connect_timeout"]).Should(Equal("10"))
 		Expect(i.options["application_name"]).Should(Equal("myapp"))
-		Expect(i.ssl).Should(BeTrue())
+		Expect(i.ssl).Should(Equal(sslRequire))
 	})
 
 	It("Invalid scheme", func() {

@@ -63,6 +63,7 @@ type MockServer struct {
 	mockTable map[string]string
 	authType  MockAuth
 	tlsConfig *tls.Config
+	forceTLS  bool
 }
 
 /*
@@ -96,6 +97,13 @@ func (m *MockServer) SetTLSInfo(certFile, keyFile string) error {
 		Certificates: []tls.Certificate{cert},
 	}
 	return nil
+}
+
+/*
+SetForceTLS sets up the server to reject any non-TLS clients.
+*/
+func (m *MockServer) SetForceTLS() {
+	m.forceTLS = true
 }
 
 /*
@@ -176,6 +184,9 @@ func (m *MockServer) connectLoop(c net.Conn) {
 			return
 		}
 		protoVersion, _ = startup.ReadInt32()
+	} else if m.forceTLS {
+		// We will just close any connection that doesn't ask for TLS
+		return
 	}
 
 	if protoVersion != protocolVersion {

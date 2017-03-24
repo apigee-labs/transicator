@@ -27,8 +27,19 @@ const (
 	postgresScheme  = "postgres"
 	alternateScheme = "postgresql"
 	defaultHost     = "localhost"
-	defaultPort     = 5432
+	defaultPort     = "5432"
 	defaultDatabase = "postgres"
+)
+
+type sslMode int
+
+const (
+	sslPrefer     sslMode = 0
+	sslDisable    sslMode = 1
+	sslAllow      sslMode = 2
+	sslRequire    sslMode = 3
+	sslVerifyCA   sslMode = 4
+	sslVerifyFull sslMode = 5
 )
 
 var hostPortExp = regexp.MustCompile("(.+):([0-9]+)$")
@@ -39,15 +50,38 @@ type connectInfo struct {
 	database string
 	user     string
 	creds    string
-	ssl      bool
+	ssl      sslMode
 	options  map[string]string
 }
 
 /*
-parseConnectString parses a postgres connection string in the style of JDBC
-into something we can use internally.
-see:
-https://jdbc.postgresql.org/documentation/80/connect.html
+parseConnectString supports the style of URL that the standard "libpq"
+supports.
+https://www.postgresql.org/docs/9.6/static/libpq-connect.html
+Status:
+
+host: Supported
+hostaddr: Not supported
+port: Supported
+dbname: Supported
+user: Supported
+password: Supported
+connect_timeout: Not supported*
+client_encoding: Not supported
+options: Not supported
+application_name: Not supported
+fallback_application_name: Not supported
+keepalives, keepalives_idle, keepalives_interval, keepalives_count: Not supported*
+tty: Ignored (as per docs)
+sslmode: Supported, not not for "verify"*
+requiressl: Supported
+ssl: Supported (true == "require", false == "prefer")
+sslcompression: Not supported
+sslcert, sslkey: Not supported
+sslrootcert, sslcrl: Not supported*
+requirepeer: Not supported*
+gsslib: Not supported
+service: Not supported
 */
 func parseConnectString(c string) (*connectInfo, error) {
 	p, err := url.Parse(c)
@@ -60,24 +94,20 @@ func parseConnectString(c string) (*connectInfo, error) {
 	}
 
 	var hostName string
-	var portNum int
+	var portName string
 
 	match := hostPortExp.FindStringSubmatch(p.Host)
 	if match == nil {
 		if p.Host == "" {
 			hostName = defaultHost
-			portNum = defaultPort
+			portName = defaultPort
 		} else {
 			hostName = p.Host
-			portNum = defaultPort
+			portName = defaultPort
 		}
 	} else {
 		hostName = match[1]
-		portStr := match[2]
-		portNum, err = strconv.Atoi(portStr)
-		if err != nil {
-			return nil, fmt.Errorf("Invalid port %s: %s", portStr, err)
-		}
+		portName = match[2]
 	}
 
 	var database string
@@ -95,14 +125,14 @@ func parseConnectString(c string) (*connectInfo, error) {
 
 	var user string
 	var pw string
-	ssl := false
+	sslMode := sslPrefer
 
 	if p.User != nil {
 		user = p.User.Username()
 		pw, _ = p.User.Password()
 	}
 
-	// "user" and "password" can override what we set before
+	// Many query parameter options override existing settings
 	if opts["user"] != "" {
 		user = opts["user"]
 		delete(opts, "user")
@@ -111,10 +141,53 @@ func parseConnectString(c string) (*connectInfo, error) {
 		pw = opts["password"]
 		delete(opts, "password")
 	}
-
+	if opts["host"] != "" {
+		hostName = opts["host"]
+		delete(opts, "host")
+	}
+	if opts["port"] != "" {
+		portName = opts["port"]
+		delete(opts, "port")
+	}
+	if opts["dbname"] != "" {
+		database = opts["dbname"]
+		delete(opts, "dbname")
+	}
 	if opts["ssl"] != "" {
-		ssl = strings.EqualFold(opts["ssl"], "true")
+		if strings.EqualFold(opts["ssl"], "true") {
+			sslMode = sslRequire
+		}
 		delete(opts, "ssl")
+	}
+	if opts["requiressl"] != "" {
+		if opts["requiressl"] == "1" {
+			sslMode = sslRequire
+		}
+		delete(opts, "ssl")
+	}
+	if opts["sslmode"] != "" {
+		switch opts["sslmode"] {
+		case "disable":
+			sslMode = sslDisable
+		case "allow":
+			sslMode = sslAllow
+		case "prefer":
+			sslMode = sslPrefer
+		case "require":
+			sslMode = sslRequire
+		case "verify-ca":
+			sslMode = sslVerifyCA
+		case "verify-full":
+			sslMode = sslVerifyFull
+		default:
+			return nil, fmt.Errorf("Invalid ssl mode \"%s\"", opts["sslmode"])
+		}
+		delete(opts, "sslmode")
+	}
+
+	portNum, err := strconv.Atoi(portName)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid port %s: %s", portName, err)
 	}
 
 	return &connectInfo{
@@ -123,7 +196,7 @@ func parseConnectString(c string) (*connectInfo, error) {
 		database: database,
 		user:     user,
 		creds:    pw,
-		ssl:      ssl,
+		ssl:      sslMode,
 		options:  opts,
 	}, nil
 }
