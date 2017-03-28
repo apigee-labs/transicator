@@ -16,6 +16,8 @@ limitations under the License.
 package pgclient
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -31,6 +33,9 @@ var _ = Describe("Connect string", func() {
 		Expect(i.creds).Should(BeEmpty())
 		Expect(i.options).Should(BeEmpty())
 		Expect(i.ssl).Should(Equal(sslPrefer))
+		Expect(i.keepAlive).Should(BeTrue())
+		Expect(i.keepAliveIdle).Should(BeNil())
+		Expect(i.connectTimeout).Should(BeNil())
 	})
 
 	It("Empty URI Postgres", func() {
@@ -221,6 +226,35 @@ var _ = Describe("Connect string", func() {
 		Expect(i.options["connect_timeout"]).Should(Equal("10"))
 		Expect(i.options["application_name"]).Should(Equal("myapp"))
 		Expect(i.ssl).Should(Equal(sslRequire))
+	})
+
+	It("Keepalive", func() {
+		i, err := parseConnectString("postgresql://localhost?keepalives=1")
+		Expect(err).Should(Succeed())
+		Expect(i.keepAlive).Should(BeTrue())
+		Expect(i.keepAliveIdle).Should(BeNil())
+	})
+
+	It("Keepalive off", func() {
+		i, err := parseConnectString("postgresql://localhost?keepalives=0")
+		Expect(err).Should(Succeed())
+		Expect(i.keepAlive).Should(BeFalse())
+		Expect(i.keepAliveIdle).Should(BeNil())
+	})
+
+	It("Keepalive interval", func() {
+		i, err := parseConnectString("postgresql://localhost?keepalives=1&keepalives_idle=10&keepalives_interval=10&keepalives_count=2")
+		Expect(err).Should(Succeed())
+		Expect(i.keepAlive).Should(BeTrue())
+		Expect(i.keepAliveIdle).ShouldNot(BeNil())
+		Expect(*(i.keepAliveIdle)).Should(Equal(10 * time.Second))
+	})
+
+	It("Connect timeout", func() {
+		i, err := parseConnectString("postgresql://localhost?connect_timeout=100")
+		Expect(err).Should(Succeed())
+		Expect(i.connectTimeout).ShouldNot(BeNil())
+		Expect(*(i.connectTimeout)).Should(Equal(100 * time.Second))
 	})
 
 	It("Invalid scheme", func() {

@@ -90,7 +90,7 @@ func Connect(connect string) (*PgConnection, error) {
 }
 
 func (c *PgConnection) startConnection(ssl sslMode) error {
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", c.connParams.host, c.connParams.port))
+	conn, err := c.openSocket()
 	if err != nil {
 		return err
 	}
@@ -141,6 +141,40 @@ func (c *PgConnection) startConnection(ssl sslMode) error {
 		success = true
 	}
 	return err
+}
+
+func (c *PgConnection) openSocket() (net.Conn, error) {
+	var conn net.Conn
+	var err error
+
+	addr := fmt.Sprintf("%s:%d", c.connParams.host, c.connParams.port)
+
+	if c.connParams.connectTimeout == nil {
+		conn, err = net.Dial("tcp", addr)
+	} else {
+		conn, err = net.DialTimeout("tcp", addr, *(c.connParams.connectTimeout))
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	tcpConn := conn.(*net.TCPConn)
+	err = tcpConn.SetNoDelay(true)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.connParams.keepAlive {
+		err = tcpConn.SetKeepAlive(true)
+		if err == nil && c.connParams.keepAliveIdle != nil {
+			err = tcpConn.SetKeepAlivePeriod(*(c.connParams.keepAliveIdle))
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return conn, nil
 }
 
 func (c *PgConnection) setReadTimeout(t time.Duration) {

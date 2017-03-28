@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -45,13 +46,16 @@ const (
 var hostPortExp = regexp.MustCompile("(.+):([0-9]+)$")
 
 type connectInfo struct {
-	host     string
-	port     int
-	database string
-	user     string
-	creds    string
-	ssl      sslMode
-	options  map[string]string
+	host           string
+	port           int
+	database       string
+	user           string
+	creds          string
+	ssl            sslMode
+	connectTimeout *time.Duration
+	keepAlive      bool
+	keepAliveIdle  *time.Duration
+	options        map[string]string
 }
 
 /*
@@ -66,20 +70,21 @@ port: Supported
 dbname: Supported
 user: Supported
 password: Supported
-connect_timeout: Not supported*
+connect_timeout: Not supported
 client_encoding: Not supported
 options: Not supported
 application_name: Not supported
 fallback_application_name: Not supported
-keepalives, keepalives_idle, keepalives_interval, keepalives_count: Not supported*
+keepalives, keepalives_idle: Supported
+keepalives_interval, keepalives_count: Ignored (no Go platform support)
 tty: Ignored (as per docs)
-sslmode: Supported, not not for "verify"*
+sslmode: Supported, not not for "verify"
 requiressl: Supported
 ssl: Supported (true == "require", false == "prefer")
 sslcompression: Not supported
 sslcert, sslkey: Not supported
-sslrootcert, sslcrl: Not supported*
-requirepeer: Not supported*
+sslrootcert, sslcrl: Not supported
+requirepeer: Not supported
 gsslib: Not supported
 service: Not supported
 */
@@ -126,6 +131,9 @@ func parseConnectString(c string) (*connectInfo, error) {
 	var user string
 	var pw string
 	sslMode := sslPrefer
+	keepAlive := true
+	var keepAliveIdle *time.Duration
+	var connectTimeout *time.Duration
 
 	if p.User != nil {
 		user = p.User.Username()
@@ -184,6 +192,32 @@ func parseConnectString(c string) (*connectInfo, error) {
 		}
 		delete(opts, "sslmode")
 	}
+	if opts["keepalives"] != "" {
+		if opts["keepalives"] == "1" {
+			keepAlive = true
+		} else {
+			keepAlive = false
+		}
+		delete(opts, "keepalives")
+	}
+	if opts["keepalives_idle"] != "" {
+		var secs int
+		secs, err = strconv.Atoi(opts["keepalives_idle"])
+		if err != nil {
+			return nil, fmt.Errorf("Invalid keepalive interval %s: %s\n", opts["keepalives_idle"], err)
+		}
+		kil := time.Duration(secs) * time.Second
+		keepAliveIdle = &kil
+	}
+	if opts["connect_timeout"] != "" {
+		var secs int
+		secs, err = strconv.Atoi(opts["connect_timeout"])
+		if err != nil {
+			return nil, fmt.Errorf("Invalid connect timeout %s: %s\n", opts["connect_timeout"], err)
+		}
+		ct := time.Duration(secs) * time.Second
+		connectTimeout = &ct
+	}
 
 	portNum, err := strconv.Atoi(portName)
 	if err != nil {
@@ -191,12 +225,15 @@ func parseConnectString(c string) (*connectInfo, error) {
 	}
 
 	return &connectInfo{
-		host:     hostName,
-		port:     portNum,
-		database: database,
-		user:     user,
-		creds:    pw,
-		ssl:      sslMode,
-		options:  opts,
+		host:           hostName,
+		port:           portNum,
+		database:       database,
+		user:           user,
+		creds:          pw,
+		ssl:            sslMode,
+		keepAlive:      keepAlive,
+		keepAliveIdle:  keepAliveIdle,
+		connectTimeout: connectTimeout,
+		options:        opts,
 	}, nil
 }

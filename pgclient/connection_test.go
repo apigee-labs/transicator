@@ -42,7 +42,7 @@ var _ = Describe("Connection Tests", func() {
 	})
 
 	It("Connect to bad host", func() {
-		failToConnect("postgres://badhost:9999/postgres")
+		failToConnect("postgres://badhost:9999/postgres?connect_timeout=1")
 	})
 
 	It("Connect to wrong database", func() {
@@ -53,7 +53,7 @@ var _ = Describe("Connection Tests", func() {
 	It("Cleartext Connect", func() {
 		mock.SetAuthType(MockClear)
 		mock.Start(0)
-		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle", mock.Address()))
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?keepalives=1&keepalives_idle=1", mock.Address()))
 		failToConnect(fmt.Sprintf("postgres://mock@%s/turtle", mock.Address()))
 		failToConnect(fmt.Sprintf("postgres://mock:notthepassword@%s/turtle", mock.Address()))
 	})
