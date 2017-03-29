@@ -84,7 +84,7 @@ func WriteSqliteSnapshot(scopes []string, db *sql.DB, w http.ResponseWriter, r *
 	var txId string
 	err = row.Scan(&txId)
 	if err == nil {
-		w.Header().Set("transicator-snapshot-txid", txId)
+		w.Header().Set("Transicator-Snapshot-TXID", txId)
 	}
 
 	// For each table, update the DB
