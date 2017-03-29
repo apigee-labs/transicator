@@ -232,6 +232,15 @@ var _ = Describe("Snapshot API Tests", func() {
 		Expect(r["created_by"]).Should(Equal(1))
 		Expect(r["id"]).Should(Equal(2))
 		Expect(r["_change_selector"]).Should(Equal(2))
+		
+		row = sdb.QueryRow(
+			"select value from _transicator_metadata where key = 'snapshot'")
+		var snap string
+		err = row.Scan(&snap)
+
+		Expect(err).Should(Succeed())
+		Expect(resp.Header.Get("Transicator-Snapshot-TXID")).To(Equal(snap))
+
 	})
 
 	It("SQLite snapshot empty scope", func() {
