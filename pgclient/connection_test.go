@@ -16,6 +16,7 @@ limitations under the License.
 package pgclient
 
 import (
+	"database/sql"
 	"fmt"
 
 	. "github.com/onsi/ginkgo"
@@ -23,37 +24,111 @@ import (
 )
 
 var _ = Describe("Connection Tests", func() {
-	It("Basic Connect", func() {
-		if dbURL == "" {
-			return
-		}
-		conn, err := Connect(dbURL)
-		Expect(err).Should(Succeed())
-		Expect(conn).ShouldNot(BeNil())
-		conn.Close()
+	var mock *MockServer
+
+	BeforeEach(func() {
+		mock = NewMockServer()
+	})
+
+	AfterEach(func() {
+		mock.Stop()
+	})
+
+	It("Trusted Connect", func() {
+		mock.Start(0)
+		tryConnect(fmt.Sprintf("postgres://mock@%s/turtle", mock.Address()))
+		// Connect with TLS required should fail
+		failToConnect(fmt.Sprintf("postgres://mock@%s/turtle?ssl=true", mock.Address()))
 	})
 
 	It("Connect to bad host", func() {
-		_, err := Connect("postgres://badhost:9999/postgres")
-		Expect(err).ShouldNot(Succeed())
+		failToConnect("postgres://badhost:9999/postgres?connect_timeout=1")
 	})
 
-	It("Connect to bad database", func() {
-		if dbURL == "" {
-			return
-		}
-		_, err := Connect("postgres://postgres@localhost/baddatabase")
-		Expect(err).ShouldNot(Succeed())
-		fmt.Fprintf(GinkgoWriter, "Error from database: %s\n", err)
+	It("Connect to wrong database", func() {
+		mock.Start(0)
+		failToConnect(fmt.Sprintf("postgres://mock@%s/wrongdatabase", mock.Address()))
 	})
 
-	PIt("Basic Connect with SSL", func() {
-		if dbURL == "" {
-			return
-		}
-		conn, err := Connect(dbURL + "?ssl=true")
+	It("Cleartext Connect", func() {
+		mock.SetAuthType(MockClear)
+		mock.Start(0)
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?keepalives=1&keepalives_idle=1", mock.Address()))
+		failToConnect(fmt.Sprintf("postgres://mock@%s/turtle", mock.Address()))
+		failToConnect(fmt.Sprintf("postgres://mock:notthepassword@%s/turtle", mock.Address()))
+	})
+
+	It("MD5 Connect", func() {
+		mock.SetAuthType(MockMD5)
+		mock.Start(0)
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle", mock.Address()))
+		failToConnect(fmt.Sprintf("postgres://mock@%s/turtle", mock.Address()))
+		failToConnect(fmt.Sprintf("postgres://mock:notthepassword@%s/turtle", mock.Address()))
+	})
+
+	It("Connect to non-TLS server", func() {
+		mock.SetAuthType(MockMD5)
+		err := mock.Start(0)
 		Expect(err).Should(Succeed())
-		Expect(conn).ShouldNot(BeNil())
-		conn.Close()
+
+		// disable -- should work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=disable", mock.Address()))
+		// allow -- should work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=allow", mock.Address()))
+		// prefer -- should still work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=prefer", mock.Address()))
+		// require -- should fail
+		failToConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=require", mock.Address()))
+	})
+
+	It("Connect to TLS server", func() {
+		mock.SetAuthType(MockMD5)
+		mock.SetTLSInfo("../test/keys/clearcert.pem", "../test/keys/clearkey.pem")
+		err := mock.Start(0)
+		Expect(err).Should(Succeed())
+
+		// disable -- should work because server doesn't care
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=disable", mock.Address()))
+		// allow -- should work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=allow", mock.Address()))
+		// prefer -- should still work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=prefer", mock.Address()))
+		// require -- should work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=require", mock.Address()))
+	})
+
+	It("Connect to force TLS server", func() {
+		mock.SetAuthType(MockMD5)
+		mock.SetTLSInfo("../test/keys/clearcert.pem", "../test/keys/clearkey.pem")
+		mock.SetForceTLS()
+		err := mock.Start(0)
+		Expect(err).Should(Succeed())
+
+		// disable -- should fail
+		failToConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=disable", mock.Address()))
+		// allow -- should work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=allow", mock.Address()))
+		// prefer -- should still work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=prefer", mock.Address()))
+		// require -- should work
+		tryConnect(fmt.Sprintf("postgres://mock:mocketty@%s/turtle?sslmode=require", mock.Address()))
 	})
 })
+
+func tryConnect(url string) {
+	db, err := sql.Open("transicator", url)
+	Expect(err).Should(Succeed())
+	err = db.Ping()
+	Expect(err).Should(Succeed())
+	err = db.Close()
+	Expect(err).Should(Succeed())
+}
+
+func failToConnect(url string) {
+	db, err := sql.Open("transicator", url)
+	Expect(err).Should(Succeed())
+	err = db.Ping()
+	Expect(err).ShouldNot(Succeed())
+	err = db.Close()
+	Expect(err).Should(Succeed())
+}

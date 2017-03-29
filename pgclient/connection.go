@@ -45,8 +45,7 @@ A PgConnection represents a connection to the database.
 */
 type PgConnection struct {
 	conn        net.Conn
-	host        string
-	port        int
+	connParams  *connectInfo
 	readTimeout time.Duration
 	pid         int32
 	key         int32
@@ -57,9 +56,11 @@ Connect to the database. "host" must be a "host:port" pair, "user" and "database
 must contain the appropriate user name and database name, and "opts" contains
 any other keys and values to send to the database.
 
-The connect string works the same way as "psql," or the JDBC driver:
+The connect stringsupports the style of URL that the standard "libpq"
+supports.
+https://www.postgresql.org/docs/9.6/static/libpq-connect.html
 
-postgres://[user[:password]@]hostname[:port]/[database]?ssl=[true|false]&param=val&param=val
+postgres://[user[:password]@]hostname[:port]/[database]?sslmode=[require|allow|prefer|disable]&param=val&param=val
 */
 func Connect(connect string) (*PgConnection, error) {
 	ci, err := parseConnectString(connect)
@@ -67,14 +68,31 @@ func Connect(connect string) (*PgConnection, error) {
 		return nil, err
 	}
 
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", ci.host, ci.port))
-	if err != nil {
-		return nil, err
+	if ci.ssl == sslVerifyCA || ci.ssl == sslVerifyFull {
+		return nil, errors.New("SSL verification options not supported")
 	}
+
 	c := &PgConnection{
-		conn: conn,
-		host: ci.host,
-		port: ci.port,
+		connParams: ci,
+	}
+
+	err = c.startConnection(ci.ssl)
+	if err != nil {
+		if ci.ssl == sslAllow {
+			// We tried non-SSL and it failed completely. Try again with SSL.
+			err = c.startConnection(sslRequire)
+		} else if ci.ssl == sslPrefer {
+			// We tried SSL and there was a handshake failure. Try again without.
+			err = c.startConnection(sslDisable)
+		}
+	}
+	return c, err
+}
+
+func (c *PgConnection) startConnection(ssl sslMode) error {
+	conn, err := c.openSocket()
+	if err != nil {
+		return err
 	}
 
 	success := false
@@ -83,46 +101,98 @@ func Connect(connect string) (*PgConnection, error) {
 			conn.Close()
 		}
 	}()
+	c.conn = conn
 
-	if ci.ssl {
-		err = c.startSSL(ci)
+	if ssl == sslPrefer || ssl == sslRequire {
+		var sslSupported bool
+		sslSupported, err = c.startSSL()
+		if err != nil {
+			return err
+		}
+		if ssl == sslRequire && !sslSupported {
+			return errors.New("SSL is not supported by the server")
+		}
+		// At this point, it's OK if SSL is not supported
+		if sslSupported {
+			err = c.sslHandshake()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// At this point we're connected and handshaked to SSL if necessary
+
+	// Send "Startup" message
+	err = c.sendStartup()
+	if err != nil {
+		return err
+	}
+
+	// Loop here for challenge-response
+	err = c.authenticationLoop()
+	if err != nil {
+		return err
+	}
+
+	// Finish up with receiving parameters and all that
+	err = c.finishConnect()
+	if err == nil {
+		success = true
+	}
+	return err
+}
+
+func (c *PgConnection) openSocket() (net.Conn, error) {
+	var conn net.Conn
+	var err error
+
+	addr := fmt.Sprintf("%s:%d", c.connParams.host, c.connParams.port)
+
+	if c.connParams.connectTimeout == nil {
+		conn, err = net.Dial("tcp", addr)
+	} else {
+		conn, err = net.DialTimeout("tcp", addr, *(c.connParams.connectTimeout))
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	tcpConn := conn.(*net.TCPConn)
+	err = tcpConn.SetNoDelay(true)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.connParams.keepAlive {
+		err = tcpConn.SetKeepAlive(true)
+		if err == nil && c.connParams.keepAliveIdle != nil {
+			err = tcpConn.SetKeepAlivePeriod(*(c.connParams.keepAliveIdle))
+		}
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	// Send "Startup" message
-	err = c.sendStartup(ci)
-	if err != nil {
-		return nil, err
-	}
-
-	// Loop here later for challenge-response
-	err = c.authenticationLoop(ci)
-	if err != nil {
-		return nil, err
-	}
-
-	// Finish up with receiving parameters and all that
-	err = c.finishConnect(ci)
-	if err == nil {
-		success = true
-	}
-	return c, err
+	return conn, nil
 }
 
 func (c *PgConnection) setReadTimeout(t time.Duration) {
 	c.readTimeout = t
 }
 
-func (c *PgConnection) startSSL(ci *connectInfo) error {
+/*
+startSSL sends the Postgres message to start an SSL session and then returns
+true if SSL is supported, and an error if we cannot get that information.
+*/
+func (c *PgConnection) startSSL() (bool, error) {
 	log.Debug("Starting SSL on connection")
 	sslStartup := NewStartupMessage()
 	sslStartup.WriteInt32(sslMagicNumber)
 
 	err := c.WriteMessage(sslStartup)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// Just read one byte to see if we support SSL:
@@ -130,24 +200,24 @@ func (c *PgConnection) startSSL(ci *connectInfo) error {
 	_, err = io.ReadFull(c.conn, sslStatus)
 	if err != nil {
 		log.Debug("Error on read")
-		return err
+		return false, err
 	}
 
 	log.Debugf("Got back %v", sslStatus[0])
 	switch sslStatus[0] {
 	case 'S':
-		return c.sslHandshake(ci)
+		return true, nil
 	case 'N':
-		return errors.New("Server does not support SSL")
+		return false, nil
 	default:
-		return fmt.Errorf("Invalid SSL handshake from server: %v", sslStatus[0])
+		return false, fmt.Errorf("Invalid SSL handshake from server: %v", sslStatus[0])
 	}
 }
 
-func (c *PgConnection) sslHandshake(ci *connectInfo) error {
+func (c *PgConnection) sslHandshake() error {
 	// Always do TLS without verifying the server
 	tlsConfig := &tls.Config{
-		ServerName:         ci.host,
+		ServerName:         c.connParams.host,
 		InsecureSkipVerify: true,
 	}
 
@@ -165,15 +235,15 @@ func (c *PgConnection) sslHandshake(ci *connectInfo) error {
 	return nil
 }
 
-func (c *PgConnection) sendStartup(ci *connectInfo) error {
+func (c *PgConnection) sendStartup() error {
 	startup := NewStartupMessage()
 	startup.WriteInt32(protocolVersion)
 	startup.WriteString("user")
-	startup.WriteString(ci.user)
+	startup.WriteString(c.connParams.user)
 	startup.WriteString("database")
-	startup.WriteString(ci.database)
+	startup.WriteString(c.connParams.database)
 
-	for k, v := range ci.options {
+	for k, v := range c.connParams.options {
 		startup.WriteString(k)
 		startup.WriteString(v)
 	}
@@ -183,7 +253,7 @@ func (c *PgConnection) sendStartup(ci *connectInfo) error {
 	return c.WriteMessage(startup)
 }
 
-func (c *PgConnection) authenticationLoop(ci *connectInfo) error {
+func (c *PgConnection) authenticationLoop() error {
 	authDone := false
 	for !authDone {
 		im, err := c.ReadMessage()
@@ -209,14 +279,14 @@ func (c *PgConnection) authenticationLoop(ci *connectInfo) error {
 			// "password"
 			log.Debug("Sending password in response")
 			pm := NewOutputMessage(PasswordMessage)
-			pm.WriteString(ci.creds)
+			pm.WriteString(c.connParams.creds)
 			c.WriteMessage(pm)
 		case 5:
 			// "md5"
 			log.Debug("Sending MD5 password as response")
 			salt, _ := im.ReadBytes(4)
 			pm := NewOutputMessage(PasswordMessage)
-			pm.WriteString(passwordMD5(ci.user, ci.creds, salt))
+			pm.WriteString(passwordMD5(c.connParams.user, c.connParams.creds, salt))
 			c.WriteMessage(pm)
 		default:
 			// Currently not supporting other schemes like Kerberos...
@@ -226,7 +296,7 @@ func (c *PgConnection) authenticationLoop(ci *connectInfo) error {
 	return nil
 }
 
-func (c *PgConnection) finishConnect(ci *connectInfo) error {
+func (c *PgConnection) finishConnect() error {
 	// Loop to wait for "ready" status
 	for {
 		im, err := c.readStandardMessage()
@@ -416,7 +486,7 @@ be cancelled.
 */
 func (c *PgConnection) sendCancel() error {
 	log.Debugf("Sending cancel to PID %d", c.pid)
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", c.host, c.port))
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", c.connParams.host, c.connParams.port))
 	if err != nil {
 		return err
 	}
