@@ -29,8 +29,12 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/apigee-labs/transicator/common"
-	// Ensure that the sqlite driver is loaded
-	_ "github.com/mattn/go-sqlite3"
+	sqlite3 "github.com/mattn/go-sqlite3"
+)
+
+const (
+	driverName        = "sqlite3"
+	backupPagesInStep = 512
 )
 
 /*
@@ -65,19 +69,13 @@ func Open(baseFile string) (*SQL, error) {
 
 	success := false
 
-	st, err := os.Stat(baseFile)
+	url, err := createDBDir(baseFile)
 	if err != nil {
-		err = os.Mkdir(baseFile, 0775)
-		if err != nil {
-			return nil, err
-		}
-	} else if !st.IsDir() {
-		return nil, fmt.Errorf("Database location %s is not a directory", baseFile)
+		return nil, err
 	}
 
-	url := fmt.Sprintf("%s/transicator", baseFile)
 	log.Infof("Opening SQLite DB at %s\n", url)
-	db, err := sql.Open("sqlite3", url)
+	db, err := sql.Open(driverName, url)
 	if err != nil {
 		return nil, err
 	}
@@ -118,6 +116,21 @@ func Open(baseFile string) (*SQL, error) {
 	success = true
 
 	return stor, nil
+}
+
+// createDBDir ensures that "base" is a directory and returns the file name
+func createDBDir(baseFile string) (string, error) {
+	st, err := os.Stat(baseFile)
+	if err != nil {
+		err = os.Mkdir(baseFile, 0775)
+		if err != nil {
+			return "", err
+		}
+	} else if !st.IsDir() {
+		return "", fmt.Errorf("Database location %s is not a directory", baseFile)
+	}
+
+	return fmt.Sprintf("%s/transicator", baseFile), err
 }
 
 /*
@@ -244,6 +257,71 @@ func (s *SQL) Purge(oldest time.Time) (uint64, error) {
 	}
 	ra, _ := res.RowsAffected()
 	return uint64(ra), nil
+}
+
+/*
+Backup creates a backup of the current database in the specified file name,
+and sends results using the supplied channel.
+*/
+func (s *SQL) Backup(dest string) <-chan BackupProgress {
+	pc := make(chan BackupProgress, 1000)
+	go s.runBackup(dest, pc)
+	return pc
+}
+
+func (s *SQL) runBackup(dest string, pc chan BackupProgress) {
+	srcConn, err := s.openRawConnection(s.baseFile)
+	if err != nil {
+		returnBackupError(pc, err)
+		return
+	}
+	defer srcConn.Close()
+
+	dstConn, err := s.openRawConnection(dest)
+	if err != nil {
+		returnBackupError(pc, err)
+		return
+	}
+	defer dstConn.Close()
+
+	backup, err := dstConn.Backup("main", srcConn, "main")
+	if err != nil {
+		returnBackupError(pc, err)
+		return
+	}
+	defer backup.Close()
+
+	done := false
+	for i := 0; !done; i++ {
+		done, err = backup.Step(backupPagesInStep)
+		pc <- BackupProgress{
+			PagesRemaining: backup.Remaining(),
+			Error:          err,
+			Done:           done,
+		}
+	}
+	backup.Finish()
+}
+
+func returnBackupError(pc chan BackupProgress, err error) {
+	pc <- BackupProgress{
+		Done:  true,
+		Error: err,
+	}
+}
+
+func (s *SQL) openRawConnection(baseFile string) (*sqlite3.SQLiteConn, error) {
+	url, err := createDBDir(baseFile)
+	if err != nil {
+		return nil, err
+	}
+
+	sqlConn, err := s.db.Driver().Open(url)
+	if err != nil {
+		return nil, err
+	}
+
+	return sqlConn.(*sqlite3.SQLiteConn), nil
 }
 
 func (s *SQL) readOneRange(scope string, startLSN uint64,

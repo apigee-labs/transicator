@@ -17,8 +17,9 @@ limitations under the License.
 package storage
 
 import (
-	"github.com/apigee-labs/transicator/common"
 	"time"
+
+	"github.com/apigee-labs/transicator/common"
 )
 
 /*
@@ -29,6 +30,15 @@ type Entry struct {
 	LSN   uint64
 	Index uint32
 	Data  []byte
+}
+
+/*
+BackupProgress records are returned on a channel by the backup API.
+*/
+type BackupProgress struct {
+	PagesRemaining int
+	Done           bool
+	Error          error
 }
 
 /*
@@ -62,4 +72,9 @@ type DB interface {
 
 	// Delete entries older than "oldest"
 	Purge(oldest time.Time) (purgeCount uint64, err error)
+
+	// Make a backup of the current database at the specified file name. The
+	// function will return a channel that can be used to read the status of
+	// the backup as it is being made.
+	Backup(dest string) <-chan BackupProgress
 }

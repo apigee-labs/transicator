@@ -19,6 +19,7 @@ limitations under the License.
 package storage
 
 import (
+	"errors"
 	"math"
 	"sort"
 
@@ -271,6 +272,18 @@ func (s *RocksDB) Purge(oldest time.Time) (purgeCount uint64, err error) {
 		}
 	}
 	return
+}
+
+/*
+Backup is not supported for the RocksDB back end.
+*/
+func (s *RocksDB) Backup(dest string) <-chan BackupProgress {
+	bc := make(chan BackupProgress, 1)
+	bc <- BackupProgress{
+		Done:  true,
+		Error: errors.New("Backups not supported"),
+	}
+	return bc
 }
 
 func (s *RocksDB) deleteIterKey(it *gorocksdb.Iterator) error {
