@@ -199,7 +199,7 @@ func makeSqliteTable(tdb *sql.DB, t *pgTable) error {
 func makeSqliteTableSQL(t *pgTable) string {
 	s := &bytes.Buffer{}
 
-	s.WriteString(fmt.Sprintf("create table %s (", t.name))
+	s.WriteString(fmt.Sprintf("create table %s (", t.schema + "_" + t.name))
 	first := true
 
 	for _, col := range t.columns {
@@ -317,7 +317,7 @@ func patchColTypes(cols []interface{}) {
 
 func makeInsertSQL(pgTable *pgTable, colNames []string) string {
 	s := &bytes.Buffer{}
-	s.WriteString(fmt.Sprintf("insert into %s (", pgTable.name))
+	s.WriteString(fmt.Sprintf("insert into %s (", pgTable.schema + "_" + pgTable.name))
 
 	for i, cn := range colNames {
 		if i > 0 {
