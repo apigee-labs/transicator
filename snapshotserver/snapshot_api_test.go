@@ -192,7 +192,7 @@ var _ = Describe("Snapshot API Tests", func() {
 		Expect(err).Should(Succeed())
 		defer sdb.Close()
 
-		row := sdb.QueryRow("select org, id, dev_id from app where id = 'sqlSnap'")
+		row := sdb.QueryRow("select org, id, dev_id from public_app where id = 'sqlSnap'")
 
 		var org string
 		var id string
@@ -271,7 +271,7 @@ var _ = Describe("Snapshot API Tests", func() {
 		Expect(err).Should(Succeed())
 		defer sdb.Close()
 
-		row := sdb.QueryRow("select count(*) from app")
+		row := sdb.QueryRow("select count(*) from public_app")
 		var count int
 		err = row.Scan(&count)
 		Expect(err).Should(Succeed())
@@ -324,7 +324,7 @@ var _ = Describe("Snapshot API Tests", func() {
 
 	It("SQLite types", func() {
 		is, err := db.Prepare(`
-		insert into snapshot_test
+		insert into public_snapshot_test
 		(id, bool, smallint, bigint, float, double, date, time, timestamp, timestampp, blob, _change_selector)
 		values
 		($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -354,7 +354,7 @@ var _ = Describe("Snapshot API Tests", func() {
 
 		query := `
 		select bool, smallint, bigint, float, double, date, time, timestamp, timestampp, blob
-		from snapshot_test
+		from public_snapshot_test
 		where _change_selector = 'typetest'
 		order by id
 		`
