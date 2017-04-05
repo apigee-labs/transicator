@@ -206,7 +206,7 @@ var _ = Describe("Snapshot API Tests", func() {
 
 		rows, err := sdb.Query(`
 			select columnName, primaryKey from _transicator_tables
-			where tableName = 'app'
+			where tableName = 'public_app'
 		`)
 		Expect(err).Should(Succeed())
 		defer rows.Close()
@@ -324,7 +324,7 @@ var _ = Describe("Snapshot API Tests", func() {
 
 	It("SQLite types", func() {
 		is, err := db.Prepare(`
-		insert into public_snapshot_test
+		insert into public.snapshot_test
 		(id, bool, smallint, bigint, float, double, date, time, timestamp, timestampp, blob, _change_selector)
 		values
 		($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
