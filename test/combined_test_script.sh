@@ -31,11 +31,8 @@ TEST_COVERAGE_FILENAME=${TEST_COVERAGE_FILENAME:-coverage.txt}
 TEST_COVERAGE_OUTPUT=${DIR}/../test-reports/${TEST_COVERAGE_FILENAME}
 TEST_MODULES="./test"
 if [[ "${TEST_COVERAGE}" == "true" ]]; then
-  if [ ! -f "${TEST_COVERAGE_OUTPUT}" ]; then
-   echo "mode: atomic" | tee ${TEST_COVERAGE_OUTPUT}
-  fi
   for package in ${TEST_MODULES}; do
-    go test -coverprofile=profile.out -covermode=atomic $package
+    go test -coverprofile=profile.out $package
     result=$?
     if [ $result -ne 0 ]; then
       error=$result

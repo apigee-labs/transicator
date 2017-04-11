@@ -100,8 +100,8 @@ var _ = Describe("Backup tests", func() {
 			testBlobs = append(testBlobs, b)
 			return true
 		}, &quick.Config{
-			// This will generate 10,000 records to test.
-			MaxCountScale: 100.0,
+			// This will generate 100 records to test.
+			MaxCountScale: 1.0,
 		})
 		Expect(err).Should(Succeed())
 		fmt.Fprintf(GinkgoWriter, "Generated %d test blobs\n", len(testBlobs))
