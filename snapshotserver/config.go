@@ -27,6 +27,8 @@ import (
 SetConfigDefaults sets up Viper for command-line and other processing.
 */
 func SetConfigDefaults() {
+	pflag.StringP("localbindipaddr", "a", "0.0.0.0", "listener IP address")
+	viper.SetDefault("localBindIpAddr", "0.0.0.0")
 	pflag.IntP("port", "p", -1, "HTTP Binding port")
 	viper.SetDefault("port", -1)
 	pflag.IntP("secureport", "t", -1, "HTTPS listen port")
@@ -54,6 +56,7 @@ func SetConfigDefaults() {
 }
 
 func getConfig() error {
+	viper.BindPFlag("localBindIpAddr", pflag.Lookup("localbindipaddr"))
 	viper.BindPFlag("port", pflag.Lookup("port"))
 	viper.BindPFlag("securePort", pflag.Lookup("secureport"))
 	viper.BindPFlag("mgmtPort", pflag.Lookup("mgmtport"))

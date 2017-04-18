@@ -51,8 +51,8 @@ var (
 func TestSnapshot(t *testing.T) {
 	dbURL = os.Getenv("TEST_PG_URL")
 	if dbURL == "" {
-		t.Logf("Cannot run snapshot tests because TEST_PG_URL not set\n")
-		t.Logf("  Example: postgres://user:password@host:port/database\n")
+		t.Log("Cannot run snapshot tests because TEST_PG_URL not set\n")
+		t.Log("  Example: postgres://user:password@host:port/database\n")
 		t.Fatal("Aborting snapshot tests because they depend on Postgres.")
 	} else {
 		RegisterFailHandler(Fail)
@@ -85,6 +85,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).Should(Succeed())
 
 	SetConfigDefaults()
+	viper.Set("localBindIpAddr", "127.0.0.1")
 	viper.Set("port", 0)
 	viper.Set("pgURL", dbURL)
 	viper.Set("debug", debugTests)
@@ -103,7 +104,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	fmt.Fprintf(GinkgoWriter, "Stopping listener\n")
+	fmt.Fprint(GinkgoWriter, "Stopping listener\n")
 	testListener.Shutdown(nil)
 
 	for _, table := range allTables {
