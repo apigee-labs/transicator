@@ -18,6 +18,7 @@ package snapshotserver
 import (
 	"database/sql"
 	"errors"
+	"net"
 	"net/http"
 	"time"
 
@@ -63,6 +64,7 @@ func Run() (*goscaffold.HTTPScaffold, error) {
 	}
 
 	// Fetch config values from Viper
+	localBindIpAddr := viper.GetString("localBindIpAddr")
 	port := viper.GetInt("port")
 	securePort := viper.GetInt("securePort")
 	mgmtPort := viper.GetInt("mgmtPort")
@@ -120,6 +122,10 @@ func Run() (*goscaffold.HTTPScaffold, error) {
 		})
 
 	scaf := goscaffold.CreateHTTPScaffold()
+	ip := net.ParseIP(localBindIpAddr)
+	if ip != nil {
+		scaf.SetlocalBindIPAddressV4(ip)
+	}
 	scaf.SetInsecurePort(port)
 	scaf.SetSecurePort(securePort)
 	if mgmtPort >= 0 {
