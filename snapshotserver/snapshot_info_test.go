@@ -220,6 +220,8 @@ CREATE TABLE transicator_tests.schema_table (
 	_change_selector character varying
 );
 alter table transicator_tests.schema_table replica identity full;
+CREATE INDEX customer_idx_created_at ON public.APP USING btree (created_at);
+CREATE INDEX dev_idx_created_at ON public.DEVELOPER USING btree (created_at);
 `
 
 var _ = Describe("Taking a snapshot", func() {

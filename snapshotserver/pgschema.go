@@ -53,6 +53,7 @@ func enumeratePgTables(tx *sql.Tx) (map[string]*pgTable, error) {
 	and a.attnum > 0
 	and n.nspname = $1
 	and c.relname = $2
+        and i.indisprimary
 	order by a.attnum
 	`)
 	if err != nil {
@@ -123,7 +124,6 @@ func mapPrimaryKeys(s *sql.Stmt, t *pgTable) error {
 	if err != nil {
 		return err
 	}
-
 	for rows.Next() {
 		var name string
 		err = rows.Scan(&name)
