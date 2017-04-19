@@ -140,6 +140,8 @@ var allTables = []string{
 	"public.developer",
 	"public.snapshot_test",
 	"public.DATA_SCOPE",
+	"public.deployment_history",
+	"public.deployment_history2",
 	"public.APID_CLUSTER",
 	"transicator_tests.schema_table",
 }
@@ -163,7 +165,7 @@ const testTableSQL = `
     timestamp timestamp with time zone,
     timestampp timestamp
   );
-  CREATE TABLE public.DEVELOPER (
+CREATE TABLE public.DEVELOPER (
 	org varchar(255),
 	id varchar(255),
 	username varchar(255),
@@ -174,7 +176,7 @@ const testTableSQL = `
 	PRIMARY KEY (id, _change_selector)
 );
 alter table public.developer replica identity full;
-  CREATE TABLE public.APP (
+CREATE TABLE public.APP (
 	org varchar(255),
 	id varchar(255),
 	dev_id varchar(255) null,
@@ -221,6 +223,20 @@ CREATE TABLE transicator_tests.schema_table (
 	_change_selector character varying
 );
 alter table transicator_tests.schema_table replica identity full;
+
+CREATE TABLE public.deployment_history (
+  id character varying primary key,
+  created_at timestamp,
+   __change_selector character varying
+);
+alter table public.deployment_history replica identity full;
+
+CREATE TABLE public.deployment_history2 (
+  id character varying primary key,
+  created_at timestamp
+);
+alter table public.deployment_history2 replica identity full;
+
 CREATE INDEX customer_idx_created_at ON public.APP USING btree (created_at);
 CREATE INDEX dev_idx_created_at ON public.DEVELOPER USING btree (created_at);
 `
