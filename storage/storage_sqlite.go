@@ -32,7 +32,7 @@ import (
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 	"io"
-	"math/rand"
+	"io/ioutil"
 )
 
 const (
@@ -265,13 +265,16 @@ func (s *SQL) Purge(oldest time.Time) (uint64, error) {
 /*
 GetBackup creates a backup of the current database in a temp filename,
 and write the persistent db file to the specified writer.
+It's the caller's responsibility to close the writer, if needed.
 */
 func (s *SQL) GetBackup(w io.Writer) (err error) {
-	backupDbName := fmt.Sprintf("./transicator_sqlite_backup_%v_%v", rand.Int(), time.Now().UnixNano())
-	log.Debugf("Sqlite backup destination: %s", backupDbName)
-
+	tempDirUrl, err := ioutil.TempDir("", "transicator_sqlite_backup")
+	backupDirName := fmt.Sprintf("%s/backup", tempDirUrl)
+	log.Debugf("Sqlite backup destination: %s", backupDirName)
+	// remove the temp backup file
+	defer os.RemoveAll(tempDirUrl)
 	// create backup
-	bc := s.Backup(backupDbName)
+	bc := s.Backup(backupDirName)
 	for {
 		br := <-bc
 		log.Debugf("Backup %d remaining\n", br.PagesRemaining)
@@ -284,11 +287,8 @@ func (s *SQL) GetBackup(w io.Writer) (err error) {
 		}
 	}
 
-	// remove the temp backup file
-	defer os.RemoveAll(backupDbName)
-
 	// copy backup file to the writer
-	backupFileName := fmt.Sprintf("%s/transicator", backupDbName)
+	backupFileName := fmt.Sprintf("%s/transicator", backupDirName)
 	fileReader, err := os.Open(backupFileName)
 	defer fileReader.Close()
 	if err != nil {
