@@ -17,19 +17,18 @@ package snapshotserver
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"path"
-
 	"time"
-
-	"net/http/httptest"
-
-	"database/sql/driver"
 
 	"github.com/apigee-labs/transicator/common"
 	"github.com/julienschmidt/httprouter"
@@ -232,7 +231,7 @@ var _ = Describe("Snapshot API Tests", func() {
 		Expect(r["created_by"]).Should(Equal(1))
 		Expect(r["id"]).Should(Equal(2))
 		Expect(r["_change_selector"]).Should(Equal(2))
-		
+
 		row = sdb.QueryRow(
 			"select value from _transicator_metadata where key = 'snapshot'")
 		var snap string
@@ -418,7 +417,55 @@ var _ = Describe("Snapshot API Tests", func() {
 
 		Expect(rows.Next()).ShouldNot(BeTrue())
 	})
+
+	It("should detect invalid chars in scope query param", func() {
+		req, err := http.NewRequest("GET",
+			fmt.Sprintf("%s/snapshots?scope=%s", testBase, url.QueryEscape("snaptests;select now()")), nil)
+		Expect(err).Should(Succeed())
+		req.Header = http.Header{}
+		req.Header.Set("Accept", "application/json")
+		dump, err := httputil.DumpRequestOut(req, true)
+		fmt.Fprintf(GinkgoWriter, "\ndump client req: %q\nerr: %+v\n", dump, err)
+
+		resp, err := http.DefaultClient.Do(req)
+		Expect(err).Should(Succeed())
+		defer resp.Body.Close()
+		checkApiErrorCode(resp, http.StatusBadRequest, "INVALID_REQUEST_PARAM")
+	})
+
+	It("should detect invalid chars in multiple scope query params", func() {
+		req, err := http.NewRequest("GET",
+			fmt.Sprintf("%s/snapshots?scope=abc123&scope=%s", testBase, url.QueryEscape("snapstests;select now()")), nil)
+		Expect(err).Should(Succeed())
+		req.Header = http.Header{}
+		req.Header.Set("Accept", "application/json")
+		dump, err := httputil.DumpRequestOut(req, true)
+		fmt.Fprintf(GinkgoWriter, "\ndump client req: %q\nerr: %+v\n", dump, err)
+
+		resp, err := http.DefaultClient.Do(req)
+		Expect(err).Should(Succeed())
+		defer resp.Body.Close()
+		checkApiErrorCode(resp, http.StatusBadRequest, "INVALID_REQUEST_PARAM")
+
+	})
+
 })
+
+func checkApiErrorCode(resp *http.Response, sc int, ec string) {
+	dump, err := httputil.DumpResponse(resp, true)
+	fmt.Fprintf(GinkgoWriter, "\nAPIError response: %q\nerr: %+v\n", dump, err)
+
+	Expect(resp.StatusCode).Should(Equal(sc))
+	Expect(resp.Header.Get("Content-Type")).Should(Equal("application/json"))
+
+	bod, err := ioutil.ReadAll(resp.Body)
+	Expect(err).Should(Succeed())
+
+	var errMsg common.APIError
+	err = json.Unmarshal(bod, &errMsg)
+	Expect(err).Should(Succeed())
+	Expect(errMsg.Code).Should(Equal(ec))
+}
 
 func insertApp(devID, appID, selector string) {
 	_, err := db.Exec(`

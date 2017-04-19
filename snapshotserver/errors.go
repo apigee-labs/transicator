@@ -17,8 +17,9 @@ limitations under the License.
 package snapshotserver
 
 import (
-	"github.com/apigee-labs/transicator/common"
 	"net/http"
+
+	"github.com/apigee-labs/transicator/common"
 )
 
 type errorCode int
@@ -27,6 +28,7 @@ const (
 	missingScope         errorCode = iota
 	unsupportedMediaType errorCode = iota
 	serverError          errorCode = iota
+	invalidRequestParam  errorCode = iota
 )
 
 func sendAPIError(code errorCode, description string,
@@ -44,6 +46,8 @@ func (e errorCode) errInfo() (string, string, int) {
 		return "UNSUPPORTED_MEDIA_TYPE", "The media type is not supported", http.StatusUnsupportedMediaType
 	case serverError:
 		return "INTERNAL_SERVER_ERROR", "An error occurred in the server", http.StatusInternalServerError
+	case invalidRequestParam:
+		return "INVALID_REQUEST_PARAM", "An invalid param was in the request", http.StatusBadRequest
 	default:
 		return "UNKNOWN", "An unknown error occurred", http.StatusInternalServerError
 	}
