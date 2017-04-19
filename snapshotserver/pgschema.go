@@ -71,11 +71,17 @@ func enumeratePgTables(tx *sql.Tx) (map[string]*pgTable, error) {
 }
 
 func mapPgTables(tx *sql.Tx) (map[string]*pgTable, error) {
+	// Ignore tables that don't have the column _change_selector
 	rows, err := tx.Query(`
 	select n.nspname, c.relname, a.attname, a.atttypid
-	from pg_namespace n, pg_class c, pg_attribute a
+	from pg_namespace n, pg_attribute a,
+		(select c.relname, c.oid, c.relnamespace
+			from pg_class c, pg_attribute a
+		 where a.attrelid = c.oid
+			and c.relkind = 'r'
+			and a.attname = '_change_selector') c
+
 	where n.oid = c.relnamespace and a.attrelid = c.oid
-	and c.relkind = 'r'
 	and n.nspname not in ('information_schema', 'pg_catalog')
 	and a.attnum > 0
 	order by n.nspname, c.relname, a.attnum
