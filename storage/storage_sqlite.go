@@ -27,12 +27,13 @@ import (
 	"os"
 	"time"
 
+	"io"
+	"io/ioutil"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/apigee-labs/transicator/common"
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
-	"io"
-	"io/ioutil"
 )
 
 const (
@@ -268,11 +269,14 @@ and write the persistent db file to the specified writer.
 It's the caller's responsibility to close the writer, if needed.
 */
 func (s *SQL) GetBackup(w io.Writer) (err error) {
-	tempDirUrl, err := ioutil.TempDir("", "transicator_sqlite_backup")
-	backupDirName := fmt.Sprintf("%s/backup", tempDirUrl)
+	tempDirURL, err := ioutil.TempDir("", "transicator_sqlite_backup")
+	if err != nil {
+		return
+	}
+	backupDirName := fmt.Sprintf("%s/backup", tempDirURL)
 	log.Debugf("Sqlite backup destination: %s", backupDirName)
 	// remove the temp backup file
-	defer os.RemoveAll(tempDirUrl)
+	defer os.RemoveAll(tempDirURL)
 	// create backup
 	bc := s.Backup(backupDirName)
 	for {

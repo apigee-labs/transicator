@@ -20,6 +20,7 @@ package storage
 
 import (
 	"errors"
+	"io"
 	"math"
 	"sort"
 
@@ -284,6 +285,13 @@ func (s *RocksDB) Backup(dest string) <-chan BackupProgress {
 		Error: errors.New("Backups not supported"),
 	}
 	return bc
+}
+
+/*
+GetBackup is not supported.
+*/
+func (s *RocksDB) GetBackup(w io.Writer) (err error) {
+	return errors.New("Not implemented")
 }
 
 func (s *RocksDB) deleteIterKey(it *gorocksdb.Iterator) error {
