@@ -94,30 +94,7 @@ var _ = Describe("Backup tests", func() {
 	})
 
 	It("Backup sequence", func() {
-		// Generate some random byte records for testing.
-		var testBlobs [][]byte
-		err := quick.Check(func(b []byte) bool {
-			testBlobs = append(testBlobs, b)
-			return true
-		}, &quick.Config{
-			// This will generate 100 records to test.
-			MaxCountScale: 1.0,
-		})
-		Expect(err).Should(Succeed())
-		fmt.Fprintf(GinkgoWriter, "Generated %d test blobs\n", len(testBlobs))
-
-		for i, b := range testBlobs {
-			err = testDB.Put("seq", uint64(i), 0, b)
-			Expect(err).Should(Succeed())
-		}
-		fmt.Fprintf(GinkgoWriter, "Inserted %d test blobs\n", len(testBlobs))
-
-		// Read them all back and compare them
-		checkBlobs, _, _, err := testDB.Scan([]string{"seq"}, 0, 0, len(testBlobs), nil)
-		Expect(err).Should(Succeed())
-		for i, b := range checkBlobs {
-			Expect(bytes.Equal(b, testBlobs[i])).Should(BeTrue())
-		}
+		testBlobs := generateRandomRecords()
 
 		bc := testDB.Backup(backupFile)
 
@@ -135,11 +112,95 @@ var _ = Describe("Backup tests", func() {
 		defer bdb.Close()
 
 		fmt.Fprintf(GinkgoWriter, "Reading %d test blobs from backup\n", len(testBlobs))
-		checkBlobs, _, _, err = bdb.Scan([]string{"seq"}, 0, 0, len(testBlobs), nil)
+		testBlobs, _, _, err = bdb.Scan([]string{"seq"}, 0, 0, len(testBlobs), nil)
 		Expect(err).Should(Succeed())
 
-		for i, b := range checkBlobs {
+		for i, b := range testBlobs {
+			Expect(bytes.Equal(b, testBlobs[i])).Should(BeTrue())
+		}
+	})
+
+	It("Backup to an existed dir should fail", func() {
+		os.Mkdir(backupFile, 0775)
+		bc := testDB.Backup(backupFile)
+
+		// expect error
+		br := <-bc
+		Expect(br.Error).ShouldNot(Succeed())
+
+	})
+
+	It("Backup to an existed db should fail", func() {
+		generateRandomRecords()
+		bc := testDB.Backup(backupFile)
+
+		for {
+			br := <-bc
+			Expect(br.Error).Should(Succeed())
+			fmt.Fprintf(GinkgoWriter, "Backup %d remaining\n", br.PagesRemaining)
+			if br.Done {
+				break
+			}
+		}
+
+		// backup again to the same dest
+		bc = testDB.Backup(backupFile)
+
+		// expect error
+		br := <-bc
+		Expect(br.Error).ShouldNot(Succeed())
+
+	})
+
+	It("Test GetBackup", func() {
+		testBlobs := generateRandomRecords()
+
+		// use GetBackup to write backup to a file
+		err := os.Mkdir(backupFile, 0775)
+		fileWriter, err := os.OpenFile(backupFile+"/transicator", os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0775)
+		Expect(err).Should(Succeed())
+		err = testDB.GetBackup(fileWriter)
+		Expect(err).Should(Succeed())
+		fileWriter.Close()
+
+		// compare backup
+		bdb, err := Open(backupFile)
+		Expect(err).Should(Succeed())
+		defer bdb.Close()
+
+		fmt.Fprintf(GinkgoWriter, "Reading %d test blobs from backup\n", len(testBlobs))
+		testBlobs, _, _, err = bdb.Scan([]string{"seq"}, 0, 0, len(testBlobs), nil)
+		Expect(err).Should(Succeed())
+
+		for i, b := range testBlobs {
 			Expect(bytes.Equal(b, testBlobs[i])).Should(BeTrue())
 		}
 	})
 })
+
+// Generate some random byte records for testing.
+func generateRandomRecords() (testBlobs [][]byte) {
+	err := quick.Check(func(b []byte) bool {
+		testBlobs = append(testBlobs, b)
+		return true
+	}, &quick.Config{
+		// This will generate 100 records to test.
+		MaxCountScale: 1.0,
+	})
+	Expect(err).Should(Succeed())
+	fmt.Fprintf(GinkgoWriter, "Generated %d test blobs\n", len(testBlobs))
+
+	for i, b := range testBlobs {
+		err = testDB.Put("seq", uint64(i), 0, b)
+		Expect(err).Should(Succeed())
+	}
+	fmt.Fprintf(GinkgoWriter, "Inserted %d test blobs\n", len(testBlobs))
+
+	// Read them all back and compare them
+	checkBlobs, _, _, err := testDB.Scan([]string{"seq"}, 0, 0, len(testBlobs), nil)
+	Expect(err).Should(Succeed())
+	for i, b := range checkBlobs {
+		Expect(bytes.Equal(b, testBlobs[i])).Should(BeTrue())
+	}
+	return
+}
