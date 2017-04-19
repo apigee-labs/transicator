@@ -256,7 +256,7 @@ func writeJSONSnapshot(
 		rows, err := db.Query(q)
 		if err != nil {
 			if strings.Contains(err.Error(), "errorMissingColumn") {
-				log.Warnf("Skipping table %s: no %s column", tn, selectorColumn)
+				log.Debugf("Skipping table %s: no %s column", tn, selectorColumn)
 				continue
 			}
 			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, tn, err)
@@ -290,7 +290,7 @@ func writeProtoSnapshot(
 		rows, err := db.Query(q)
 		if err != nil {
 			if strings.Contains(err.Error(), "errorMissingColumn") {
-				log.Warnf("Skipping table %s: no %s column", t, selectorColumn)
+				log.Debugf("Skipping table %s: no %s column", t, selectorColumn)
 				continue
 			}
 			log.Errorf("Failed to get tenant data <Query: %s> in Table %s : %+v", q, t, err)
