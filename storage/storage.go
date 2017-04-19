@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/apigee-labs/transicator/common"
+	"io"
 )
 
 /*
@@ -77,4 +78,8 @@ type DB interface {
 	// function will return a channel that can be used to read the status of
 	// the backup as it is being made.
 	Backup(dest string) <-chan BackupProgress
+
+	// GetBackup creates a backup of the current database in a temp filename,
+	// and write the persistent db file to the specified writer.
+	GetBackup(w io.Writer) error
 }
