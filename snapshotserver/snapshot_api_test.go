@@ -182,10 +182,14 @@ var _ = Describe("Snapshot API Tests", func() {
 		Expect(resp.Header.Get("Content-Type")).Should(Equal("application/transicator+sqlite"))
 
 		dbFileName := path.Join(dbDir, "snapdb")
+
 		outFile, err := os.OpenFile(dbFileName, os.O_RDWR|os.O_CREATE, 0666)
 		Expect(err).Should(Succeed())
 		_, err = io.Copy(outFile, resp.Body)
 		outFile.Close()
+		err, cksum := getSHA256Checksum(dbFileName)
+		Expect(err).Should(Succeed())
+		Expect(resp.Header.Get("SHA256Sum")).To(Equal(cksum))
 		Expect(err).Should(Succeed())
 
 		sdb, err := sql.Open("sqlite3", dbFileName)
@@ -232,7 +236,7 @@ var _ = Describe("Snapshot API Tests", func() {
 		Expect(r["created_by"]).Should(Equal(1))
 		Expect(r["id"]).Should(Equal(2))
 		Expect(r["_change_selector"]).Should(Equal(2))
-		
+
 		row = sdb.QueryRow(
 			"select value from _transicator_metadata where key = 'snapshot'")
 		var snap string
@@ -266,6 +270,10 @@ var _ = Describe("Snapshot API Tests", func() {
 		_, err = io.Copy(outFile, resp.Body)
 		outFile.Close()
 		Expect(err).Should(Succeed())
+
+		err, cksum := getSHA256Checksum(dbFileName)
+		Expect(err).Should(Succeed())
+		Expect(resp.Header.Get("SHA256Sum")).To(Equal(cksum))
 
 		sdb, err := sql.Open("sqlite3", dbFileName)
 		Expect(err).Should(Succeed())
@@ -478,6 +486,10 @@ func getSqliteSnapshot(dbDir, scope string) (*sql.DB, string) {
 	Expect(err).Should(Succeed())
 	_, err = io.Copy(outFile, resp.Body)
 	outFile.Close()
+	Expect(err).Should(Succeed())
+	err, cksum := getSHA256Checksum(dbFileName)
+	Expect(err).Should(Succeed())
+	Expect(resp.Header.Get("SHA256Sum")).To(Equal(cksum))
 	Expect(err).Should(Succeed())
 
 	sdb, err := sql.Open("sqlite3", dbFileName)
