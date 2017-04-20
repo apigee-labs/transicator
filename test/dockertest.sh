@@ -23,6 +23,8 @@ then
   read -s TEST_PG_PW
 fi
 
+finalExitCode=0
+
 rm -rf ${working_dir}/docker-test-reports
 mkdir ${working_dir}/docker-test-reports
 
@@ -55,6 +57,10 @@ docker run -i \
   -e TEST_COVERAGE_FILENAME=coverage_container_test.txt \
   ${testName} \
   /go/src/github.com/apigee-labs/transicator/test/container_test_script.sh
+if [ $? -ne 0 ]
+then
+  finalExitCode=$?
+fi
 
 # Copy JUnit test files and rm container
 docker cp ${testName}:/go/src/github.com/apigee-labs/transicator/test-reports/. ./docker-test-reports
@@ -103,6 +109,10 @@ docker run -i \
   -e TEST_COVERAGE_FILENAME=coverage_combined_test.txt \
   ${testName} \
   /go/src/github.com/apigee-labs/transicator/test/combined_test_script.sh
+if [ $? -ne 0 ]
+then
+  finalExitCode=$?
+fi
 
 # No test-reports to get. Combined tests are black box and won't show coverage
 
@@ -139,3 +149,5 @@ then
   fi
 fi
 ${RMCMD} ${testName} ${ssName} ${csName} ${dbName}
+
+exit ${finalExitCode}
