@@ -368,11 +368,7 @@ func streamFile(srcFile string, w http.ResponseWriter) error {
 		return err
 	}
 	defer inFile.Close()
-
 	_, err = io.Copy(w, inFile)
-	if err != nil {
-		return err
-	}
 
 	return err
 }
