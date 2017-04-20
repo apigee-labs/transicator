@@ -1,0 +1,4 @@
+{
+  "bucketName": "transicator-bootstrap-data",
+  "minBackupAge": 3600000
+}

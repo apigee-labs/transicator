@@ -1,0 +1,8 @@
+{
+  "name": "bootstrap",
+  "private": true,
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/storage": "^1.1.0"
+  }
+}
