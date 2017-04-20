@@ -187,9 +187,9 @@ var _ = Describe("Snapshot API Tests", func() {
 		Expect(err).Should(Succeed())
 		_, err = io.Copy(outFile, resp.Body)
 		outFile.Close()
-		err, cksum := getSHA256Checksum(dbFileName)
+		err, cksum := generateEtag(dbFileName)
 		Expect(err).Should(Succeed())
-		Expect(resp.Header.Get("SHA256Sum")).To(Equal(cksum))
+		Expect(resp.Header.Get("ETag")).To(Equal(cksum))
 		Expect(err).Should(Succeed())
 
 		sdb, err := sql.Open("sqlite3", dbFileName)
@@ -271,9 +271,9 @@ var _ = Describe("Snapshot API Tests", func() {
 		outFile.Close()
 		Expect(err).Should(Succeed())
 
-		err, cksum := getSHA256Checksum(dbFileName)
+		err, cksum := generateEtag(dbFileName)
 		Expect(err).Should(Succeed())
-		Expect(resp.Header.Get("SHA256Sum")).To(Equal(cksum))
+		Expect(resp.Header.Get("ETag")).To(Equal(cksum))
 
 		sdb, err := sql.Open("sqlite3", dbFileName)
 		Expect(err).Should(Succeed())
@@ -487,9 +487,9 @@ func getSqliteSnapshot(dbDir, scope string) (*sql.DB, string) {
 	_, err = io.Copy(outFile, resp.Body)
 	outFile.Close()
 	Expect(err).Should(Succeed())
-	err, cksum := getSHA256Checksum(dbFileName)
+	err, cksum := generateEtag(dbFileName)
 	Expect(err).Should(Succeed())
-	Expect(resp.Header.Get("SHA256Sum")).To(Equal(cksum))
+	Expect(resp.Header.Get("ETag")).To(Equal(cksum))
 	Expect(err).Should(Succeed())
 
 	sdb, err := sql.Open("sqlite3", dbFileName)

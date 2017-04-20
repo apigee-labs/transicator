@@ -340,7 +340,7 @@ func makeInsertSQL(pgTable *pgTable, colNames []string) string {
 	return s.String()
 }
 
-func getSHA256Checksum(srcFile string) (error, string) {
+func generateEtag(srcFile string) (error, string) {
 	inFileHash, err := os.Open(srcFile)
 	if err != nil {
 		return err, ""
@@ -351,16 +351,22 @@ func getSHA256Checksum(srcFile string) (error, string) {
 	if err != nil {
 		return err, ""
 	}
-	return nil, hex.EncodeToString(hasher.Sum(nil))
+	etag := &bytes.Buffer{}
+	etag.WriteString("\"")
+	etag.WriteString(hex.EncodeToString(hasher.Sum(nil)))
+	etag.WriteString("\"")
+
+	return nil, etag.String()
 }
 
 func streamFile(srcFile string, w http.ResponseWriter) error {
 
-	err, shasum := getSHA256Checksum(srcFile)
+	err, etag := generateEtag(srcFile)
 	if err != nil {
 		return err
 	}
-	w.Header().Set("SHA256Sum", shasum)
+
+	w.Header().Set("ETag", etag)
 	w.Header().Set("Content-Type", sqlMediaType)
 
 	inFile, err := os.Open(srcFile)
