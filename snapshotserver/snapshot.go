@@ -466,7 +466,7 @@ func DownloadSnapshot(
 	case sqliteDataType:
 		err := WriteSqliteSnapshot(scopes, db, w, r)
 		if err != nil {
-			log.Errorf("GetTenantSnapshotData error: %v", err)
+			log.Errorf("Sqlite snapshot error: %v", err)
 		}
 		return
 	case protoType:

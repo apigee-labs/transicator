@@ -205,23 +205,25 @@ var _ = Describe("Snapshot API Tests", func() {
 		Expect(devID).Should(Equal("sqlSnap"))
 
 		rows, err := sdb.Query(`
-			select columnName, primaryKey from _transicator_tables
+			select columnName, sqliteType, primaryKey from _transicator_tables
 			where tableName = 'public_app'
 		`)
 		Expect(err).Should(Succeed())
 		defer rows.Close()
 
 		r := make(map[string]int)
+		sqliteTypes := make(map[string]string)
 		for rows.Next() {
-			var cn string
+			var cn, sqliteType string
 			var pk bool
-			err = rows.Scan(&cn, &pk)
+			err = rows.Scan(&cn, &sqliteType, &pk)
 			Expect(err).Should(Succeed())
 			if pk {
 				r[cn] = 2
 			} else {
 				r[cn] = 1
 			}
+			sqliteTypes[cn] = sqliteType
 		}
 
 		Expect(r["org"]).Should(Equal(1))
@@ -232,7 +234,16 @@ var _ = Describe("Snapshot API Tests", func() {
 		Expect(r["created_by"]).Should(Equal(1))
 		Expect(r["id"]).Should(Equal(2))
 		Expect(r["_change_selector"]).Should(Equal(2))
-		
+
+		Expect(sqliteTypes["org"]).Should(Equal("text"))
+		Expect(sqliteTypes["dev_id"]).Should(Equal("text"))
+		Expect(sqliteTypes["display_name"]).Should(Equal("text"))
+		Expect(sqliteTypes["name"]).Should(Equal("text"))
+		Expect(sqliteTypes["created_at"]).Should(Equal("blob"))
+		Expect(sqliteTypes["created_by"]).Should(Equal("text"))
+		Expect(sqliteTypes["id"]).Should(Equal("text"))
+		Expect(sqliteTypes["_change_selector"]).Should(Equal("text"))
+
 		row = sdb.QueryRow(
 			"select value from _transicator_metadata where key = 'snapshot'")
 		var snap string

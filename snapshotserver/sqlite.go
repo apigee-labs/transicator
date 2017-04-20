@@ -129,7 +129,8 @@ func writeMetadata(pgTx *sql.Tx, tdb *sql.DB, tables map[string]*pgTable) error 
 			create table _transicator_tables
 			(tableName varchar not null,
 			 columnName varchar not null,
-			 typid integer,
+			 typid integer not null,
+			 sqliteType text not null,
 			 primaryKey bool)
 		`)
 	}
@@ -149,8 +150,8 @@ func writeMetadata(pgTx *sql.Tx, tdb *sql.DB, tables map[string]*pgTable) error 
 	if err == nil {
 		st, err = tdb.Prepare(`
 			insert into _transicator_tables
-			(tableName, columnName, typid, primaryKey)
-			values (?, ?, ?, ?)
+			(tableName, columnName, typid, sqliteType, primaryKey)
+			values (?, ?, ?, ?, ?)
 		`)
 		defer st.Close()
 	}
@@ -158,7 +159,8 @@ func writeMetadata(pgTx *sql.Tx, tdb *sql.DB, tables map[string]*pgTable) error 
 	if err == nil {
 		for _, table := range tables {
 			for _, col := range table.columns {
-				_, err = st.Exec(table.schema+"_"+table.name, col.name, col.typid, col.primaryKey)
+				sqliteType := convertPgType(col.typid)
+				_, err = st.Exec(table.schema+"_"+table.name, col.name, col.typid, sqliteType, col.primaryKey)
 				if err != nil {
 					return err
 				}
