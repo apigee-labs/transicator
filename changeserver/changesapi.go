@@ -18,6 +18,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/30x/goscaffold"
@@ -28,7 +29,8 @@ import (
 )
 
 const (
-	defaultLimit = 100
+	defaultLimit    = 100
+	maxLimitChanges = 100000
 )
 
 var emptySequence = common.Sequence{}
@@ -50,6 +52,10 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 	limit, err := getIntParam(q, "limit", defaultLimit)
 	if err != nil {
 		sendAPIError(invalidParameter, "limit", resp, req)
+		return
+	}
+	if limit > maxLimitChanges {
+		sendAPIError(invalidParameter, "limit too high, exceeds max "+strconv.Itoa(maxLimitChanges), resp, req)
 		return
 	}
 

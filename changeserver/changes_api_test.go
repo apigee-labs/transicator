@@ -23,6 +23,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/httputil"
 
 	"github.com/apigee-labs/transicator/common"
 	. "github.com/onsi/ginkgo"
@@ -242,6 +243,22 @@ var _ = Describe("Changes API Tests", func() {
 			"%s/changes?since=%s&scope=foo&limit=1", baseURL, origLastSequence))
 		Expect(len(cl.Changes)).Should(Equal(1))
 		Expect(compareSequence(cl, 0, lastTestSequence-3)).Should(BeTrue())
+
+		// Over limit
+		limit := maxLimitChanges + 1
+		req, err := http.NewRequest("GET",
+			fmt.Sprintf("%s/changes?since=%s&scope=foo&limit=%d", baseURL, origLastSequence, limit), nil)
+		Expect(err).Should(Succeed())
+		req.Header = http.Header{}
+		req.Header.Set("Accept", "application/json")
+		dump, err := httputil.DumpRequestOut(req, true)
+		fmt.Fprintf(GinkgoWriter, "\ndump client req: %serr: %+v\n", dump, err)
+
+		resp, err := http.DefaultClient.Do(req)
+		Expect(err).Should(Succeed())
+		defer resp.Body.Close()
+		checkApiErrorCode(resp, http.StatusBadRequest, "PARAMETER_INVALID")
+
 	})
 
 	It("Last sequence inserted", func() {
@@ -529,6 +546,22 @@ func getChanges(url string) *common.ChangeList {
 	Expect(err).Should(Succeed())
 	fmt.Fprintf(GinkgoWriter, "Num changes: %d\n", len(cl.Changes))
 	return cl
+}
+
+func checkApiErrorCode(resp *http.Response, sc int, ec string) {
+	dump, err := httputil.DumpResponse(resp, true)
+	fmt.Fprintf(GinkgoWriter, "\nAPIError response: %s\nerr: %+v\n", dump, err)
+
+	Expect(resp.StatusCode).Should(Equal(sc))
+	Expect(resp.Header.Get("Content-Type")).Should(Equal("application/json"))
+
+	bod, err := ioutil.ReadAll(resp.Body)
+	Expect(err).Should(Succeed())
+
+	var errMsg common.APIError
+	err = json.Unmarshal(bod, &errMsg)
+	Expect(err).Should(Succeed())
+	Expect(errMsg.Code).Should(Equal(ec))
 }
 
 func compareSequence(cl *common.ChangeList, index int, lts int64) bool {
