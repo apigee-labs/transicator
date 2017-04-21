@@ -189,10 +189,14 @@ var _ = Describe("Snapshot API Tests", func() {
 				Expect(resp.Header.Get("Content-Type")).Should(Equal("application/transicator+sqlite"))
 
 				dbFileName := path.Join(dbDir, "snapdb")
+
 				outFile, err := os.OpenFile(dbFileName, os.O_RDWR|os.O_CREATE, 0666)
 				Expect(err).Should(Succeed())
 				_, err = io.Copy(outFile, resp.Body)
 				outFile.Close()
+				err, cksum := generateEtag(dbFileName)
+				Expect(err).Should(Succeed())
+				Expect(resp.Header.Get("ETag")).To(Equal(cksum))
 				Expect(err).Should(Succeed())
 
 				sdb, err := sql.Open("sqlite3", dbFileName)
@@ -273,6 +277,10 @@ var _ = Describe("Snapshot API Tests", func() {
 				_, err = io.Copy(outFile, resp.Body)
 				outFile.Close()
 				Expect(err).Should(Succeed())
+
+				err, cksum := generateEtag(dbFileName)
+				Expect(err).Should(Succeed())
+				Expect(resp.Header.Get("ETag")).To(Equal(cksum))
 
 				sdb, err := sql.Open("sqlite3", dbFileName)
 				Expect(err).Should(Succeed())
@@ -515,6 +523,10 @@ func getSqliteSnapshot(dbDir, scope string) (*sql.DB, string) {
 	Expect(err).Should(Succeed())
 	_, err = io.Copy(outFile, resp.Body)
 	outFile.Close()
+	Expect(err).Should(Succeed())
+	err, cksum := generateEtag(dbFileName)
+	Expect(err).Should(Succeed())
+	Expect(resp.Header.Get("ETag")).To(Equal(cksum))
 	Expect(err).Should(Succeed())
 
 	sdb, err := sql.Open("sqlite3", dbFileName)

@@ -16,15 +16,16 @@ limitations under the License.
 package snapshotserver
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
-
-	"bytes"
-	"fmt"
 
 	"time"
 
@@ -339,15 +340,40 @@ func makeInsertSQL(pgTable *pgTable, colNames []string) string {
 	return s.String()
 }
 
+func generateEtag(srcFile string) (error, string) {
+	inFileHash, err := os.Open(srcFile)
+	if err != nil {
+		return err, ""
+	}
+	defer inFileHash.Close()
+	hasher := sha256.New()
+	_, err = io.Copy(hasher, inFileHash)
+	if err != nil {
+		return err, ""
+	}
+	etag := &bytes.Buffer{}
+	etag.WriteString("\"")
+	etag.WriteString(hex.EncodeToString(hasher.Sum(nil)))
+	etag.WriteString("\"")
+
+	return nil, etag.String()
+}
+
 func streamFile(srcFile string, w http.ResponseWriter) error {
+
+	err, etag := generateEtag(srcFile)
+	if err != nil {
+		return err
+	}
+
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Content-Type", sqlMediaType)
+
 	inFile, err := os.Open(srcFile)
 	if err != nil {
 		return err
 	}
 	defer inFile.Close()
-
-	w.Header().Set("Content-Type", sqlMediaType)
-
 	_, err = io.Copy(w, inFile)
 	return err
 }

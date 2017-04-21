@@ -27,9 +27,13 @@ import (
 	"os"
 	"time"
 
+	"io"
+	"io/ioutil"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/apigee-labs/transicator/common"
 	sqlite3 "github.com/mattn/go-sqlite3"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -260,6 +264,49 @@ func (s *SQL) Purge(oldest time.Time) (uint64, error) {
 }
 
 /*
+GetBackup creates a backup of the current database in a temp filename,
+and write the persistent db file to the specified writer.
+It's the caller's responsibility to close the writer, if needed.
+*/
+func (s *SQL) GetBackup(w io.Writer) (err error) {
+	tempDirURL, err := ioutil.TempDir("", "transicator_sqlite_backup")
+	if err != nil {
+		return
+	}
+	backupDirName := fmt.Sprintf("%s/backup", tempDirURL)
+	log.Debugf("Sqlite backup destination: %s", backupDirName)
+	// remove the temp backup file
+	defer os.RemoveAll(tempDirURL)
+	// create backup
+	bc := s.Backup(backupDirName)
+	for {
+		br := <-bc
+		log.Debugf("Backup %d remaining\n", br.PagesRemaining)
+		if err = br.Error; err != nil {
+			log.Error(err)
+			return
+		}
+		if br.Done {
+			break
+		}
+	}
+
+	// copy backup file to the writer
+	backupFileName := fmt.Sprintf("%s/transicator", backupDirName)
+	fileReader, err := os.Open(backupFileName)
+	defer fileReader.Close()
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	_, err = io.Copy(w, fileReader)
+	if err != nil {
+		log.Error(err)
+	}
+	return
+}
+
+/*
 Backup creates a backup of the current database in the specified file name,
 and sends results using the supplied channel.
 */
@@ -270,6 +317,16 @@ func (s *SQL) Backup(dest string) <-chan BackupProgress {
 }
 
 func (s *SQL) runBackup(dest string, pc chan BackupProgress) {
+	// if the specified database file existed, return error
+	if _, err := os.Stat(dest); err == nil {
+		log.Error("dest dir existed")
+		pc <- BackupProgress{
+			PagesRemaining: -1,
+			Error:          errors.New("dest dir existed"),
+			Done:           false,
+		}
+		return
+	}
 	srcConn, err := s.openRawConnection(s.baseFile)
 	if err != nil {
 		returnBackupError(pc, err)

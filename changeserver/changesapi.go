@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/30x/goscaffold"
@@ -31,6 +32,7 @@ import (
 
 const (
 	defaultLimit             = 100
+	maxLimitChanges          = 100000
 	changeSelectorValidChars = "^[0-9a-z_-]+$"
 )
 
@@ -54,6 +56,10 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 	limit, err := getIntParam(q, "limit", defaultLimit)
 	if err != nil {
 		sendAPIError(invalidParameter, "limit", resp, req)
+		return
+	}
+	if limit > maxLimitChanges {
+		sendAPIError(invalidParameter, "limit too high, exceeds max "+strconv.Itoa(maxLimitChanges), resp, req)
 		return
 	}
 

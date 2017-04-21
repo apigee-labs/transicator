@@ -98,7 +98,8 @@ var _ = BeforeSuite(func() {
 
 	// Listen on an anonymous port
 	scaf := goscaffold.CreateHTTPScaffold()
-	scaf.SetlocalBindIPAddressV4(net.ParseIP("127.0.0.1"))
+	ip := net.ParseIP("127.0.0.1")
+	scaf.SetlocalBindIPAddressV4(ip)
 	err = scaf.Open()
 	Expect(err).Should(Succeed())
 
