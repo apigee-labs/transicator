@@ -43,99 +43,104 @@ var _ = Describe("Snapshot API Tests", func() {
 	It("Default snapshot", func() {
 		insertApp("jsonSnap", "jsonSnap", "snaptests")
 
-		resp, err := http.Get(fmt.Sprintf("%s/snapshots?scope=snaptests", testBase))
-		Expect(err).Should(Succeed())
-		defer resp.Body.Close()
-		Expect(resp.StatusCode).Should(Equal(200))
-		Expect(resp.Header.Get("Content-Type")).Should(Equal("application/json"))
-		bod, err := ioutil.ReadAll(resp.Body)
-		Expect(err).Should(Succeed())
-		ss, err := common.UnmarshalSnapshot(bod)
-		Expect(err).Should(Succeed())
+		for _, p := range []string{"scope", "selector"} {
+			func() {
+				resp, err := http.Get(fmt.Sprintf("%s/snapshots?%s=snaptests", testBase, p))
+				Expect(err).Should(Succeed())
+				defer resp.Body.Close()
+				Expect(resp.StatusCode).Should(Equal(200))
+				Expect(resp.Header.Get("Content-Type")).Should(Equal("application/json"))
+				bod, err := ioutil.ReadAll(resp.Body)
+				Expect(err).Should(Succeed())
+				ss, err := common.UnmarshalSnapshot(bod)
+				Expect(err).Should(Succeed())
 
-		appTable := getTable(ss, "public.app")
-		r := getRowByID(appTable, "jsonSnap")
-		Expect(r).ShouldNot(BeNil())
+				appTable := getTable(ss, "public.app")
+				r := getRowByID(appTable, "jsonSnap")
+				Expect(r).ShouldNot(BeNil())
 
-		var org string
-		err = r.Get("org", &org)
-		Expect(err).Should(Succeed())
-		Expect(org).Should(Equal("testorg"))
+				var org string
+				err = r.Get("org", &org)
+				Expect(err).Should(Succeed())
+				Expect(org).Should(Equal("testorg"))
 
-		var appID string
-		err = r.Get("id", &appID)
-		Expect(err).Should(Succeed())
-		Expect(appID).Should(Equal("jsonSnap"))
+				var appID string
+				err = r.Get("id", &appID)
+				Expect(err).Should(Succeed())
+				Expect(appID).Should(Equal("jsonSnap"))
 
-		var devID string
-		err = r.Get("dev_id", &devID)
-		Expect(err).Should(Succeed())
-		Expect(devID).Should(Equal("jsonSnap"))
+				var devID string
+				err = r.Get("dev_id", &devID)
+				Expect(err).Should(Succeed())
+				Expect(devID).Should(Equal("jsonSnap"))
 
-		devTable := getTable(ss, "public.developer")
-		r = getRowByID(devTable, "jsonSnap")
+				devTable := getTable(ss, "public.developer")
+				r = getRowByID(devTable, "jsonSnap")
 
-		err = r.Get("org", &org)
-		Expect(err).Should(Succeed())
-		Expect(org).Should(Equal("testorg"))
+				err = r.Get("org", &org)
+				Expect(err).Should(Succeed())
+				Expect(org).Should(Equal("testorg"))
 
-		err = r.Get("id", &devID)
-		Expect(err).Should(Succeed())
-		Expect(devID).Should(Equal("jsonSnap"))
+				err = r.Get("id", &devID)
+				Expect(err).Should(Succeed())
+				Expect(devID).Should(Equal("jsonSnap"))
+			}()
+		}
+
 	})
 
 	It("JSON snapshot two scopes", func() {
 		insertApp("jsonSnap2", "jsonSnap2", "snaptests2")
 		insertApp("jsonSnap3", "jsonSnap3", "snaptests2")
 
-		req, err := http.NewRequest("GET",
-			fmt.Sprintf("%s/snapshots?scope=snaptests2&scope=snaptests3", testBase),
-			nil)
-		Expect(err).Should(Succeed())
-		req.Header = http.Header{}
-		req.Header.Set("Accept", "application/json")
+		for _, p := range []string{"scope", "selector"} {
+			func() {
+				u := fmt.Sprintf("%s/snapshots?%s=snaptests2&%s=snaptests3", testBase, p, p)
+				req := createStandardRequest("GET", u, "application/json", nil)
 
-		resp, err := http.DefaultClient.Do(req)
-		Expect(err).Should(Succeed())
-		defer resp.Body.Close()
-		Expect(resp.StatusCode).Should(Equal(200))
-		Expect(resp.Header.Get("Content-Type")).Should(Equal("application/json"))
-		bod, err := ioutil.ReadAll(resp.Body)
-		Expect(err).Should(Succeed())
-		ss, err := common.UnmarshalSnapshot(bod)
-		Expect(err).Should(Succeed())
+				resp, err := http.DefaultClient.Do(req)
+				Expect(err).Should(Succeed())
+				defer resp.Body.Close()
+				Expect(resp.StatusCode).Should(Equal(200))
+				Expect(resp.Header.Get("Content-Type")).Should(Equal("application/json"))
+				bod, err := ioutil.ReadAll(resp.Body)
+				Expect(err).Should(Succeed())
+				ss, err := common.UnmarshalSnapshot(bod)
+				Expect(err).Should(Succeed())
 
-		appTable := getTable(ss, "public.app")
-		r := getRowByID(appTable, "jsonSnap2")
-		Expect(r).ShouldNot(BeNil())
-		r2 := getRowByID(appTable, "jsonSnap3")
-		Expect(r2).ShouldNot(BeNil())
+				appTable := getTable(ss, "public.app")
+				r := getRowByID(appTable, "jsonSnap2")
+				Expect(r).ShouldNot(BeNil())
+				r2 := getRowByID(appTable, "jsonSnap3")
+				Expect(r2).ShouldNot(BeNil())
 
-		var org string
-		err = r.Get("org", &org)
-		Expect(err).Should(Succeed())
-		Expect(org).Should(Equal("testorg"))
+				var org string
+				err = r.Get("org", &org)
+				Expect(err).Should(Succeed())
+				Expect(org).Should(Equal("testorg"))
 
-		var appID string
-		err = r.Get("id", &appID)
-		Expect(err).Should(Succeed())
-		Expect(appID).Should(Equal("jsonSnap2"))
+				var appID string
+				err = r.Get("id", &appID)
+				Expect(err).Should(Succeed())
+				Expect(appID).Should(Equal("jsonSnap2"))
 
-		var devID string
-		err = r.Get("dev_id", &devID)
-		Expect(err).Should(Succeed())
-		Expect(devID).Should(Equal("jsonSnap2"))
+				var devID string
+				err = r.Get("dev_id", &devID)
+				Expect(err).Should(Succeed())
+				Expect(devID).Should(Equal("jsonSnap2"))
 
-		devTable := getTable(ss, "public.developer")
-		r = getRowByID(devTable, "jsonSnap2")
+				devTable := getTable(ss, "public.developer")
+				r = getRowByID(devTable, "jsonSnap2")
 
-		err = r.Get("org", &org)
-		Expect(err).Should(Succeed())
-		Expect(org).Should(Equal("testorg"))
+				err = r.Get("org", &org)
+				Expect(err).Should(Succeed())
+				Expect(org).Should(Equal("testorg"))
 
-		err = r.Get("id", &devID)
-		Expect(err).Should(Succeed())
-		Expect(devID).Should(Equal("jsonSnap2"))
+				err = r.Get("id", &devID)
+				Expect(err).Should(Succeed())
+				Expect(devID).Should(Equal("jsonSnap2"))
+			}()
+		}
 	})
 
 	It("should return error if DB error", func() {
@@ -145,9 +150,9 @@ var _ = Describe("Snapshot API Tests", func() {
 			defer GinkgoRecover()
 			GenSnapshot(w, r)
 		})
+		sql.Register("badDriver", badDriver{})
 		router.GET("/data", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 			defer GinkgoRecover()
-			sql.Register("badDriver", badDriver{})
 			db, err := sql.Open("badDriver", "badDriver")
 			Expect(err).NotTo(HaveOccurred())
 			DownloadSnapshot(w, r, db, p)
@@ -155,10 +160,14 @@ var _ = Describe("Snapshot API Tests", func() {
 
 		ts := httptest.NewServer(router)
 
-		resp, err := http.Get(fmt.Sprintf("%s/snapshots?scope=snaptests", ts.URL))
-		Expect(err).NotTo(HaveOccurred())
-		defer resp.Body.Close()
-		Expect(resp.StatusCode).Should(Equal(500))
+		for _, p := range []string{"scope", "selector"} {
+			func() {
+				resp, err := http.Get(fmt.Sprintf("%s/snapshots?%s=snaptests", ts.URL, p))
+				Expect(err).NotTo(HaveOccurred())
+				defer resp.Body.Close()
+				Expect(resp.StatusCode).Should(Equal(500))
+			}()
+		}
 	})
 
 	It("SQLite snapshot", func() {
@@ -168,78 +177,78 @@ var _ = Describe("Snapshot API Tests", func() {
 
 		insertApp("sqlSnap", "sqlSnap", "snaptests3")
 
-		req, err := http.NewRequest("GET",
-			fmt.Sprintf("%s/snapshots?scope=snaptests3", testBase), nil)
-		Expect(err).Should(Succeed())
-		req.Header = http.Header{}
-		req.Header.Set("Accept", "application/transicator+sqlite")
+		for _, p := range []string{"scope", "selector"} {
+			func() {
+				u := fmt.Sprintf("%s/snapshots?%s=snaptests3", testBase, p)
+				req := createStandardRequest("GET", u, "application/transicator+sqlite", nil)
 
-		resp, err := http.DefaultClient.Do(req)
-		Expect(err).Should(Succeed())
-		defer resp.Body.Close()
-		Expect(resp.StatusCode).Should(Equal(200))
-		Expect(resp.Header.Get("Content-Type")).Should(Equal("application/transicator+sqlite"))
+				resp, err := http.DefaultClient.Do(req)
+				Expect(err).Should(Succeed())
+				defer resp.Body.Close()
+				Expect(resp.StatusCode).Should(Equal(200))
+				Expect(resp.Header.Get("Content-Type")).Should(Equal("application/transicator+sqlite"))
 
-		dbFileName := path.Join(dbDir, "snapdb")
-		outFile, err := os.OpenFile(dbFileName, os.O_RDWR|os.O_CREATE, 0666)
-		Expect(err).Should(Succeed())
-		_, err = io.Copy(outFile, resp.Body)
-		outFile.Close()
-		Expect(err).Should(Succeed())
+				dbFileName := path.Join(dbDir, "snapdb")
+				outFile, err := os.OpenFile(dbFileName, os.O_RDWR|os.O_CREATE, 0666)
+				Expect(err).Should(Succeed())
+				_, err = io.Copy(outFile, resp.Body)
+				outFile.Close()
+				Expect(err).Should(Succeed())
 
-		sdb, err := sql.Open("sqlite3", dbFileName)
-		Expect(err).Should(Succeed())
-		defer sdb.Close()
+				sdb, err := sql.Open("sqlite3", dbFileName)
+				Expect(err).Should(Succeed())
+				defer sdb.Close()
 
-		row := sdb.QueryRow("select org, id, dev_id from public_app where id = 'sqlSnap'")
+				row := sdb.QueryRow("select org, id, dev_id from public_app where id = 'sqlSnap'")
 
-		var org string
-		var id string
-		var devID string
+				var org string
+				var id string
+				var devID string
 
-		err = row.Scan(&org, &id, &devID)
-		Expect(err).Should(Succeed())
-		Expect(org).Should(Equal("testorg"))
-		Expect(id).Should(Equal("sqlSnap"))
-		Expect(devID).Should(Equal("sqlSnap"))
+				err = row.Scan(&org, &id, &devID)
+				Expect(err).Should(Succeed())
+				Expect(org).Should(Equal("testorg"))
+				Expect(id).Should(Equal("sqlSnap"))
+				Expect(devID).Should(Equal("sqlSnap"))
 
-		rows, err := sdb.Query(`
-			select columnName, primaryKey from _transicator_tables
-			where tableName = 'public_app'
-		`)
-		Expect(err).Should(Succeed())
-		defer rows.Close()
+				rows, err := sdb.Query(`
+					select columnName, primaryKey from _transicator_tables
+					where tableName = 'public_app'
+				`)
+				Expect(err).Should(Succeed())
+				defer rows.Close()
 
-		r := make(map[string]int)
-		for rows.Next() {
-			var cn string
-			var pk bool
-			err = rows.Scan(&cn, &pk)
-			Expect(err).Should(Succeed())
-			if pk {
-				r[cn] = 2
-			} else {
-				r[cn] = 1
-			}
+				r := make(map[string]int)
+				for rows.Next() {
+					var cn string
+					var pk bool
+					err = rows.Scan(&cn, &pk)
+					Expect(err).Should(Succeed())
+					if pk {
+						r[cn] = 2
+					} else {
+						r[cn] = 1
+					}
+				}
+
+				Expect(r["org"]).Should(Equal(1))
+				Expect(r["dev_id"]).Should(Equal(1))
+				Expect(r["display_name"]).Should(Equal(1))
+				Expect(r["name"]).Should(Equal(1))
+				Expect(r["created_at"]).Should(Equal(1))
+				Expect(r["created_by"]).Should(Equal(1))
+				Expect(r["id"]).Should(Equal(2))
+				Expect(r["_change_selector"]).Should(Equal(2))
+
+				row = sdb.QueryRow(
+					"select value from _transicator_metadata where key = 'snapshot'")
+				var snap string
+				err = row.Scan(&snap)
+
+				Expect(err).Should(Succeed())
+				Expect(resp.Header.Get("Transicator-Snapshot-TXID")).To(Equal(snap))
+			}()
 		}
-
-		Expect(r["org"]).Should(Equal(1))
-		Expect(r["dev_id"]).Should(Equal(1))
-		Expect(r["display_name"]).Should(Equal(1))
-		Expect(r["name"]).Should(Equal(1))
-		Expect(r["created_at"]).Should(Equal(1))
-		Expect(r["created_by"]).Should(Equal(1))
-		Expect(r["id"]).Should(Equal(2))
-		Expect(r["_change_selector"]).Should(Equal(2))
-
-		row = sdb.QueryRow(
-			"select value from _transicator_metadata where key = 'snapshot'")
-		var snap string
-		err = row.Scan(&snap)
-
-		Expect(err).Should(Succeed())
-		Expect(resp.Header.Get("Transicator-Snapshot-TXID")).To(Equal(snap))
-
 	})
 
 	It("SQLite snapshot empty scope", func() {
@@ -247,78 +256,58 @@ var _ = Describe("Snapshot API Tests", func() {
 		Expect(err).Should(Succeed())
 		defer os.RemoveAll(dbDir)
 
-		req, err := http.NewRequest("GET",
-			fmt.Sprintf("%s/snapshots?scope=wrong_scope_you_dope", testBase), nil)
-		Expect(err).Should(Succeed())
-		req.Header = http.Header{}
-		req.Header.Set("Accept", "application/transicator+sqlite")
+		for _, p := range []string{"scope", "selector"} {
+			func() {
+				u := fmt.Sprintf("%s/snapshots?%s=wrong_scope_you_dope", testBase, p)
+				req := createStandardRequest("GET", u, "application/transicator+sqlite", nil)
 
-		resp, err := http.DefaultClient.Do(req)
-		Expect(err).Should(Succeed())
-		defer resp.Body.Close()
-		Expect(resp.StatusCode).Should(Equal(200))
-		Expect(resp.Header.Get("Content-Type")).Should(Equal("application/transicator+sqlite"))
+				resp, err := http.DefaultClient.Do(req)
+				Expect(err).Should(Succeed())
+				defer resp.Body.Close()
+				Expect(resp.StatusCode).Should(Equal(200))
+				Expect(resp.Header.Get("Content-Type")).Should(Equal("application/transicator+sqlite"))
 
-		dbFileName := path.Join(dbDir, "snapdb")
-		outFile, err := os.OpenFile(dbFileName, os.O_RDWR|os.O_CREATE, 0666)
-		Expect(err).Should(Succeed())
-		_, err = io.Copy(outFile, resp.Body)
-		outFile.Close()
-		Expect(err).Should(Succeed())
+				dbFileName := path.Join(dbDir, "snapdb")
+				outFile, err := os.OpenFile(dbFileName, os.O_RDWR|os.O_CREATE, 0666)
+				Expect(err).Should(Succeed())
+				_, err = io.Copy(outFile, resp.Body)
+				outFile.Close()
+				Expect(err).Should(Succeed())
 
-		sdb, err := sql.Open("sqlite3", dbFileName)
-		Expect(err).Should(Succeed())
-		defer sdb.Close()
+				sdb, err := sql.Open("sqlite3", dbFileName)
+				Expect(err).Should(Succeed())
+				defer sdb.Close()
 
-		row := sdb.QueryRow("select count(*) from public_app")
-		var count int
-		err = row.Scan(&count)
-		Expect(err).Should(Succeed())
-		Expect(count).Should(BeZero())
+				row := sdb.QueryRow("select count(*) from public_app")
+				var count int
+				err = row.Scan(&count)
+				Expect(err).Should(Succeed())
+				Expect(count).Should(BeZero())
+			}()
+		}
 	})
 
 	It("SQLite snapshot missing scope", func() {
-		req, err := http.NewRequest("GET",
-			fmt.Sprintf("%s/snapshots", testBase), nil)
-		Expect(err).Should(Succeed())
-		req.Header = http.Header{}
-		req.Header.Set("Accept", "application/json")
-
+		u := fmt.Sprintf("%s/snapshots", testBase)
+		req := createStandardRequest("GET", u, "application/json", nil)
 		resp, err := http.DefaultClient.Do(req)
 		Expect(err).Should(Succeed())
 		defer resp.Body.Close()
-		Expect(resp.StatusCode).Should(Equal(400))
-		Expect(resp.Header.Get("Content-Type")).Should(Equal("application/json"))
-
-		bod, err := ioutil.ReadAll(resp.Body)
-		Expect(err).Should(Succeed())
-
-		var errMsg common.APIError
-		err = json.Unmarshal(bod, &errMsg)
-		Expect(err).Should(Succeed())
-		Expect(errMsg.Code).Should(Equal("MISSING_SCOPE"))
+		checkApiErrorCode(resp, http.StatusBadRequest, "MISSING_SCOPE")
 	})
 
 	It("SQLite snapshot bad accept header", func() {
-		req, err := http.NewRequest("GET",
-			fmt.Sprintf("%s/snapshots?scope=nope_not_the_scope", testBase), nil)
-		Expect(err).Should(Succeed())
-		req.Header = http.Header{}
-		req.Header.Set("Accept", "text/plain")
+		for _, p := range []string{"scope", "selector"} {
+			func() {
+				u := fmt.Sprintf("%s/snapshots?%s=nope_not_the_scope", testBase, p)
+				req := createStandardRequest("GET", u, "text/plain", nil)
 
-		resp, err := http.DefaultClient.Do(req)
-		Expect(err).Should(Succeed())
-		defer resp.Body.Close()
-		Expect(resp.StatusCode).Should(Equal(415))
-		Expect(resp.Header.Get("Content-Type")).Should(Equal("application/json"))
-
-		bod, err := ioutil.ReadAll(resp.Body)
-		Expect(err).Should(Succeed())
-
-		var errMsg common.APIError
-		err = json.Unmarshal(bod, &errMsg)
-		Expect(err).Should(Succeed())
-		Expect(errMsg.Code).Should(Equal("UNSUPPORTED_MEDIA_TYPE"))
+				resp, err := http.DefaultClient.Do(req)
+				Expect(err).Should(Succeed())
+				defer resp.Body.Close()
+				checkApiErrorCode(resp, http.StatusUnsupportedMediaType, "UNSUPPORTED_MEDIA_TYPE")
+			}()
+		}
 	})
 
 	It("SQLite types", func() {
@@ -419,33 +408,40 @@ var _ = Describe("Snapshot API Tests", func() {
 	})
 
 	It("should detect invalid chars in scope query param", func() {
-		req, err := createStandardRequest("GET",
-			fmt.Sprintf("%s/snapshots?scope=%s", testBase, url.QueryEscape("snaptests;select now()")), nil)
-		resp, err := http.DefaultClient.Do(req)
-		Expect(err).Should(Succeed())
-		defer resp.Body.Close()
-		checkApiErrorCode(resp, http.StatusBadRequest, "INVALID_REQUEST_PARAM")
+		for _, p := range []string{"scope", "selector"} {
+			func() {
+				u := fmt.Sprintf("%s/snapshots?%s=%s", testBase, p, url.QueryEscape("snaptests;select now()"))
+				req := createStandardRequest("GET", u, "application/json", nil)
+				resp, err := http.DefaultClient.Do(req)
+				Expect(err).Should(Succeed())
+				defer resp.Body.Close()
+				checkApiErrorCode(resp, http.StatusBadRequest, "INVALID_REQUEST_PARAM")
+			}()
+		}
 	})
 
 	It("should detect invalid chars in multiple scope query params", func() {
-		req, err := createStandardRequest("GET",
-			fmt.Sprintf("%s/snapshots?scope=abc123&scope=%s", testBase, url.QueryEscape("snapstests;select now()")), nil)
-		resp, err := http.DefaultClient.Do(req)
-		Expect(err).Should(Succeed())
-		defer resp.Body.Close()
-		checkApiErrorCode(resp, http.StatusBadRequest, "INVALID_REQUEST_PARAM")
+		for _, p := range []string{"scope", "selector"} {
+			func() {
+				u := fmt.Sprintf("%s/snapshots?%s=abc123&%s=%s", testBase, p, p, url.QueryEscape("snapstests;select now()"))
+				req := createStandardRequest("GET", u, "application/json", nil)
+				resp, err := http.DefaultClient.Do(req)
+				Expect(err).Should(Succeed())
+				defer resp.Body.Close()
+				checkApiErrorCode(resp, http.StatusBadRequest, "INVALID_REQUEST_PARAM")
+			}()
+		}
 	})
-
 })
 
-func createStandardRequest(method string, urlStr string, body io.Reader) (*http.Request, error) {
+func createStandardRequest(method string, urlStr string, acceptHdr string, body io.Reader) *http.Request {
 	req, err := http.NewRequest(method, urlStr, body)
 	Expect(err).Should(Succeed())
 	req.Header = http.Header{}
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", acceptHdr)
 	dump, err := httputil.DumpRequestOut(req, true)
 	fmt.Fprintf(GinkgoWriter, "\ndump client req: %q\nerr: %+v\n", dump, err)
-	return req, err
+	return req
 }
 
 func checkApiErrorCode(resp *http.Response, sc int, ec string) {
@@ -499,11 +495,8 @@ func getRowByID(t *common.Table, id string) common.Row {
 }
 
 func getSqliteSnapshot(dbDir, scope string) (*sql.DB, string) {
-	req, err := http.NewRequest("GET",
-		fmt.Sprintf("%s/snapshots?scope=%s", testBase, scope), nil)
-	Expect(err).Should(Succeed())
-	req.Header = http.Header{}
-	req.Header.Set("Accept", "application/transicator+sqlite")
+	u := fmt.Sprintf("%s/snapshots?scope=%s", testBase, scope)
+	req := createStandardRequest("GET", u, "application/transicator+sqlite", nil)
 
 	resp, err := http.DefaultClient.Do(req)
 	Expect(err).Should(Succeed())

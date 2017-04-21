@@ -44,6 +44,14 @@ paths:
             tables that have an "_apid_scope" column that matches the value.
             At least one scope must be included. If multiple scopes are included,
             then the result is treated as an "OR" of all the scopes.
+        - name: selector
+          in: query
+          description:
+            Alias for "scope" query parameter with the same usage.
+            Completely interchangeable with "scope", which is no longer
+            required if "selector" param is present.
+          required: false
+          type: string
         - name: scopes
           in: query
           required: false

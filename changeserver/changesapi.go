@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	defaultLimit = 100
+	defaultLimit             = 100
 	changeSelectorValidChars = "^[0-9a-z_-]+$"
 )
 
@@ -189,7 +189,7 @@ func (s *server) receiveChanges(
 /*
 getChangeSelectorParams combines all 'scope' query
 params into one slice after checking for valid characters.
- */
+*/
 func getCheckChangeSelectorParams(r *http.Request) ([]string, error) {
 	scopes := r.URL.Query()["scope"]
 	for _, s := range scopes {
@@ -197,7 +197,13 @@ func getCheckChangeSelectorParams(r *http.Request) ([]string, error) {
 			return nil, errors.New("Invalid char in scope param")
 		}
 	}
-	return scopes, nil
+	selectors := r.URL.Query()["selector"]
+	for _, s := range selectors {
+		if !reChangeSelector.MatchString(s) {
+			return nil, errors.New("Invalid char in selector param")
+		}
+	}
+	return append(scopes, selectors...), nil
 }
 
 func makeSnapshotFilter(ss *replication.Snapshot) func([]byte) bool {

@@ -35,12 +35,12 @@ import (
 )
 
 const (
-	jsonType       = "json"
-	protoType      = "proto"
-	sqliteDataType = "sqlite"
-	jsonMediaType  = "application/json"
-	protoMediaType = "application/transicator+protobuf"
-	sqlMediaType   = "application/transicator+sqlite"
+	jsonType                 = "json"
+	protoType                = "proto"
+	sqliteDataType           = "sqlite"
+	jsonMediaType            = "application/json"
+	protoMediaType           = "application/transicator+protobuf"
+	sqlMediaType             = "application/transicator+sqlite"
 	changeSelectorValidChars = "^[0-9a-z_-]+$"
 )
 
@@ -445,7 +445,7 @@ func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, selector := range changeSelectorInput {
-		changeSelectorParam += "scope=" + selector + "&"
+		changeSelectorParam += "selector=" + selector + "&"
 	}
 	redURL := "/data?" + changeSelectorParam + "type=" + typeParam
 
@@ -501,9 +501,10 @@ func DownloadSnapshot(
 }
 
 /*
-getChangeSelectorParams combines all 'scope' query
-params into one slice after checking for valid characters.
- */
+getChangeSelectorParams combines all 'scope' and 'selector' query
+params into one slice after checking for valid characters. The
+'selector' query param is an alias for 'scope'
+*/
 func getCheckChangeSelectorParams(r *http.Request) ([]string, error) {
 	scopes := r.URL.Query()["scope"]
 	for _, s := range scopes {
@@ -511,5 +512,11 @@ func getCheckChangeSelectorParams(r *http.Request) ([]string, error) {
 			return nil, errors.New("Invalid char in scope param")
 		}
 	}
-	return scopes, nil
+	selectors := r.URL.Query()["selector"]
+	for _, s := range selectors {
+		if !reChangeSelector.MatchString(s) {
+			return nil, errors.New("Invalid char in selector param")
+		}
+	}
+	return append(scopes, selectors...), nil
 }
