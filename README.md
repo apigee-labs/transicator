@@ -68,6 +68,8 @@ In order for transicator to work, we need to identify records by scope. We do
 this by adding a "text" column named "_change_selector" to every table that we
 wish to replicate using transicator.
 
+The valid characters for a scope are: `0-9a-z_-`
+
 # API Specifications:
 
 * changeserver [API](./changeserver/changeserver-api.html) and [OpenAPI spec](./changeserver/api.yaml)
