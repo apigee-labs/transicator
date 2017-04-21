@@ -47,7 +47,7 @@ The "changeserver" is a server that consumes the stream of logical changes
 directly from Postgres using the streaming replication protocol, and makes them
 available via an HTTP API. Changes in changeserver are ordered by the order
 in which they appeared in the logical replication stream, and are further
-segregated by "scope."
+segregated by "selector" (formerly called "scope").
 
 changeserver is designed to handle thousands of clients waiting for the next
 change via "long polling." This way, we can scale up the number of consumers
@@ -56,19 +56,19 @@ for the set of changes by adding changeservers.
 ## Snapshot Server
 
 The changeserver would be impractical if it had to store every change for
-every scope since the beginning of time. So, the snapshot server lets
+every selector since the beginning of time. So, the snapshot server lets
 clients get an initial snapshot of the data by requesting the contents of
-the database for a particular set of scopes at a particular point in time.
+the database for a particular set of selectors at a particular point in time.
 
-The snapshot server and change server operate on the principle of a "scope."
-A scope is simply a unique identifier for a particular set of records in the
-database.
+The snapshot server and change server operate on the principle of a "selector"
+(formerly called "scope") A selector is simply a unique identifier for a
+particular set of records in the database.
 
-In order for transicator to work, we need to identify records by scope. We do
+In order for transicator to work, we need to identify records by selector. We do
 this by adding a "text" column named "_change_selector" to every table that we
 wish to replicate using transicator.
 
-The valid characters for a scope are: `0-9a-z_-`
+The valid characters for a selector are: `0-9a-z_-`
 
 # API Specifications:
 
@@ -106,7 +106,7 @@ Now, start a snapshot server running on port 9001:
 
 You can test quickly -- this API call should return "303 See Other":
 
-    curl -v http://localhost:9001/snapshots?scope=foo
+    curl -v http://localhost:9001/snapshots?selector=foo
 
 Finally, start a change server running on port 9000:
 
@@ -148,7 +148,7 @@ INSERT 0 1
 We can now get a snapshot in JSON format using the snapshot server:
 
 ````
-$ curl -H "Accept: application/json" -L http://localhost:9001/snapshots?scope=foo
+$ curl -H "Accept: application/json" -L http://localhost:9001/snapshots?selector=foo
 
 {"snapshotInfo":"229444:229444:","timestamp":"2016-10-13T17:42:12.171306-07:00",
 "tables":[{"name":"public.snapshot_test","rows":[]},{"name":"scope","rows":[
@@ -177,9 +177,9 @@ Postgres transactions were visible when the snapshot was created.
 At this point, using the changeserver, a client may issue the following
 API call:
 
-    curl -H "Accept: application/json" "http://localhost:9000/changes?snapshot=229444:229444:&scope=foo&block=10"
+    curl -H "Accept: application/json" "http://localhost:9000/changes?snapshot=229444:229444:&selector=foo&block=10"
 
-This call asks for all the changes for the scope "foo" starting from the first
+This call asks for all the changes for the selector "foo" starting from the first
 change that was not visible in the sequence. If no changes appear for 10 seconds,
 it will return with something like this:
 
@@ -197,14 +197,14 @@ Once the first set of changes has been retrieved, the "lastSequence" parameter
 tells us where in the change stream we left off. We can now use this
 in another API call to wait for more changes:
 
-    curl -H "Accept: application/json" "http://changeserver/changes?since=0.1390d838.0&scope=foo&block=10"
+    curl -H "Accept: application/json" "http://localhost:9000/changes?since=0.1390d838.0&selector=foo&block=10"
 
 This call won't result in any changes either but it will return us another sequence
 if anything changed in the database.
 
 Let's try again (with a longer timeout this time):
 
-    curl -H "Accept: application/json" "http://changeserver/changes?since=0.1390d838.0&scope=foo&block=60"
+    curl -H "Accept: application/json" "http://localhost:9000/changes?since=0.1390d838.0&selector=foo&block=60"
 
 and while we're waiting, let's use another window to insert something to the database:
 
@@ -256,7 +256,7 @@ when the transactions commit. Rolled back transactions will never appear.
 
 For instance:
 
-    curl -H "Accept: application/json" "http://localhost:9000/changes?scope=foo&bock=60&since=0.1392ed18.0"
+    curl -H "Accept: application/json" "http://localhost:9000/changes?selector=foo&block=60&since=0.1392ed18.0"
 
 and then...
 
@@ -375,7 +375,7 @@ looks like this:
 
 So to sum it up, clients of transicator should do the following:
 
-1) Download a snapshot for the scopes in which they are interested
+1) Download a snapshot for the selectors in which they are interested
 
 2) Store the snapshot somewhere locally
 
