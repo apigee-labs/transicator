@@ -16,8 +16,10 @@ limitations under the License.
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/30x/goscaffold"
@@ -29,10 +31,12 @@ import (
 
 const (
 	defaultLimit = 100
+	changeSelectorValidChars = "^[0-9a-z_-]+$"
 )
 
 var emptySequence = common.Sequence{}
 var lowestPossibleSequence = common.MakeSequence(0, 1)
+var reChangeSelector = regexp.MustCompile(changeSelectorValidChars)
 
 func (s *server) initChangesAPI(prefix string, router *httprouter.Router) {
 	router.HandlerFunc("GET", prefix+"/changes", s.handleGetChanges)
@@ -59,7 +63,11 @@ func (s *server) handleGetChanges(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	scopes := q["scope"]
+	scopes, err := getCheckChangeSelectorParams(req)
+	if err != nil {
+		sendAPIError(invalidParameter, err.Error(), resp, req)
+		return
+	}
 	if len(scopes) == 0 {
 		// If no scope specified, replace with the empty scope
 		scopes = []string{""}
@@ -176,6 +184,20 @@ func (s *server) receiveChanges(
 	log.Debugf("Received %d changes", len(entries))
 	success = true
 	return
+}
+
+/*
+getChangeSelectorParams combines all 'scope' query
+params into one slice after checking for valid characters.
+ */
+func getCheckChangeSelectorParams(r *http.Request) ([]string, error) {
+	scopes := r.URL.Query()["scope"]
+	for _, s := range scopes {
+		if !reChangeSelector.MatchString(s) {
+			return nil, errors.New("Invalid char in scope param")
+		}
+	}
+	return scopes, nil
 }
 
 func makeSnapshotFilter(ss *replication.Snapshot) func([]byte) bool {

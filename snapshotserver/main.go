@@ -20,7 +20,6 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"regexp"
 	"time"
 
 	"github.com/30x/goscaffold"
@@ -40,7 +39,6 @@ const (
 	tempSnapshotPrefix    = "transicatortmp"
 	tempSnapshotName      = "snap"
 	maxRequestBodyLength  = 1024 * 1024 // 1 MB
-	scopeParamValidChars  = "^[0-9a-z_-]+$"
 )
 
 // selectorColumn is the name of the database column that distinguishes a scope
@@ -157,15 +155,7 @@ func Close() {
 }
 
 func basicValidationHandler(h httprouter.Handle) httprouter.Handle {
-	var re = regexp.MustCompile(scopeParamValidChars)
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		scopes := r.URL.Query()["scope"]
-		for _, s := range scopes {
-			if !re.MatchString(s) {
-				sendAPIError(invalidRequestParam, "Invalid char in scope", w, r)
-				return
-			}
-		}
 		// Limit request body size to maxRequestBodyLength
 		r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyLength)
 		h(w, r, p)

@@ -419,14 +419,8 @@ var _ = Describe("Snapshot API Tests", func() {
 	})
 
 	It("should detect invalid chars in scope query param", func() {
-		req, err := http.NewRequest("GET",
+		req, err := createStandardRequest("GET",
 			fmt.Sprintf("%s/snapshots?scope=%s", testBase, url.QueryEscape("snaptests;select now()")), nil)
-		Expect(err).Should(Succeed())
-		req.Header = http.Header{}
-		req.Header.Set("Accept", "application/json")
-		dump, err := httputil.DumpRequestOut(req, true)
-		fmt.Fprintf(GinkgoWriter, "\ndump client req: %q\nerr: %+v\n", dump, err)
-
 		resp, err := http.DefaultClient.Do(req)
 		Expect(err).Should(Succeed())
 		defer resp.Body.Close()
@@ -434,22 +428,25 @@ var _ = Describe("Snapshot API Tests", func() {
 	})
 
 	It("should detect invalid chars in multiple scope query params", func() {
-		req, err := http.NewRequest("GET",
+		req, err := createStandardRequest("GET",
 			fmt.Sprintf("%s/snapshots?scope=abc123&scope=%s", testBase, url.QueryEscape("snapstests;select now()")), nil)
-		Expect(err).Should(Succeed())
-		req.Header = http.Header{}
-		req.Header.Set("Accept", "application/json")
-		dump, err := httputil.DumpRequestOut(req, true)
-		fmt.Fprintf(GinkgoWriter, "\ndump client req: %q\nerr: %+v\n", dump, err)
-
 		resp, err := http.DefaultClient.Do(req)
 		Expect(err).Should(Succeed())
 		defer resp.Body.Close()
 		checkApiErrorCode(resp, http.StatusBadRequest, "INVALID_REQUEST_PARAM")
-
 	})
 
 })
+
+func createStandardRequest(method string, urlStr string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequest(method, urlStr, body)
+	Expect(err).Should(Succeed())
+	req.Header = http.Header{}
+	req.Header.Set("Accept", "application/json")
+	dump, err := httputil.DumpRequestOut(req, true)
+	fmt.Fprintf(GinkgoWriter, "\ndump client req: %q\nerr: %+v\n", dump, err)
+	return req, err
+}
 
 func checkApiErrorCode(resp *http.Response, sc int, ec string) {
 	dump, err := httputil.DumpResponse(resp, true)

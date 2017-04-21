@@ -23,6 +23,8 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 
 	"github.com/apigee-labs/transicator/common"
 	. "github.com/onsi/ginkgo"
@@ -519,7 +521,51 @@ var _ = Describe("Changes API Tests", func() {
 		Expect(lastCl.FirstSequence).Should(Equal(newLast.String()))
 		Expect(lastCl.LastSequence).Should(Equal(newLast.String()))
 	})
+
+	It("should detect invalid chars in scope query param", func() {
+		req, err := createStandardRequest("GET",
+			fmt.Sprintf("%s/changes?scope=%s", baseURL, url.QueryEscape("snaptests;select now()")), nil)
+		resp, err := http.DefaultClient.Do(req)
+		Expect(err).Should(Succeed())
+		defer resp.Body.Close()
+		checkApiErrorCode(resp, http.StatusBadRequest, "PARAMETER_INVALID")
+	})
+
+	It("should detect invalid chars in multiple scope query params", func() {
+		req, err := createStandardRequest("GET",
+			fmt.Sprintf("%s/changes?scope=abc123&scope=%s", baseURL, url.QueryEscape("snapstests;select now()")), nil)
+		resp, err := http.DefaultClient.Do(req)
+		Expect(err).Should(Succeed())
+		defer resp.Body.Close()
+		checkApiErrorCode(resp, http.StatusBadRequest, "PARAMETER_INVALID")
+	})
 })
+
+func createStandardRequest(method string, urlStr string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequest(method, urlStr, body)
+	Expect(err).Should(Succeed())
+	req.Header = http.Header{}
+	req.Header.Set("Accept", "application/json")
+	dump, err := httputil.DumpRequestOut(req, true)
+	fmt.Fprintf(GinkgoWriter, "\ndump client req: %q\nerr: %+v\n", dump, err)
+	return req, err
+}
+
+func checkApiErrorCode(resp *http.Response, sc int, ec string) {
+	dump, err := httputil.DumpResponse(resp, true)
+	fmt.Fprintf(GinkgoWriter, "\nAPIError response: %q\nerr: %+v\n", dump, err)
+
+	Expect(resp.StatusCode).Should(Equal(sc))
+	Expect(resp.Header.Get("Content-Type")).Should(Equal("application/json"))
+
+	bod, err := ioutil.ReadAll(resp.Body)
+	Expect(err).Should(Succeed())
+
+	var errMsg common.APIError
+	err = json.Unmarshal(bod, &errMsg)
+	Expect(err).Should(Succeed())
+	Expect(errMsg.Code).Should(Equal(ec))
+}
 
 func getChanges(url string) *common.ChangeList {
 	fmt.Fprintf(GinkgoWriter, "URL: %s\n", url)

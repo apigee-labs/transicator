@@ -19,9 +19,11 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -39,7 +41,10 @@ const (
 	jsonMediaType  = "application/json"
 	protoMediaType = "application/transicator+protobuf"
 	sqlMediaType   = "application/transicator+sqlite"
+	changeSelectorValidChars = "^[0-9a-z_-]+$"
 )
+
+var reChangeSelector = regexp.MustCompile(changeSelectorValidChars)
 
 /*
 GetTenants returns a list of tenant IDs turned into a string.
@@ -414,7 +419,11 @@ func GenSnapshot(w http.ResponseWriter, r *http.Request) {
 	var changeSelectorParam string
 
 	r.ParseForm()
-	changeSelectorInput := r.URL.Query()["scope"]
+	changeSelectorInput, err := getCheckChangeSelectorParams(r)
+	if err != nil {
+		sendAPIError(invalidRequestParam, err.Error(), w, r)
+		return
+	}
 	if len(changeSelectorInput) == 0 {
 		sendAPIError(missingScope, "", w, r)
 		return
@@ -449,7 +458,11 @@ DownloadSnapshot downloads and returns the JSON related to the scope
 func DownloadSnapshot(
 	w http.ResponseWriter, r *http.Request,
 	db *sql.DB, p httprouter.Params) {
-	scopes := r.URL.Query()["scope"]
+	scopes, err := getCheckChangeSelectorParams(r)
+	if err != nil {
+		sendAPIError(invalidRequestParam, err.Error(), w, r)
+		return
+	}
 	if len(scopes) == 0 {
 		sendAPIError(missingScope, "", w, r)
 		return
@@ -476,7 +489,7 @@ func DownloadSnapshot(
 		return
 	}
 
-	err := GetTenantSnapshotData(scopes, mediaType, db, w)
+	err = GetTenantSnapshotData(scopes, mediaType, db, w)
 	if err != nil {
 		log.Errorf("GetTenantSnapshotData error: %v", err)
 		sendAPIError(http.StatusInternalServerError, err.Error(), w, r)
@@ -485,4 +498,18 @@ func DownloadSnapshot(
 
 	log.Debugf("Downloaded snapshot", scopes)
 	return
+}
+
+/*
+getChangeSelectorParams combines all 'scope' query
+params into one slice after checking for valid characters.
+ */
+func getCheckChangeSelectorParams(r *http.Request) ([]string, error) {
+	scopes := r.URL.Query()["scope"]
+	for _, s := range scopes {
+		if !reChangeSelector.MatchString(s) {
+			return nil, errors.New("Invalid char in scope param")
+		}
+	}
+	return scopes, nil
 }
