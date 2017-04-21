@@ -36,60 +36,55 @@ exports.bootstrapBackup = (req, res) => {
         return res.status(400).send('secret is required')
     }
 
-    try {
-        let bucket = gcs.bucket(bucketName)
+    let bucket = gcs.bucket(bucketName)
 
-        bucket.exists((err, exists) => {
+    bucket.exists((err, exists) => {
+        if (err) {
+            let s = err.toString() + " (1)"
+            console.error(s)
+            return res.status(500).send(s)
+        }
+
+        if (!exists) {
+            return res.status(500).send('bucket ' + bucketName + " doesn't exist")
+        }
+
+        let file = bucket.file(id)
+
+        // check if file exists, and the file age, reject if younger than minBackupAge
+        file.exists((err, exists) => {
             if (err) {
-                console.error(err.toString())
-                return res.status(500).send(err.toString())
+                let s = err.toString() + " (2)"
+                console.error(s)
+                return res.status(500).send(s)
             }
 
-            if (!exists) {
-                console.error(err.toString())
-                return res.status(500).send('bucket ' + bucketName + " doesn't exist")
+            if (exists) {
+
+                let backupCreated = Date.parse(file.metadata.timeCreated)
+                let backupAge = Date.now() - backupCreated
+
+                if (backupAge < minBackupAge) {
+                    return res.status(429).send('no need for backup right now')
+                }
             }
 
-            let file = bucket.file(id)
-
-            // check if file exists, and the file age, reject if younger than minBackupAge
-            file.exists((err, exists) => {
-                if (err) {
-                    console.error(err.toString())
-                    return res.status(500).send(err.toString())
-                }
-
-                if (exists) {
-
-                    let backupCreated = Date.parse(file.metadata.timeCreated)
-                    let backupAge = Date.now() - backupCreated
-
-                    if (backupAge < minBackupAge) {
-                        return res.status(429).send('no need for backup right now')
-                    }
-                }
-
-                let writeOpts = {
+            let writeOpts = {
+                metadata: {
+                    contentType: contentType,
                     metadata: {
-                        contentType: contentType,
-                        metadata: {
-                            secret: secret,
-                        },
+                        secret: secret,
                     },
-                }
+                },
+            }
 
-                let writer = file.createWriteStream(writeOpts)
-                writer.write(req.body)
-                writer.end()
+            let writer = file.createWriteStream(writeOpts)
+            writer.write(req.body)
+            writer.end()
 
-                res.send(`Thank you, ${id}.`)
-            })
+            res.send(`Thank you, ${id}.`)
         })
-
-    } catch (err) {
-        console.error(err.toString())
-        res.status(500).send(err.toString())
-    }
+    })
 }
 
 exports.bootstrapRestore = (req, res) => {
@@ -116,20 +111,21 @@ exports.bootstrapRestore = (req, res) => {
 
     bucket.exists((err, exists) => {
         if (err) {
-            console.error(err.toString())
-            return res.status(500).send(err.toString())
+            let s = err.toString() + " (1)"
+            console.error(s)
+            return res.status(500).send(s)
         }
 
         if (!exists) {
-            console.error(err.toString())
             return res.status(500).send('bucket ' + bucketName + " doesn't exist")
         }
 
         let file = bucket.file(id)
         file.exists((err, exists) => {
             if (err) {
-                console.error(err.toString())
-                return res.status(500).send(err.toString())
+                let s = err.toString() + " (2)"
+                console.error(s)
+                return res.status(500).send(s)
             }
 
             if (!exists) {
@@ -137,10 +133,10 @@ exports.bootstrapRestore = (req, res) => {
             }
 
             file.getMetadata((err, metadata) => {
-
                 if (err) {
-                    console.error(err.toString())
-                    return res.status(500).send(err.toString())
+                    let s = err.toString() + " (3)"
+                    console.error(s)
+                    return res.status(500).send(s)
                 }
 
                 if (metadata.metadata.secret !== secret) {
@@ -152,8 +148,9 @@ exports.bootstrapRestore = (req, res) => {
                 file
                     .createReadStream()
                     .on('error', function(err) {
-                        console.error(err.toString())
-                        res.status(500).send(err.toString())
+                        let s = err.toString() + " (4)"
+                        console.error(s)
+                        return res.status(500).send(s)
                     })
                     .pipe(res)
             })
