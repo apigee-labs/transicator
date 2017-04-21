@@ -76,6 +76,9 @@ func createChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix stri
 	// Retrieve the highest sequence from the DB so that we don't
 	// process duplicate updates that might come from PG.
 	_, _, firstChange, err := db.Scan(nil, 0, 0, 0, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	repl, err := replication.CreateReplicator(pgURL, slotName)
 	if err != nil {

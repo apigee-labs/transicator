@@ -258,14 +258,14 @@ var _ = Describe("Changes API Tests", func() {
 			Expect(len(cl.Changes)).Should(Equal(1))
 			Expect(compareSequence(cl, 0, lastTestSequence-3)).Should(BeTrue())
 
-      // Over limit
-      limit := maxLimitChanges + 1
-      u := fmt.Sprintf("%s/changes?since=%s&%s=foo&limit=%d", baseURL, origLastSequence, p, limit)
-      req := createStandardRequest("GET", u, "application/json", nil)
-      resp, err := http.DefaultClient.Do(req)
-      Expect(err).Should(Succeed())
-      defer resp.Body.Close()
-      checkApiErrorCode(resp, http.StatusBadRequest, "PARAMETER_INVALID")
+			// Over limit
+			limit := maxLimitChanges + 1
+			u := fmt.Sprintf("%s/changes?since=%s&%s=foo&limit=%d", baseURL, origLastSequence, p, limit)
+			req := createStandardRequest("GET", u, "application/json", nil)
+			resp, err := http.DefaultClient.Do(req)
+			Expect(err).Should(Succeed())
+			defer resp.Body.Close()
+			checkAPIErrorCode(resp, http.StatusBadRequest, "PARAMETER_INVALID")
 		}
 
 	})
@@ -570,7 +570,7 @@ var _ = Describe("Changes API Tests", func() {
 				resp, err := http.DefaultClient.Do(req)
 				Expect(err).Should(Succeed())
 				defer resp.Body.Close()
-				checkApiErrorCode(resp, http.StatusBadRequest, "PARAMETER_INVALID")
+				checkAPIErrorCode(resp, http.StatusBadRequest, "PARAMETER_INVALID")
 			}()
 		}
 	})
@@ -584,7 +584,7 @@ var _ = Describe("Changes API Tests", func() {
 				resp, err := http.DefaultClient.Do(req)
 				Expect(err).Should(Succeed())
 				defer resp.Body.Close()
-				checkApiErrorCode(resp, http.StatusBadRequest, "PARAMETER_INVALID")
+				checkAPIErrorCode(resp, http.StatusBadRequest, "PARAMETER_INVALID")
 			}()
 		}
 	})
@@ -600,22 +600,6 @@ func createStandardRequest(method string, urlStr string, acceptHdr string, body 
 	return req
 }
 
-func checkApiErrorCode(resp *http.Response, sc int, ec string) {
-	dump, err := httputil.DumpResponse(resp, true)
-	fmt.Fprintf(GinkgoWriter, "\nAPIError response: %q\nerr: %+v\n", dump, err)
-
-	Expect(resp.StatusCode).Should(Equal(sc))
-	Expect(resp.Header.Get("Content-Type")).Should(Equal("application/json"))
-
-	bod, err := ioutil.ReadAll(resp.Body)
-	Expect(err).Should(Succeed())
-
-	var errMsg common.APIError
-	err = json.Unmarshal(bod, &errMsg)
-	Expect(err).Should(Succeed())
-	Expect(errMsg.Code).Should(Equal(ec))
-}
-
 func getChanges(url string) *common.ChangeList {
 	fmt.Fprintf(GinkgoWriter, "URL: %s\n", url)
 	bod := executeGet(url)
@@ -626,7 +610,7 @@ func getChanges(url string) *common.ChangeList {
 	return cl
 }
 
-func checkApiErrorCode(resp *http.Response, sc int, ec string) {
+func checkAPIErrorCode(resp *http.Response, sc int, ec string) {
 	dump, err := httputil.DumpResponse(resp, true)
 	fmt.Fprintf(GinkgoWriter, "\nAPIError response: %s\nerr: %+v\n", dump, err)
 
