@@ -259,13 +259,15 @@ var _ = Describe("Changes API Tests", func() {
 			Expect(compareSequence(cl, 0, lastTestSequence-3)).Should(BeTrue())
 
 			// Over limit
-			limit := maxLimitChanges + 1
-			u := fmt.Sprintf("%s/changes?since=%s&%s=foo&limit=%d", baseURL, origLastSequence, p, limit)
-			req := createStandardRequest("GET", u, "application/json", nil)
-			resp, err := http.DefaultClient.Do(req)
-			Expect(err).Should(Succeed())
-			defer resp.Body.Close()
-			checkAPIErrorCode(resp, http.StatusBadRequest, "PARAMETER_INVALID")
+			func() {
+				limit := maxLimitChanges + 1
+				u := fmt.Sprintf("%s/changes?since=%s&%s=foo&limit=%d", baseURL, origLastSequence, p, limit)
+				req := createStandardRequest("GET", u, "application/json", nil)
+				resp, err := http.DefaultClient.Do(req)
+				Expect(err).Should(Succeed())
+				defer resp.Body.Close()
+				checkAPIErrorCode(resp, http.StatusBadRequest, "PARAMETER_INVALID")
+			}()
 		}
 
 	})
@@ -498,10 +500,33 @@ var _ = Describe("Changes API Tests", func() {
 					testServer.cleaner = nil
 				}()
 
+				// Insert new record here to ensure oldest sequence
+				// returned by /changes API is NOT 0.0.0, which is
+				// ignored for SNAPSHOT_TOO_OLD detection
+				lastTestSequence++
+				_, err := insertStmt.Exec(lastTestSequence, "clean")
+				Expect(err).Should(Succeed())
+
+				Eventually(func() bool {
+					isDetected := false
+					lc := getChanges(fmt.Sprintf(
+						"%s/changes?%s=clean", baseURL, p))
+					if len(lc.Changes) > 0 {
+						// Check that initial change is newest result
+						isDetected = compareSequence(lc, len(lc.Changes)-1, lastTestSequence)
+						if isDetected {
+							fmt.Fprintf(GinkgoWriter, "detected initial change lc: %+v\n", lc)
+						}
+					}
+					return isDetected
+				}, 2*time.Second, 200*time.Millisecond).Should(BeTrue())
+
 				// Get oldest sequence and ensure we can still use it in API calls
 				lc := getChanges(fmt.Sprintf(
 					"%s/changes?%s=clean", baseURL, p))
 				origFirstSequence := lc.FirstSequence
+				fmt.Fprintf(GinkgoWriter, "lc: %+v\n", lc)
+				fmt.Fprintf(GinkgoWriter, "origFirstSequence: %s\n", origFirstSequence)
 				resp, err := http.Get(fmt.Sprintf(
 					"%s/changes?%s=clean&since=%s", baseURL, p, origFirstSequence))
 				Expect(err).Should(Succeed())
@@ -512,18 +537,25 @@ var _ = Describe("Changes API Tests", func() {
 				lastTestSequence++
 				_, err = insertStmt.Exec(lastTestSequence, "clean")
 				Expect(err).Should(Succeed())
+				fmt.Fprintf(GinkgoWriter, "added change lastTestSequnce: %+v\n", lastTestSequence)
 				var newLast common.Sequence
 
 				// Should be visible well before five seconds is up
-				Eventually(func() int {
+				Eventually(func() bool {
+					isDetected := false
+					// query for new changes since oldest sequence
 					lc := getChanges(fmt.Sprintf(
-						"%s/changes?%s=clean", baseURL, p))
+						"%s/changes?%s=clean&since=%s", baseURL, p, origFirstSequence))
 					if len(lc.Changes) > 0 {
-						Expect(compareSequence(lc, 0, lastTestSequence)).Should(BeTrue())
-						newLast = lc.Changes[0].GetSequence()
+						// Check that added change is newest result
+						isDetected = compareSequence(lc, len(lc.Changes)-1, lastTestSequence)
+						if isDetected {
+							fmt.Fprintf(GinkgoWriter, "detected added change lc: %+v\n", lc)
+							newLast = lc.Changes[len(lc.Changes)-1].GetSequence()
+						}
 					}
-					return len(lc.Changes)
-				}, 2*time.Second).Should(Equal(1))
+					return isDetected
+				}, 2*time.Second, 200*time.Millisecond).Should(BeTrue())
 
 				defer func() {
 					lastChangeSequence = newLast
@@ -532,16 +564,20 @@ var _ = Describe("Changes API Tests", func() {
 				// Should start to get "old snapshot" error once
 				// cleanup is triggered
 				Eventually(func() bool {
-					resp, err := http.Get(fmt.Sprintf(
-						"%s/changes?%s=clean&since=%s", baseURL, p, origFirstSequence))
+					u := fmt.Sprintf("%s/changes?%s=clean&since=%s", baseURL, p, origFirstSequence)
+					req := createStandardRequest("GET", u, "application/json", nil)
+					resp, err := http.DefaultClient.Do(req)
 					Expect(err).Should(Succeed())
 					defer resp.Body.Close()
+					dump, err := httputil.DumpResponse(resp, true)
+					fmt.Fprintf(GinkgoWriter, "dump client response: %s\nerr: %+v\n", dump, err)
 					if resp.StatusCode == 400 {
+						fmt.Fprintln(GinkgoWriter, "detected SNAPSHOT_TOO_OLD")
 						verifyErrorCode(resp.Body, "SNAPSHOT_TOO_OLD")
 						return true
 					}
 					return false
-				}, 5*time.Second).Should(BeTrue())
+				}, 7*time.Second, 500*time.Millisecond).Should(BeTrue())
 
 				// All records should be deleted before 10 seconds is up
 				Eventually(func() int {
