@@ -117,6 +117,9 @@ func createChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix,
 func (s *server) start() {
 	s.repl.Start()
 	go s.runReplication(s.firstChange)
+	if s.backupURI != "" && s.backupID != "" && s.backupSecret != "" && s.backupInterval > 0 {
+		go s.runBackup()
+	}
 }
 
 func (s *server) stop() {
