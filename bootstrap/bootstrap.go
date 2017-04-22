@@ -44,8 +44,8 @@ var client = http.Client{Timeout: 3 * time.Minute}
 
 // note: current behavior is to always make the backup and then just allow the send to fail
 // if the server doesn't want it.
-// note: err returned is nil and backupUploaded is false if backup was rejected as being too soon
-func Backup(db storage.DB, boostrapBackupURI, bootstrapID, bootstrapSecret string) (err error, backupUploaded bool) {
+// note: err returned is nil and uploaded is false if backup was rejected as being too soon
+func Backup(db storage.DB, uri, id, secret string) (err error, uploaded bool) {
 
 	// make backup
 	tempDirURL, err := ioutil.TempDir("", "transicator_sqlite_backup")
@@ -77,12 +77,12 @@ func Backup(db storage.DB, boostrapBackupURI, bootstrapID, bootstrapSecret strin
 	defer fileReader.Close()
 
 	// send backup
-	req, err := http.NewRequest("POST", boostrapBackupURI, fileReader)
+	req, err := http.NewRequest("POST", uri, fileReader)
 	if err != nil {
 		return err, false
 	}
-	req.Header.Set(headerID, bootstrapID)
-	req.Header.Set(headerSecret, bootstrapSecret)
+	req.Header.Set(headerID, id)
+	req.Header.Set(headerSecret, secret)
 	req.Header.Set("Content-Type", contentType)
 
 	res, err := client.Do(req)
@@ -93,10 +93,10 @@ func Backup(db storage.DB, boostrapBackupURI, bootstrapID, bootstrapSecret strin
 
 	switch res.StatusCode {
 	case 200:
-		log.Debug("backup successful")
+		log.Debug("backup uploaded successfully")
 		return nil, true
 	case 429:
-		log.Debug("backup not needed")
+		log.Debug("backup upload not needed")
 		return nil, false
 	default:
 		msg, _ := ioutil.ReadAll(res.Body)
@@ -107,14 +107,14 @@ func Backup(db storage.DB, boostrapBackupURI, bootstrapID, bootstrapSecret strin
 	}
 }
 
-func Restore(dbDir, boostrapRestoreURI, bootstrapID, bootstrapSecret string) error {
+func Restore(dbDir, uri, id, secret string) error {
 
-	req, err := http.NewRequest("GET", boostrapRestoreURI, nil)
+	req, err := http.NewRequest("GET", uri, nil)
 	if err != nil {
 		return err
 	}
-	req.Header.Set(headerID, bootstrapID)
-	req.Header.Set(headerSecret, bootstrapSecret)
+	req.Header.Set(headerID, id)
+	req.Header.Set(headerSecret, secret)
 	req.Header.Set("Accept", contentType)
 
 	res, err := client.Do(req)

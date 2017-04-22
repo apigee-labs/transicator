@@ -28,6 +28,7 @@ import (
 	"github.com/apigee-labs/transicator/replication"
 	"github.com/apigee-labs/transicator/storage"
 	"github.com/julienschmidt/httprouter"
+	"time"
 )
 
 const (
@@ -45,21 +46,26 @@ const (
 var selectorColumn = defaultSelectorColumn
 
 type server struct {
-	db          storage.DB
-	repl        *replication.Replicator
-	tracker     *changeTracker
-	cleaner     *cleaner
-	firstChange common.Sequence
-	slotName    string
-	dropSlot    int32
-	stopChan    chan chan<- bool
+	db             storage.DB
+	repl           *replication.Replicator
+	tracker        *changeTracker
+	cleaner        *cleaner
+	firstChange    common.Sequence
+	slotName       string
+	dropSlot       int32
+	stopChan       chan chan<- bool
+	backupURI      string
+	backupID       string
+	backupSecret   string
+	backupInterval time.Duration
 }
 
 type errMsg struct {
 	Error string `json:"error"`
 }
 
-func createChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix string) (*server, error) {
+func createChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix,
+	backupURI, backupID, backupSecret string, backupInterval time.Duration) (*server, error) {
 	success := false
 	slotName := sanitizeSlotName(pgSlot)
 
@@ -88,12 +94,16 @@ func createChangeServer(mux *http.ServeMux, dbDir, pgURL, pgSlot, urlPrefix stri
 	success = true
 
 	s := &server{
-		db:          db,
-		repl:        repl,
-		slotName:    slotName,
-		firstChange: firstChange,
-		tracker:     createTracker(),
-		stopChan:    make(chan chan<- bool, 1),
+		db:             db,
+		repl:           repl,
+		slotName:       slotName,
+		firstChange:    firstChange,
+		tracker:        createTracker(),
+		stopChan:       make(chan chan<- bool, 1),
+		backupURI:      backupURI,
+		backupID:       backupID,
+		backupSecret:   backupSecret,
+		backupInterval: backupInterval,
 	}
 
 	router := httprouter.New()

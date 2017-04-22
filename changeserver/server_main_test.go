@@ -32,6 +32,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	"time"
 )
 
 const (
@@ -84,7 +85,8 @@ var _ = BeforeSuite(func() {
 	// Start the server, which will be ready to respond to API calls
 	// and which will also start replication with the database
 	mux := http.NewServeMux()
-	testServer, err = createChangeServer(mux, testDataDir, dbURL, replicationSlot, "")
+	testServer, err = createChangeServer(mux, testDataDir, dbURL, replicationSlot, "",
+		"", "", "", time.Hour)
 	Expect(err).Should(Succeed())
 
 	// For the tests, filter out changes for tables not part of these unit
