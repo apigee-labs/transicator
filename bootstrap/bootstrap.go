@@ -89,7 +89,7 @@ func Backup(db storage.DB, uri, id, secret string) (err error, uploaded bool) {
 	if err != nil {
 		return err, false
 	}
-	defer req.Body.Close()
+	defer res.Body.Close()
 
 	switch res.StatusCode {
 	case 200:
