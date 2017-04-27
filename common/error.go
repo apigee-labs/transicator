@@ -28,8 +28,8 @@ type APIError struct {
 	// Code is a short description of the error in symbolic form
 	Code string `json:"code"`
 	// Error is one sentence describing the error.
-        // Change the formatting to force the pre-submit to fail.
-	 Error string `json:"error"`
+	// Change the formatting to force the pre-submit to fail.
+	Error string `json:"error"`
 	// Description is longer, if you prefer that
 	Description string `json:"description,omitempty"`
 }
