@@ -521,10 +521,10 @@ var _ = Describe("Changes API Tests", func() {
 					return isDetected
 				}, 2*time.Second, 200*time.Millisecond).Should(BeTrue())
 
-				// Get oldest sequence and ensure we can still use it in API calls
+				// Get oldest sequence in changelist and ensure we can still use it in API calls
 				lc := getChanges(fmt.Sprintf(
 					"%s/changes?%s=clean", baseURL, p))
-				origFirstSequence := lc.FirstSequence
+				origFirstSequence := lc.Changes[0].Sequence
 				fmt.Fprintf(GinkgoWriter, "lc: %+v\n", lc)
 				fmt.Fprintf(GinkgoWriter, "origFirstSequence: %s\n", origFirstSequence)
 				resp, err := http.Get(fmt.Sprintf(
