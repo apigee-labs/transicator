@@ -4,7 +4,8 @@ RUN mkdir /src
 COPY . /src/pgoutput
 # Contents of "scripts" fix pg_hba.conf and postgresql.conf
 COPY scripts /docker-entrypoint-initdb.d
-
+RUN chmod +r /docker-entrypoint-initdb.d/*
+RUN chmod +x /docker-entrypoint-initdb.d/00-pg-conf.sh
 # Deliberately run in multiple steps.  This way we can harness intermediate
 # images, and not have to re-install the build tools after the first build
 RUN \
