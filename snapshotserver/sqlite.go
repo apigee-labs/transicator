@@ -191,6 +191,7 @@ func createDatabase(fileName string) (*sql.DB, error) {
 		tdb.Close()
 		return nil, err
 	}
+
 	return tdb, err
 }
 
