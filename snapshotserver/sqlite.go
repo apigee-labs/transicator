@@ -185,6 +185,12 @@ func createDatabase(fileName string) (*sql.DB, error) {
 		tdb.Close()
 		return nil, err
 	}
+
+	_, err = tdb.Exec("pragma synchronous = OFF")
+	if err != nil {
+		tdb.Close()
+		return nil, err
+	}
 	return tdb, err
 }
 
@@ -253,6 +259,10 @@ func copyData(pgTx *sql.Tx, tdb *sql.DB, scopes []string, pgTable *pgTable) erro
 	}
 	defer stmt.Close()
 
+	tx, err := tdb.Begin()
+	if err != nil {
+		return err
+	}
 	for pgRows.Next() {
 		cols := make([]interface{}, len(colNames))
 		for i := range cols {
@@ -273,18 +283,21 @@ func copyData(pgTx *sql.Tx, tdb *sql.DB, scopes []string, pgTable *pgTable) erro
 		}
 		err = pgRows.Scan(cols...)
 		if err != nil {
+			tx.Rollback()
 			log.Errorf("Postgres scan error %s. cols = %s", err, debugColTypes(cols))
 			return err
 		}
 
 		patchColTypes(cols)
 
-		_, err := stmt.Exec(cols...)
+		_, err := tx.Stmt(stmt).Exec(cols...)
 		if err != nil {
+			tx.Rollback()
 			log.Errorf("SQLite insert error %s. SQL = %s. cols = %s", err, sql, debugColTypes(cols))
 			return err
 		}
 	}
+	tx.Commit()
 
 	return nil
 }
