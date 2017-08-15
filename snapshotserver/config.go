@@ -50,7 +50,7 @@ func SetConfigDefaults() {
 	pflag.StringP("tempdir", "T", "", "Set temporary directory for snapshot files")
 	viper.SetDefault("tempdir", defaultTempDir)
 
-	pflag.BoolP("config", "C", false, fmt.Sprintf("Use a config file named '%s' located in either /etc/%s/, ~/.%s or ./)", appName, packageName, packageName))
+	pflag.BoolP("config", "C", false, "specify the config file directory for snapshotserver.properties")
 	pflag.BoolP("debug", "D", false, "Turn on debugging")
 	viper.SetDefault("debug", false)
 }
@@ -71,16 +71,16 @@ func getConfig() error {
 	viper.BindPFlag("selectorColumn", pflag.Lookup("selectorcolumn"))
 	viper.BindPFlag("tempdir", pflag.Lookup("tempdir"))
 
+	viper.SetConfigName(appName)
 	// Load config values from file
-	if viper.GetBool("configFile") {
-		viper.SetConfigName(appName)                                               // name of config file (without extension)
-		viper.AddConfigPath(fmt.Sprintf("/etc/%s/", packageName))                  // path to look for the config file in
-		viper.AddConfigPath(fmt.Sprintf("%s/.%s", os.Getenv("HOME"), packageName)) // loof for config in the users home directory
-		viper.AddConfigPath(".")                                                   // look for config in the working directory
+	if viper.GetString("configFile") != "" {
+		viper.AddConfigPath(viper.GetString("configFile"))
 		err := viper.ReadInConfig()                                                // Find and read the config file
 		if err != nil {                                                            // Handle errors reading the config file
 			return err
 		}
+	} else {
+		viper.AddConfigPath(".")
 	}
 
 	// Load any config values from Environment variables who's name is prefixed TSS_ (Transicator Snaphot Server)
@@ -90,3 +90,4 @@ func getConfig() error {
 	return nil
 
 }
+
