@@ -16,9 +16,6 @@ limitations under the License.
 package main
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -49,7 +46,7 @@ func setConfigDefaults() {
 	viper.SetDefault("prefix", "")
 	viper.SetDefault("selectorColumn", defaultSelectorColumn)
 
-	pflag.BoolP("config", "C", false, fmt.Sprintf("Use a config file named '%s' located in either /etc/%s/, ~/.%s or ./)", appName, packageName, packageName))
+	pflag.StringP("config", "C", "", "specify the config directory (ONLY) for changeserver.properties")
 	pflag.BoolP("debug", "D", false, "Turn on debugging")
 	viper.SetDefault("debug", false)
 }
@@ -72,14 +69,12 @@ func getConfig() error {
 	viper.BindPFlag("debug", pflag.Lookup("debug"))
 	viper.BindPFlag("selectorColumn", pflag.Lookup("selectorcolumn"))
 
+	viper.SetConfigName(appName)
 	// Load config values from file
-	if viper.GetBool("configFile") {
-		viper.SetConfigName(appName)                                               // name of config file (without extension)
-		viper.AddConfigPath(fmt.Sprintf("/etc/%s/", packageName))                  // path to look for the config file in
-		viper.AddConfigPath(fmt.Sprintf("%s/.%s", os.Getenv("HOME"), packageName)) // loof for config in the users home directory
-		viper.AddConfigPath(".")                                                   // look for config in the working directory
-		err := viper.ReadInConfig()                                                // Find and read the config file
-		if err != nil {                                                            // Handle errors reading the config file
+	if viper.GetString("configFile") != "" {
+		viper.AddConfigPath(viper.GetString("configFile"))
+		err := viper.ReadInConfig()                           // Find and read the config file
+		if err != nil {                                       // Handle errors reading the config file
 			return err
 		}
 	}
