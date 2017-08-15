@@ -16,9 +16,6 @@ limitations under the License.
 package snapshotserver
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -50,7 +47,7 @@ func SetConfigDefaults() {
 	pflag.StringP("tempdir", "T", "", "Set temporary directory for snapshot files")
 	viper.SetDefault("tempdir", defaultTempDir)
 
-	pflag.BoolP("config", "C", false, "specify the config file directory for snapshotserver.properties")
+	pflag.StringP("config", "C", ".", "specify the config (ONLY) directory for snapshotserver.properties")
 	pflag.BoolP("debug", "D", false, "Turn on debugging")
 	viper.SetDefault("debug", false)
 }
