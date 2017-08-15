@@ -78,6 +78,10 @@ func Run() (*goscaffold.HTTPScaffold, error) {
 	selectorColumn = viper.GetString("selectorColumn")
 	tempSnapshotDir = viper.GetString("tempdir")
 
+	cml := viper.GetInt("connMaxLife")
+	mic := viper.GetInt("maxIdleConns")
+	moc := viper.GetInt("maxOpenConns")
+
 	if pgURL == "" {
 		return nil, ErrUsage
 	}
@@ -105,6 +109,26 @@ func Run() (*goscaffold.HTTPScaffold, error) {
 	pgdriver.SetIsolationLevel("repeatable read")
 	pgdriver.SetExtendedColumnNames(true)
 	pgdriver.SetReadTimeout(defaultPGTimeout)
+
+
+	log.Infof("Set SetConnMaxLifetime to %d minutes", cml)
+	mainDB.SetConnMaxLifetime(time.Duration(cml) * time.Minute)
+
+	if mic >= 0 {
+		log.Infof("Set SetMaxIdleConns to %d", mic)
+		mainDB.SetMaxIdleConns(mic)
+	}
+
+	if moc >= 0 {
+		log.Infof("Set SetMaxOpenConns to %d", moc)
+		mainDB.SetMaxOpenConns(moc)
+	}
+
+	// In the future, the return param to schedule() can be used to stop stats collection
+	if debug {
+		schedule(getStatsInfo, time.Second * 5)
+	}
+
 	router := httprouter.New()
 
 	router.GET("/scopes/:apidclusterId",
@@ -176,4 +200,24 @@ func checkHealth(db *sql.DB) (goscaffold.HealthStatus, error) {
 	// status here that would cause a restart. We will be able to reach PG
 	// again when it's ready.
 	return goscaffold.NotReady, err
+}
+
+
+func schedule(cback func(), delay time.Duration) chan bool {
+	stop := make(chan bool)
+	go func() {
+		for {
+			select {
+			case <-time.After(delay):
+				cback()
+			case <-stop:
+				return
+			}
+		}
+	}()
+	return stop
+}
+
+func getStatsInfo() {
+	log.Debugf("Current open DB connections %d", mainDB.Stats().OpenConnections)
 }

@@ -16,9 +16,6 @@ limitations under the License.
 package snapshotserver
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -50,7 +47,16 @@ func SetConfigDefaults() {
 	pflag.StringP("tempdir", "T", "", "Set temporary directory for snapshot files")
 	viper.SetDefault("tempdir", defaultTempDir)
 
-	pflag.BoolP("config", "C", false, fmt.Sprintf("Use a config file named '%s' located in either /etc/%s/, ~/.%s or ./)", appName, packageName, packageName))
+	pflag.IntP("connmaxlife", "x", 5, "Sets the maximum amount of time (Minutes) a connection may be reused")
+	viper.SetDefault("connmaxlife", 5)
+
+	pflag.IntP("maxidleconns", "y", -1, "Sets the maximum number of connections in the idle connection pool")
+	viper.SetDefault("maxidleconns", -1)
+
+	pflag.IntP("maxopenconns", "z", -1, "Sets the maximum number of open connections to the database")
+	viper.SetDefault("maxopenconns", -1)
+
+	pflag.StringP("config", "C", "", "specify the config directory (ONLY) for snapshotserver.properties")
 	pflag.BoolP("debug", "D", false, "Turn on debugging")
 	viper.SetDefault("debug", false)
 }
@@ -65,23 +71,26 @@ func getConfig() error {
 	viper.BindPFlag("key", pflag.Lookup("key"))
 	viper.BindPFlag("cert", pflag.Lookup("cert"))
 
+	viper.BindPFlag("connMaxLife", pflag.Lookup("connmaxlife"))
+	viper.BindPFlag("maxIdleConns", pflag.Lookup("maxidleconns"))
+	viper.BindPFlag("maxOpenConns", pflag.Lookup("maxopenconns"))
+
 	viper.BindPFlag("configFile", pflag.Lookup("config"))
 	viper.BindPFlag("debug", pflag.Lookup("debug"))
 	viper.BindPFlag("help", pflag.Lookup("help"))
 	viper.BindPFlag("selectorColumn", pflag.Lookup("selectorcolumn"))
 	viper.BindPFlag("tempdir", pflag.Lookup("tempdir"))
 
+	viper.SetConfigName(appName)
 	// Load config values from file
-	if viper.GetBool("configFile") {
-		viper.SetConfigName(appName)                                               // name of config file (without extension)
-		viper.AddConfigPath(fmt.Sprintf("/etc/%s/", packageName))                  // path to look for the config file in
-		viper.AddConfigPath(fmt.Sprintf("%s/.%s", os.Getenv("HOME"), packageName)) // loof for config in the users home directory
-		viper.AddConfigPath(".")                                                   // look for config in the working directory
+	if viper.GetString("configFile") != "" {
+		viper.AddConfigPath(viper.GetString("configFile"))
 		err := viper.ReadInConfig()                                                // Find and read the config file
 		if err != nil {                                                            // Handle errors reading the config file
 			return err
 		}
 	}
+
 
 	// Load any config values from Environment variables who's name is prefixed TSS_ (Transicator Snaphot Server)
 	viper.SetEnvPrefix("tss") // will be uppercased automatically
@@ -90,3 +99,4 @@ func getConfig() error {
 	return nil
 
 }
+

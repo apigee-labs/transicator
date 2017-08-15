@@ -89,6 +89,7 @@ var _ = BeforeSuite(func() {
 	viper.Set("port", 0)
 	viper.Set("pgURL", dbURL)
 	viper.Set("debug", debugTests)
+	viper.Set("connmaxlife", 2)
 
 	testListener, err = Run()
 	Expect(err).Should(Succeed())
