@@ -47,7 +47,7 @@ func SetConfigDefaults() {
 	pflag.StringP("tempdir", "T", "", "Set temporary directory for snapshot files")
 	viper.SetDefault("tempdir", defaultTempDir)
 
-	pflag.StringP("config", "C", ".", "specify the config (ONLY) directory for snapshotserver.properties")
+	pflag.StringP("config", "C", "", "specify the config (ONLY) directory for snapshotserver.properties")
 	pflag.BoolP("debug", "D", false, "Turn on debugging")
 	viper.SetDefault("debug", false)
 }
@@ -76,8 +76,6 @@ func getConfig() error {
 		if err != nil {                                                            // Handle errors reading the config file
 			return err
 		}
-	} else {
-		viper.AddConfigPath(".")
 	}
 
 	// Load any config values from Environment variables who's name is prefixed TSS_ (Transicator Snaphot Server)
