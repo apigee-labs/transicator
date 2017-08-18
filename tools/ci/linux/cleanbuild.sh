@@ -1,6 +1,6 @@
 #!/bin/sh
 
-BUILDROOT=${BUILDROOT:-git/transicator}
+BUILDROOT=${BUILDROOT:-github/transicator}
 export BUILDROOT
 
 # Make a temporary GOPATH to build in
@@ -11,7 +11,7 @@ export GOPATH
 
 CLEANVENDOR=1
 export CLEANVENDOR
-${BUILDROOT}/tools/internal_ci/linux/build.sh
+${BUILDROOT}/tools/ci/linux/build.sh
 
 if [ ! -d bin ]
 then

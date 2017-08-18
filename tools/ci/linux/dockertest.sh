@@ -4,7 +4,7 @@
 TEST_PG_PW=`openssl rand -hex 18`
 export TEST_PG_PW
 
-BUILDROOT=${BUILDROOT:-git/transicator}
+BUILDROOT=${BUILDROOT:-github/transicator}
 (cd ${BUILDROOT}; make dockerTests)
 
 for n in ${BUILDROOT}/docker-test-reports/*.xml

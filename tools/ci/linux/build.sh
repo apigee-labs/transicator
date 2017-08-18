@@ -8,7 +8,7 @@ then
   exit 2
 fi
 
-BUILDROOT=${BUILDROOT:-git/transicator}
+BUILDROOT=${BUILDROOT:-github/transicator}
 GLIDE=${GLIDE:-glide}
 
 # Copy our code there, minus any vendor dependencies
