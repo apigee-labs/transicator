@@ -1,0 +1,69 @@
+swagger: "2.0"
+info:
+  version: "0.0.1"
+  title: Bootstrap backup and restore
+host: region-project.cloudfunctions.net
+basePath: /
+schemes:
+  - http
+  - https
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /bootstrapBackup:
+    post:
+      description: Perform backup
+      consumes:
+        - application/octet-stream
+      parameters:
+        - name: x-bootstrap-id
+          type: string
+          in: header
+          required: true
+        - name: x-bootstrap-secret
+          type: string
+          in: header
+          required: true
+      responses:
+        "200":
+          description: Success
+          schema:
+            $ref: "#/definitions/BackupResponse"
+        "429":
+          description: Backup not needed
+        default:
+          description: Error
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+  /bootstrapRestore:
+    get:
+      description: Perform restore
+      produces:
+        - application/octet-stream
+      parameters:
+        - name: x-bootstrap-id
+          type: string
+          in: header
+          required: true
+        - name: x-bootstrap-secret
+          type: string
+          in: header
+          required: true
+      responses:
+        "200":
+          description: Success
+          schema:
+            $ref: "#/definitions/RestoreResponse"
+        default:
+          description: Error
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+definitions:
+  BackupResponse:
+    type: object
+  RestoreResponse:
+    type: object
+  ErrorResponse:
+    type: object

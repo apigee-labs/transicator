@@ -21,6 +21,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"time"
 )
 
 func setConfigDefaults() {
@@ -52,6 +53,17 @@ func setConfigDefaults() {
 	pflag.BoolP("config", "C", false, fmt.Sprintf("Use a config file named '%s' located in either /etc/%s/, ~/.%s or ./)", appName, packageName, packageName))
 	pflag.BoolP("debug", "D", false, "Turn on debugging")
 	viper.SetDefault("debug", false)
+
+	pflag.String("boostrapBackupURI", "", "Bootstrap backup URI")
+	viper.SetDefault("boostrapBackupURI", "")
+	pflag.String("boostrapRestoreURI", "", "Bootstrap restore URI")
+	viper.SetDefault("boostrapRestoreURI", "")
+	pflag.String("boostrapID", "", "Bootstrap backup and restore ID (unique per cluster)")
+	viper.SetDefault("boostrapID", "")
+	pflag.String("boostrapSecret", "", "Bootstrap backup and restore secret")
+	viper.SetDefault("boostrapSecret", "")
+	pflag.Duration("boostrapBackupInterval", time.Hour, "Bootstrap backup interval")
+	viper.SetDefault("boostrapBackupInterval", time.Hour)
 }
 
 func getConfig() error {
@@ -71,6 +83,11 @@ func getConfig() error {
 	viper.BindPFlag("configFile", pflag.Lookup("config"))
 	viper.BindPFlag("debug", pflag.Lookup("debug"))
 	viper.BindPFlag("selectorColumn", pflag.Lookup("selectorcolumn"))
+
+	viper.BindPFlag("boostrapBackupURI", pflag.Lookup("boostrapBackupURI"))
+	viper.BindPFlag("boostrapRestoreURI", pflag.Lookup("boostrapRestoreURI"))
+	viper.BindPFlag("boostrapID", pflag.Lookup("boostrapID"))
+	viper.BindPFlag("boostrapSecret", pflag.Lookup("boostrapSecret"))
 
 	// Load config values from file
 	if viper.GetBool("configFile") {

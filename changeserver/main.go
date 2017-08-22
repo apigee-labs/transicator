@@ -24,8 +24,10 @@ import (
 
 	"github.com/30x/goscaffold"
 	"github.com/Sirupsen/logrus"
+	"github.com/apigee-labs/transicator/bootstrap"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"net/url"
 )
 
 const (
@@ -86,6 +88,12 @@ func runMain() int {
 	prefix := viper.GetString("prefix")
 	selectorColumnParam := viper.GetString("selectorColumn")
 
+	bootstrapRestoreURI := viper.GetString("boostrapRestoreURI")
+	bootstrapBackupURI := viper.GetString("boostrapBackupURI")
+	bootstrapID := viper.GetString("boostrapID")
+	bootstrapSecret := viper.GetString("boostrapSecret")
+	backupInterval := viper.GetDuration("backupInterval")
+
 	debug := viper.GetBool("debug")
 
 	if dbDir == "" || pgURL == "" || pgSlot == "" {
@@ -108,6 +116,27 @@ func runMain() int {
 		}
 	}
 
+	if bootstrapRestoreURI != "" {
+		_, err := url.Parse(bootstrapRestoreURI)
+		fmt.Fprintf(os.Stderr, "Invalid value for boostrapRestoreURI: \"%s\": %s\n",
+			bootstrapRestoreURI, err)
+		printUsage()
+		return 4
+	}
+	if bootstrapBackupURI != "" {
+		_, err := url.Parse(bootstrapBackupURI)
+		fmt.Fprintf(os.Stderr, "Invalid value for bootstrapBackupURIParam: \"%s\": %s\n",
+			bootstrapBackupURI, err)
+		printUsage()
+		return 4
+	}
+	if bootstrapBackupURI != "" || bootstrapBackupURI != "" && (bootstrapID == "" || bootstrapSecret == "") {
+		fmt.Fprintln(os.Stderr,
+			"Error: bootstrapID and bootstrapSecret are required with boostrapRestoreURI or bootstrapBackupURIParam")
+		printUsage()
+		return 4
+	}
+
 	// Set the global scopeField from server.go to the user supplied value
 	selectorColumn = selectorColumnParam
 
@@ -115,9 +144,18 @@ func runMain() int {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
+	if bootstrapBackupURI != "" {
+		err := bootstrap.Restore(bootstrapBackupURI, bootstrapID, bootstrapSecret, dbDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error retrieving bootstrap: %s\n", err)
+			return 4
+		}
+	}
+
 	mux := http.NewServeMux()
 
-	server, err := createChangeServer(mux, dbDir, pgURL, pgSlot, prefix)
+	server, err := createChangeServer(mux, dbDir, pgURL, pgSlot, prefix,
+		bootstrapBackupURI, bootstrapID, bootstrapSecret, backupInterval)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error starting server: %s\n", err)
 		return 4

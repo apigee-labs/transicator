@@ -122,6 +122,33 @@ func Open(baseFile string) (*SQL, error) {
 	return stor, nil
 }
 
+/*
+RestoreBackup deletes any existing data at the baseFile location and writes the contents of the
+Reader, which is expected to be a Sqlite DB, to the persistent db file at the expected location.
+It's the caller's responsibility to close the Reader if needed and verify the DB is correct.
+Generally, a call to this would be followed by Open(baseFile).
+*/
+func RestoreBackup(r io.Reader, baseFile string) (err error) {
+	err = os.RemoveAll(baseFile)
+	if err != nil {
+		return err
+	}
+
+	url, err := createDBDir(baseFile)
+	if err != nil {
+		return err
+	}
+
+	f, err := os.Create(url)
+	defer f.Close()
+	_, err = io.Copy(f, r)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // createDBDir ensures that "base" is a directory and returns the file name
 func createDBDir(baseFile string) (string, error) {
 	st, err := os.Stat(baseFile)

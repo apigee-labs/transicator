@@ -10,3 +10,6 @@ snapshotserver/snapshotserver
 .vscode
 test-reports/
 docker-test-reports/
+bootstrap/cloud_functions/config.json
+bootstrap/cloud_functions/node_modules
+bootstrap/cloud_functions/test.out
