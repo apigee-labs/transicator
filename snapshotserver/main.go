@@ -33,12 +33,14 @@ const (
 	packageName string = "transicator"
 	appName     string = "snapshotserver"
 	// Default timeout for individual Postgres transactions
-	defaultPGTimeout      = 30 * time.Second
-	defaultSelectorColumn = "_change_selector"
-	defaultTempDir        = ""
-	tempSnapshotPrefix    = "transicatortmp"
-	tempSnapshotName      = "snap"
-	maxRequestBodyLength  = 1024 * 1024 // 1 MB
+	defaultPGTimeout       = 30 * time.Second
+	defaultSelectorColumn  = "_change_selector"
+	defaultTempDir         = ""
+	tempSnapshotPrefix     = "transicatortmp"
+	tempSnapshotName       = "snap"
+	maxRequestBodyLength   = 1024 * 1024 // 1 MB
+	statsIntervalInSeconds = 5
+	connmaxlifeInMinutes   = 5
 )
 
 // selectorColumn is the name of the database column that distinguishes a scope
@@ -110,7 +112,6 @@ func Run() (*goscaffold.HTTPScaffold, error) {
 	pgdriver.SetExtendedColumnNames(true)
 	pgdriver.SetReadTimeout(defaultPGTimeout)
 
-
 	log.Infof("Set SetConnMaxLifetime to %d minutes", cml)
 	mainDB.SetConnMaxLifetime(time.Duration(cml) * time.Minute)
 
@@ -126,7 +127,7 @@ func Run() (*goscaffold.HTTPScaffold, error) {
 
 	// In the future, the return param to schedule() can be used to stop stats collection
 	if debug {
-		schedule(getStatsInfo, time.Second * 5)
+		schedule(getStatsInfo, time.Second*statsIntervalInSeconds)
 	}
 
 	router := httprouter.New()
@@ -201,7 +202,6 @@ func checkHealth(db *sql.DB) (goscaffold.HealthStatus, error) {
 	// again when it's ready.
 	return goscaffold.NotReady, err
 }
-
 
 func schedule(cback func(), delay time.Duration) chan bool {
 	stop := make(chan bool)

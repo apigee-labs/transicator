@@ -47,13 +47,13 @@ func SetConfigDefaults() {
 	pflag.StringP("tempdir", "T", "", "Set temporary directory for snapshot files")
 	viper.SetDefault("tempdir", defaultTempDir)
 
-	pflag.IntP("connmaxlife", "x", 5, "Sets the maximum amount of time (Minutes) a connection may be reused")
-	viper.SetDefault("connmaxlife", 5)
+	pflag.IntP("connmaxlife", "", connmaxlifeInMinutes, "Sets the maximum amount of time (Minutes) a connection may be reused")
+	viper.SetDefault("connmaxlife", connmaxlifeInMinutes)
 
-	pflag.IntP("maxidleconns", "y", -1, "Sets the maximum number of connections in the idle connection pool")
+	pflag.IntP("maxidleconns", "", -1, "Sets the maximum number of connections in the idle connection pool")
 	viper.SetDefault("maxidleconns", -1)
 
-	pflag.IntP("maxopenconns", "z", -1, "Sets the maximum number of open connections to the database")
+	pflag.IntP("maxopenconns", "", -1, "Sets the maximum number of open connections to the database")
 	viper.SetDefault("maxopenconns", -1)
 
 	pflag.StringP("config", "C", "", "specify the config directory (ONLY) for snapshotserver.properties")
@@ -85,12 +85,11 @@ func getConfig() error {
 	// Load config values from file
 	if viper.GetString("configFile") != "" {
 		viper.AddConfigPath(viper.GetString("configFile"))
-		err := viper.ReadInConfig()                                                // Find and read the config file
-		if err != nil {                                                            // Handle errors reading the config file
+		err := viper.ReadInConfig() // Find and read the config file
+		if err != nil {             // Handle errors reading the config file
 			return err
 		}
 	}
-
 
 	// Load any config values from Environment variables who's name is prefixed TSS_ (Transicator Snaphot Server)
 	viper.SetEnvPrefix("tss") // will be uppercased automatically
@@ -99,4 +98,3 @@ func getConfig() error {
 	return nil
 
 }
-
