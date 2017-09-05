@@ -73,8 +73,8 @@ func getConfig() error {
 	// Load config values from file
 	if viper.GetString("configFile") != "" {
 		viper.AddConfigPath(viper.GetString("configFile"))
-		err := viper.ReadInConfig()                           // Find and read the config file
-		if err != nil {                                       // Handle errors reading the config file
+		err := viper.ReadInConfig() // Find and read the config file
+		if err != nil {             // Handle errors reading the config file
 			return err
 		}
 	}

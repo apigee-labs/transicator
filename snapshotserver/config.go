@@ -47,7 +47,16 @@ func SetConfigDefaults() {
 	pflag.StringP("tempdir", "T", "", "Set temporary directory for snapshot files")
 	viper.SetDefault("tempdir", defaultTempDir)
 
-	pflag.StringP("config", "C", "", "specify the config (ONLY) directory for snapshotserver.properties")
+	pflag.IntP("connmaxlife", "", connmaxlifeInMinutes, "Sets the maximum amount of time (Minutes) a connection may be reused")
+	viper.SetDefault("connmaxlife", connmaxlifeInMinutes)
+
+	pflag.IntP("maxidleconns", "", -1, "Sets the maximum number of connections in the idle connection pool")
+	viper.SetDefault("maxidleconns", -1)
+
+	pflag.IntP("maxopenconns", "", -1, "Sets the maximum number of open connections to the database")
+	viper.SetDefault("maxopenconns", -1)
+
+	pflag.StringP("config", "C", "", "specify the config directory (ONLY) for snapshotserver.properties")
 	pflag.BoolP("debug", "D", false, "Turn on debugging")
 	viper.SetDefault("debug", false)
 }
@@ -62,6 +71,10 @@ func getConfig() error {
 	viper.BindPFlag("key", pflag.Lookup("key"))
 	viper.BindPFlag("cert", pflag.Lookup("cert"))
 
+	viper.BindPFlag("connMaxLife", pflag.Lookup("connmaxlife"))
+	viper.BindPFlag("maxIdleConns", pflag.Lookup("maxidleconns"))
+	viper.BindPFlag("maxOpenConns", pflag.Lookup("maxopenconns"))
+
 	viper.BindPFlag("configFile", pflag.Lookup("config"))
 	viper.BindPFlag("debug", pflag.Lookup("debug"))
 	viper.BindPFlag("help", pflag.Lookup("help"))
@@ -72,8 +85,8 @@ func getConfig() error {
 	// Load config values from file
 	if viper.GetString("configFile") != "" {
 		viper.AddConfigPath(viper.GetString("configFile"))
-		err := viper.ReadInConfig()                                                // Find and read the config file
-		if err != nil {                                                            // Handle errors reading the config file
+		err := viper.ReadInConfig() // Find and read the config file
+		if err != nil {             // Handle errors reading the config file
 			return err
 		}
 	}
