@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/30x/goscaffold"
 	log "github.com/Sirupsen/logrus"
+	"github.com/apid/goscaffold"
 	"github.com/apigee-labs/transicator/pgclient"
 	"github.com/julienschmidt/httprouter"
 	"github.com/spf13/viper"
