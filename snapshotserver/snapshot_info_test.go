@@ -28,7 +28,7 @@ import (
 
 	"time"
 
-	"github.com/30x/goscaffold"
+	"github.com/apid/goscaffold"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"

@@ -27,7 +27,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/30x/goscaffold"
+	"github.com/apid/goscaffold"
 	"github.com/apigee-labs/transicator/common"
 	"github.com/julienschmidt/httprouter"
 

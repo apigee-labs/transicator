@@ -22,8 +22,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/30x/goscaffold"
 	"github.com/Sirupsen/logrus"
+	"github.com/apid/goscaffold"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )

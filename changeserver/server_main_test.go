@@ -24,8 +24,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/30x/goscaffold"
 	"github.com/Sirupsen/logrus"
+	"github.com/apid/goscaffold"
 	"github.com/apigee-labs/transicator/common"
 	"github.com/apigee-labs/transicator/pgclient"
 	"github.com/apigee-labs/transicator/replication"

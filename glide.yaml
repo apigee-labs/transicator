@@ -19,9 +19,11 @@ import:
   repo: https://edge.googlesource.com/third_party/golang/protobuf.git
   subpackages:
   - proto
-- package: github.com/30x/goscaffold
-  version: master
+- package: github.com/apid/goscaffold
+  version: 8e87c1fe3bd4a16330f61dc27975a92d68f0ff42
   repo: https://edge.googlesource.com/goscaffold.git
+- package: github.com/justinas/alice
+  version: 1051eaf52fcafdd87ead59d28b065f1fcb8274ec
 - package: github.com/tecbot/gorocksdb
   version: f2a0b10f7228cff360e2d9efa081a15a8cbd68b7
 - package: github.com/spf13/viper
@@ -33,7 +35,14 @@ import:
 - package: github.com/onsi/ginkgo
 - package: github.com/mattn/go-sqlite3
   version: ^1.2.0
+- package: github.com/SermoDigital/jose
+  version: 2bd9b81ac51d6d6134fcd4fd846bd2e7347a15f9
+  subpackages:
+  - crypto
+  - jwt
 testImport:
 - package: github.com/onsi/gomega
   repo: https://edge.googlesource.com/third_party/onsi/gomega.git
 - package: github.com/onsi/ginkgo
+- package: github.com/lib/pq
+  version: 23da1db4f16d9658a86ae9b717c245fc078f10f1

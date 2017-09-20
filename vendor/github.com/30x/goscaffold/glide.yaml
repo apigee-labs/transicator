@@ -1,4 +1,0 @@
-package: github.com/30x/go-scaffold
-testImport:
-- package: github.com/onsi/ginkgo
-- package: github.com/onsi/gomega
